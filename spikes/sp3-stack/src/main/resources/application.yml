@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: sp3-stack
+  # Spike-only objects live in schema sp3_spike of the orders database, owned by orders_owner, so they never
+  # touch order-service's Flyway history in schema public. The stack is reset with `down -v` afterwards.
+  datasource:
+    url: jdbc:postgresql://${ZS_DB_HOST:localhost}:${ZS_DB_PORT:5432}/orders
+    username: orders_owner
+    password: ${ZS_ORDERS_OWNER_DB_PASSWORD}
+  flyway:
+    default-schema: sp3_spike
+    schemas: sp3_spike
+  kafka:
+    bootstrap-servers: ${ZS_KAFKA_BOOTSTRAP:127.0.0.1:9092}
+    producer:
+      # Explicit per master §2.5: idempotence is silently disabled by conflicting settings unless set.
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      auto-offset-reset: earliest
+      properties:
+        # Explicit per master §2.5: KIP-848 protocol is opt-in.
+        group.protocol: consumer
+
+server:
+  port: 8099
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  otlp:
+    metrics:
+      export:
+        url: ${ZS_OTLP_METRICS_URL:http://127.0.0.1:4318/v1/metrics}
+        step: 10s

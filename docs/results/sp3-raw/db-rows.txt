@@ -1,0 +1,2 @@
+inbound=3 consumed=3
+1 spike tables installed_by=orders_owner

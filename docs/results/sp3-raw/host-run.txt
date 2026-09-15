@@ -1,0 +1,6 @@
+# SP3 host run 2026-09-15T21:38:47Z: java -javaagent:<otel agent> -jar sp3-stack.jar against the Compose stack
+# env: OTEL_SERVICE_NAME=sp3-stack OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none; Micrometer OTLP step 10s
+health: {"groups":["liveness","readiness"],"status":"UP"}
+POST /spike/messages body=one -> {"id":"9e741d5f-c5c5-42e2-972d-5c83f307a35c","offset":0}
+POST /spike/messages body=two -> {"id":"c9a8d1ab-0dd0-4091-8010-547c9a263391","offset":1}
+POST /spike/messages body=three -> {"id":"4315f2b4-ad83-4d2a-9f85-bd2fb26c1cd6","offset":2}

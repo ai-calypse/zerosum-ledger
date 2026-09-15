@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"sp3_spike_consumed_total","job":"sp3-stack","service_name":"sp3-stack"},"values":[[1789508955,"0"],[1789508960,"0"],[1789508965,"3"],[1789508970,"3"],[1789508975,"3"],[1789508980,"3"],[1789508985,"3"]]}]}}

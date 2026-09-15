@@ -29,6 +29,14 @@ postgresql = { module = "org.postgresql:postgresql" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-kafka = { module = "org.testcontainers:testcontainers-kafka" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+spring-boot-starter-kafka = { module = "org.springframework.boot:spring-boot-starter-kafka" }
+micrometer-registry-otlp = { module = "io.micrometer:micrometer-registry-otlp" }
+# Required in Boot 4.1 for OtlpMetricsExportAutoConfiguration (OpenTelemetryProperties); module only, not the starter,
+# so Micrometer Tracing is absent and the OTel agent stays the only trace exporter (D00-6).
+spring-boot-opentelemetry = { module = "org.springframework.boot:spring-boot-opentelemetry" }
 
 # Not Boot-managed; pinned now, first used in S01 (master §0.3 C16)
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }

@@ -1,0 +1,21 @@
+# SP3 final evidence run 2026-09-15T21:49:09Z
+# java -javaagent:opentelemetry-javaagent.jar (2.31.1) -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -jar sp3-stack.jar
+# env: OTEL_SERVICE_NAME=sp3-stack OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf (no OTEL_METRICS_EXPORTER env var: Boot 4.1 maps it to management.otlp.metrics.export.enabled)
+OtlpMetricsExportAutoConfiguration: MATCHED
+log: Publishing metrics for OtlpMeterRegistry every 10s to http://127.0.0.1:4318/v1/metrics with resource attributes {service.name=sp3-stack}
+POST body=sp3-final2-a -> {"id":"d74584ce-9d25-447a-b47e-58cac4967836","offset":13}
+POST body=sp3-final2-b -> {"id":"c165e9a3-b766-4ba5-9d28-a4cf132142b8","offset":14}
+POST body=sp3-final2-c -> {"id":"e67a13b4-55ce-4e8c-900f-4253814098e6","offset":15}
+B Grafana /api/ds/query sp3_spike_consumed_total{job=sp3-stack}: 200 [('sp3-stack', [3])]
+   range sample 2026-09-15T21:49:15Z 0
+   range sample 2026-09-15T21:49:25Z 3
+JVM memory metric names for job sp3-stack (duplicate check): [('jvm_memory_used_bytes', '8')]
+POST traces this run: 3
+A trace 2aedbef9dae17723334c6406cfa68e46: 5 spans
+   POST /spike/messages         SPAN_KIND_SERVER     parent=(root)                 links=0 scope=io.opentelemetry.tomcat-10.0
+   INSERT sp3_spike.inbound     SPAN_KIND_CLIENT     parent=POST /spike/messages   links=0 scope=io.opentelemetry.jdbc
+   sp3.spike publish            SPAN_KIND_PRODUCER   parent=POST /spike/messages   links=0 scope=io.opentelemetry.kafka-clients-0.11
+   sp3.spike process            SPAN_KIND_CONSUMER   parent=sp3.spike publish      links=0 scope=io.opentelemetry.spring-kafka-2.7
+   INSERT sp3_spike.consumed    SPAN_KIND_CLIENT     parent=sp3.spike process      links=0 scope=io.opentelemetry.jdbc
+[otel.javaagent 2026-09-15 14:49:05:769 -0700] [main] INFO io.opentelemetry.javaagent.tooling.VersionLogger - opentelemetry-javaagent - version: 2.31.1
+2026-09-15T14:49:08.208-07:00  INFO 80927 --- [sp3-stack] [           main] o.f.core.internal.command.DbMigrate      : Schema "sp3_spike" is up to date. No migration necessary.
