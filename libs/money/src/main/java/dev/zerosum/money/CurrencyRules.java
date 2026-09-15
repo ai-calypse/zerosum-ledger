@@ -19,13 +19,18 @@ public final class CurrencyRules {
     /** decision: D01-2 — docs/step_01_domain_contracts.md#decisions-and-outputs */
     public static final String TABLE_RESOURCE = "dev/zerosum/money/iso4217-minor-units.csv";
 
+    /** decision: D01-7 — currencies orders may use; no runtime override in the MVP. */
+    public static final String ALLOW_LIST_RESOURCE = "dev/zerosum/money/allowed-currencies.txt";
+
     private static final Pattern CODE = Pattern.compile("[A-Z]{3}");
     private static volatile CurrencyRules defaults;
 
     private final Map<String, Integer> digits;
+    private final java.util.Set<String> allowed;
 
-    private CurrencyRules(Map<String, Integer> digits) {
+    private CurrencyRules(Map<String, Integer> digits, java.util.Set<String> allowed) {
         this.digits = Collections.unmodifiableMap(digits);
+        this.allowed = Collections.unmodifiableSet(allowed);
     }
 
     /** The rules loaded from {@link #TABLE_RESOURCE}; loaded once, on first use. */
@@ -43,11 +48,58 @@ public final class CurrencyRules {
         return rules;
     }
 
-    /**
-     * Loads a table resource. Fails with an {@link IllegalStateException} naming the resource when it is missing,
-     * empty, malformed, unsorted or contains duplicates, instead of an opaque class-initialization error.
-     */
+    /** Loads a table resource with the default allow-list. See {@link #load(String, String)}. */
     public static CurrencyRules load(String resource) {
+        return load(resource, ALLOW_LIST_RESOURCE);
+    }
+
+    /**
+     * Loads a table and an allow-list. Fails with an {@link IllegalStateException} naming the resource when either is
+     * missing, empty, malformed, unsorted (table) or contains duplicates, or when the allow-list names a currency that
+     * is absent from the table — instead of an opaque class-initialization error.
+     */
+    public static CurrencyRules load(String resource, String allowListResource) {
+        Map<String, Integer> table = loadTable(resource);
+        java.util.Set<String> allowed = new java.util.TreeSet<>();
+        try (BufferedReader reader = open(allowListResource, "currency allow-list")) {
+            int lineNumber = 0;
+            for (String line; (line = reader.readLine()) != null; ) {
+                lineNumber++;
+                if (line.isBlank() || line.startsWith("#")) {
+                    continue;
+                }
+                String code = line.strip();
+                if (!CODE.matcher(code).matches()) {
+                    throw new IllegalStateException("malformed line " + lineNumber + " in currency allow-list resource "
+                            + allowListResource + ": " + line);
+                }
+                if (!table.containsKey(code)) {
+                    throw new IllegalStateException("currency allow-list resource " + allowListResource + " lists " + code
+                            + ", which is absent from the minor-unit table " + resource);
+                }
+                if (!allowed.add(code)) {
+                    throw new IllegalStateException(
+                            "duplicate " + code + " in currency allow-list resource " + allowListResource);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("cannot read currency allow-list resource " + allowListResource, e);
+        }
+        if (allowed.isEmpty()) {
+            throw new IllegalStateException("currency allow-list resource is empty: " + allowListResource);
+        }
+        return new CurrencyRules(table, allowed);
+    }
+
+    private static BufferedReader open(String resource, String what) {
+        InputStream in = CurrencyRules.class.getClassLoader().getResourceAsStream(resource);
+        if (in == null) {
+            throw new IllegalStateException(what + " resource not found: " + resource);
+        }
+        return new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+    }
+
+    private static Map<String, Integer> loadTable(String resource) {
         InputStream in = CurrencyRules.class.getClassLoader().getResourceAsStream(resource);
         if (in == null) {
             throw new IllegalStateException("currency table resource not found: " + resource);
@@ -79,7 +131,17 @@ public final class CurrencyRules {
         if (table.isEmpty()) {
             throw new IllegalStateException("currency table resource is empty: " + resource);
         }
-        return new CurrencyRules(table);
+        return table;
+    }
+
+    /** True if orders may use {@code code} (D01-7). Every allowed code is also known. */
+    public boolean isAllowed(String code) {
+        return code != null && allowed.contains(code);
+    }
+
+    /** Allowed codes, sorted. */
+    public java.util.Set<String> allowedCodes() {
+        return allowed;
     }
 
     /** True if {@code code} is an alphabetic code with numeric minor units in the table. */

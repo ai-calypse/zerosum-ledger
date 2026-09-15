@@ -1,0 +1,13 @@
+# S01-T03 ZeroSumValidator and ChartOfAccounts 2026-09-15T22:11:12Z
+$ ./gradlew :libs:money:test   (exit 0)
+  dev.zerosum.money.ChartOfAccountsTest tests 20 failures 0 errors 0
+  dev.zerosum.money.CurrencyRulesTest tests 8 failures 0 errors 0
+  dev.zerosum.money.FareSplitterTest tests 4 failures 0 errors 0
+  dev.zerosum.money.FeeCalculatorTest tests 12 failures 0 errors 0
+  dev.zerosum.money.MoneyTest tests 13 failures 0 errors 0
+  dev.zerosum.money.ZeroSumValidatorTest tests 13 failures 0 errors 0
+RESULT PASS
+$ ValidationLimits trace comment present
+1
+$ allow-list trace comment present
+1

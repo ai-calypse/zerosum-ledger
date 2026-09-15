@@ -1,0 +1,7 @@
+# Currencies money orders may use in the MVP (master §5.3 rule 4). One ISO 4217 alphabetic code per line.
+# decision: D01-7 — docs/step_01_domain_contracts.md#decisions-and-outputs
+# Every code must exist in iso4217-minor-units.csv, or CurrencyRules refuses to load. No runtime override.
+EUR
+JPY
+KWD
+USD
