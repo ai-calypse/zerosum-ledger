@@ -841,6 +841,7 @@ Host for every row: Apple M4, 10 cores, 24 GiB RAM, macOS 26.5.2; Docker Engine 
 | `docs/adr/0002-stack-and-pinned-versions.md` (consumed by later S00 tasks once written) | `0a9b404` (Proposed) → `3eae42a` (Accepted) → `f840db0` (+ Temurin base image row) | 2026-09-15 | S00-T07, S00-T08 | Revalidated: T08 added a pin under the D00-1 policy; no decision changed |
 | `docker-compose.yml` (consumed by later S00 tasks once written) | `0bf9f6e` (infrastructure) → `f840db0` (+ services) | 2026-09-15 | S00-T04, S00-T05, S00-T07, S00-T08, S00-T09 | Revalidated: T08 appended service entries without changing any existing D00-3 choice; `DatabaseIsolationIT` still reads the same postgres pin |
 | `gradle/libs.versions.toml` | `09cedee` → `0bf9f6e` → `d4e49f0` | 2026-09-15 | S00-T04, S00-T07, S00-T08 | Revalidated: additions only (JDBC/Flyway/Testcontainers, Kafka/OTLP entries kept for S04/T08); no pinned version changed |
+| Change request **CR-S02-01** from [S02 I.2](step_02_ledger_core.md#change-record) against D00-4 | Ledger migration V2 narrows the `ledger_owner` default privileges: `ledger_app` no longer inherits UPDATE/DELETE on tables created later in the `ledger` database | 2026-09-15 | S00-T04 (D00-4) | Accepted as an additive, database-local narrowing; `DatabaseIsolationIT` revalidated green after V2; other databases keep the D00-4 defaults until S03/S05 adopt the same line |
 
 <a id="handoff"></a>
 ## J. Handoff
