@@ -1,6 +1,9 @@
 spring:
   application:
     name: order-service
+  lifecycle:
+    # decision: D00-3 — graceful shutdown timeout per master §5.11; Compose stop_grace_period is longer
+    timeout-per-shutdown-phase: 30s
   # decision: D00-4, D00-8 — docs/step_00_foundations.md#decisions-and-outputs
   # Runtime queries use orders_app; Flyway migrates as orders_owner. Passwords have no defaults (fail fast).
   datasource:
@@ -23,3 +26,9 @@ management:
       exposure:
         # decision: D00-6 — actuator HTTP exposure limited to health
         include: health
+  otlp:
+    metrics:
+      export:
+        # decision: D00-6, D00-7 — Micrometer OTLP push is the single metrics exporter (the agent exports traces only)
+        url: ${ZS_OTLP_METRICS_URL:http://localhost:4318/v1/metrics}
+        step: 10s

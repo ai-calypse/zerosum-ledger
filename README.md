@@ -23,7 +23,8 @@ This creates a git-ignored `.env` with generated local secrets. See [docs/secret
 ### 3. Start and verify the stack
 
 ```sh
-docker compose up -d --wait
+./gradlew assemble                 # service jars + OpenTelemetry agent for the images
+docker compose up -d --build --wait
 docker compose ps
 ```
 

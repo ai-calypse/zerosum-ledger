@@ -53,6 +53,7 @@ Images are pinned by tag **and** multi-arch index digest. Every image has a nati
 | Apache Kafka (KRaft) | `apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837` | `docker-compose.yml` | https://hub.docker.com/r/apache/kafka | — |
 | grafana/otel-lgtm | `grafana/otel-lgtm:0.33.0@sha256:475319e883b66594d1a2f22ef168c2459802bb94548e6f25d9782bd5f5c19a3a` | `docker-compose.yml` | https://github.com/grafana/docker-otel-lgtm/releases | Master listed no tag; pinned to 0.33.0 (2026-09-11) |
 | Toxiproxy | `ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e` | `docker-compose.yml` (`chaos` profile) | https://github.com/Shopify/toxiproxy/releases | — |
+| Service base image (Eclipse Temurin JRE 25) | `eclipse-temurin:25.0.4_7-jre@sha256:15090d159279e5c158473eccb48cd87f57b3e3a47511a797eb5a7a7ea6f86b0f` | `services/Dockerfile` | https://hub.docker.com/_/eclipse-temurin | Not named in master; added by S00-T08 under the D00-1 pin-update policy (same Java line as the toolchain) |
 
 ### Tools and CI
 

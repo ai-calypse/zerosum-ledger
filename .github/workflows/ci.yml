@@ -82,8 +82,10 @@ jobs:
           while IFS='=' read -r name value; do
             if [[ "$name" =~ ^[A-Z0-9_]+$ && -n "$value" ]]; then echo "::add-mask::$value"; fi
           done < .env
+      - name: Build service jars and agent
+        run: ./gradlew assemble
       - name: Start stack
-        run: docker compose up -d --wait
+        run: docker compose up -d --build --wait
       - name: Run e2e tests
         # Until S05 adds scenarios the tag selects no tests (reported by the build); the health wait above is the check.
         run: ./gradlew e2eTest
