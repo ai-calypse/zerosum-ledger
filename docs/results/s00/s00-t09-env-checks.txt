@@ -1,0 +1,22 @@
+# S00-T09 environment index checks 2026-09-15T21:55:02Z
+$ inventory: variables referenced by Compose interpolation, service application.yml, infra/postgres/init.sh, ci.yml
+referenced: 14 variables: ZS_DB_HOST ZS_DB_PORT ZS_FAKEPROVIDERS_APP_DB_PASSWORD ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD ZS_INSTRUMENTS_APP_DB_PASSWORD ZS_INSTRUMENTS_OWNER_DB_PASSWORD ZS_LEDGER_APP_DB_PASSWORD ZS_LEDGER_OWNER_DB_PASSWORD ZS_ORDERS_APP_DB_PASSWORD ZS_ORDERS_OWNER_DB_PASSWORD ZS_OTLP_METRICS_URL ZS_POSTGRES_SUPERUSER_PASSWORD ZS_STATS_DB_PASSWORD ZS_VERIFIER_DB_PASSWORD 
+missing from .env.example: [ZS_OTLP_METRICS_URL ]
+in .env.example but unreferenced: []
+$ fail fast: docker compose --env-file <copy of .env without ZS_LEDGER_APP_DB_PASSWORD> config --quiet
+error while interpolating services.ledger-service.environment.ZS_LEDGER_APP_DB_PASSWORD: required variable ZS_LEDGER_APP_DB_PASSWORD is missing a value: set ZS_LEDGER_APP_DB_PASSWORD in .env
+error while interpolating services.postgres.environment.ZS_LEDGER_APP_DB_PASSWORD: required variable ZS_LEDGER_APP_DB_PASSWORD is missing a value: set ZS_LEDGER_APP_DB_PASSWORD in .env
+exit 1
+$ placeholders in .env.example are not usable values
+11
+$ git check-ignore .env / .env.example
+[.env] []
+$ generated .env: mode, LF endings, no placeholders
+-rw-------@
+.env: Unicode text, UTF-8 text
+0
+
+# Rerun 2026-09-15T21:55:33Z after adding ZS_OTLP_METRICS_URL to .env.example (the first run above found it missing)
+referenced: 14 variables
+missing from .env.example: []
+in .env.example but unreferenced: []
