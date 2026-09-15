@@ -1,0 +1,21 @@
+# S02-T01 ledger migrations, append-only triggers, grants and role tests 2026-09-15T22:48:16Z
+## 1. ./gradlew :services:ledger-service:integrationTest :infra:tests:integrationTest --rerun --continue   (2026-09-15T22:48:16Z)
+GREEN_EXIT=0
+  dev.zerosum.ledger.schema.LedgerAppendOnlyIT tests 13 failures 0 errors 0 time 1.929
+  dev.zerosum.ledger.schema.LedgerGrantsIT tests 4 failures 0 errors 0 time 0.941
+  dev.zerosum.ledger.schema.LedgerSchemaMigrationIT tests 3 failures 0 errors 0 time 0.991
+  dev.zerosum.infra.DatabaseIsolationIT tests 6 failures 0 errors 0 time 1.872
+## 2. negative control (local only, reverted): entity_changelog UPDATE/DELETE row trigger removed from V2   (2026-09-15T22:48:24Z)
+trigger lines removed: 1
+NEG_EXIT=1 (non-zero expected)
+  dev.zerosum.ledger.schema.LedgerAppendOnlyIT tests 13 failures 2 errors 0 time 1.813
+     FAILED entity_changelog UPDATE as ledger_owner :: org.opentest4j.AssertionFailedError: UPDATE entity_changelog SET delta_minor = delta_minor WHERE entity_id = 'rider:R1' AND seq = 1 ==> Expected java.sql.SQLException to be thrown, but nothing was thrown.
+     FAILED entity_changelog DELETE as ledger_owner :: org.opentest4j.AssertionFailedError: DELETE FROM entity_changelog WHERE entity_id = 'rider:R1' AND seq = 1 ==> Expected java.sql.SQLException to be thrown, but nothing was thrown.
+failed cells: ['entity_changelog DELETE as ledger_owner', 'entity_changelog UPDATE as ledger_owner']
+NEG_EXACT
+RESTORED_IDENTICAL
+## 3. restored run   (2026-09-15T22:48:26Z)
+RESTORED_EXIT=0
+  dev.zerosum.ledger.schema.LedgerAppendOnlyIT tests 13 failures 0 errors 0 time 1.847
+  dev.zerosum.ledger.schema.LedgerGrantsIT tests 4 failures 0 errors 0 time 0.946
+  dev.zerosum.ledger.schema.LedgerSchemaMigrationIT tests 3 failures 0 errors 0 time 0.95
