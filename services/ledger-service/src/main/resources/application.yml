@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: ledger-service
+
+server:
+  # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # decision: D00-6 — actuator HTTP exposure limited to health
+        include: health

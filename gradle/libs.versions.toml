@@ -1,0 +1,32 @@
+# decision: D00-1 — docs/step_00_foundations.md#decisions-and-outputs
+# Every version below was rechecked on 2026-09-15; the dated record is docs/adr/0002-stack-and-pinned-versions.md.
+# Pin-update policy (D00-1): later steps may add entries for tools already pinned in ADR-0002 (recording the
+# addition in their own register); changing a pinned version needs a change request against D00-1.
+# Boot-managed libraries (spring-kafka, kafka-clients, Flyway, Testcontainers, JUnit, PostgreSQL JDBC, Micrometer)
+# carry no version here: they resolve through the spring-boot-dependencies platform.
+
+[versions]
+# decision: D00-10 — Java toolchain language version
+java = "25"
+spring-boot = "4.1.1"
+archunit = "1.5.0"
+json-schema-validator = "3.0.7"
+opentelemetry-javaagent = "2.31.1"
+
+[libraries]
+spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-boot-gradle-plugin = { module = "org.springframework.boot:spring-boot-gradle-plugin", version.ref = "spring-boot" }
+
+# Boot-managed (versionless)
+spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+# Not Boot-managed; pinned now, first used in S01 (master §0.3 C16)
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
+
+# Not Boot-managed; attached to service images (D00-6)
+opentelemetry-javaagent = { module = "io.opentelemetry.javaagent:opentelemetry-javaagent", version.ref = "opentelemetry-javaagent" }
