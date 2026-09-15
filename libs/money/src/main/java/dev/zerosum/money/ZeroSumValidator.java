@@ -31,29 +31,51 @@ public final class ZeroSumValidator {
         return new ZeroSumValidator(rules);
     }
 
-    /** All violations, ordered by {@link Violation#ORDER}; empty means valid. */
+    /**
+     * Which rules a consumer runs (D01-5).
+     *
+     * <ul>
+     *   <li>{@link #FULL}: rules 1–5; order-service, the single writer of money orders (ADR-0006).</li>
+     *   <li>{@link #LEDGER}: only the rules master §5.3 marks ‡ — the account allowed for the entity kind (rule 3, which
+     *       needs the entity ID to parse) and zero-sum per currency (rule 5). The ledger never re-applies order-service
+     *       rules such as the currency allow-list, so a configuration difference can't quarantine a valid order
+     *       (change request CR-S02-02).</li>
+     * </ul>
+     */
+    public enum RuleSet {
+        FULL,
+        LEDGER
+    }
+
+    /** All {@link RuleSet#FULL} violations, ordered by {@link Violation#ORDER}; empty means valid. */
     public List<Violation> validate(OrderCandidate order) {
+        return validate(order, RuleSet.FULL);
+    }
+
+    /** All violations of the given rule set, ordered by {@link Violation#ORDER}; empty means valid. */
+    public List<Violation> validate(OrderCandidate order, RuleSet ruleSet) {
         List<Violation> out = new ArrayList<>();
         if (order == null) {
             out.add(Violation.of(Violation.Code.ORDER_MISSING, 1));
             return out;
         }
+        boolean full = ruleSet == RuleSet.FULL;
         CurrencyRules rules = explicitRules != null ? explicitRules : CurrencyRules.defaults();
 
         // Rule 1
-        if (order.type() == null || !ValidationLimits.TYPES.contains(order.type())) {
+        if (full && (order.type() == null || !ValidationLimits.TYPES.contains(order.type()))) {
             out.add(Violation.of(Violation.Code.TYPE_INVALID, 1));
         }
         String reason = order.reason();
-        if (reason == null || reason.length() > ValidationLimits.REASON_MAX_LENGTH
-                || !ValidationLimits.REASON_PATTERN.matcher(reason).matches()) {
+        if (full && (reason == null || reason.length() > ValidationLimits.REASON_MAX_LENGTH
+                || !ValidationLimits.REASON_PATTERN.matcher(reason).matches())) {
             out.add(Violation.of(Violation.Code.REASON_INVALID, 1));
         }
 
         // Rule 2: count first; above the maximum, per-entry work is skipped entirely.
         List<Entry> entries = order.entries();
         int count = entries == null ? 0 : entries.size();
-        if (count < ValidationLimits.MIN_ENTRIES || count > ValidationLimits.MAX_ENTRIES) {
+        if (full && (count < ValidationLimits.MIN_ENTRIES || count > ValidationLimits.MAX_ENTRIES)) {
             out.add(Violation.of(Violation.Code.ENTRY_COUNT_OUT_OF_RANGE, 2));
             if (count > ValidationLimits.MAX_ENTRIES) {
                 return out;
@@ -71,9 +93,9 @@ public final class ZeroSumValidator {
             Long amount = e.amountMinor();
             if (amount == null) {
                 out.add(Violation.atEntry(Violation.Code.AMOUNT_MISSING, 2, i));
-            } else if (amount == 0) {
+            } else if (full && amount == 0) {
                 out.add(Violation.atEntry(Violation.Code.AMOUNT_ZERO, 2, i));
-            } else if (amount > ValidationLimits.MAX_ABS_AMOUNT_MINOR || amount < -ValidationLimits.MAX_ABS_AMOUNT_MINOR) {
+            } else if (full && (amount > ValidationLimits.MAX_ABS_AMOUNT_MINOR || amount < -ValidationLimits.MAX_ABS_AMOUNT_MINOR)) {
                 out.add(Violation.atEntry(Violation.Code.AMOUNT_OUT_OF_RANGE, 2, i));
             }
 
@@ -87,7 +109,7 @@ public final class ZeroSumValidator {
 
             // Rule 4
             String currency = e.currency();
-            if (currency == null || !rules.isAllowed(currency)) {
+            if (full && (currency == null || !rules.isAllowed(currency))) {
                 out.add(new Violation(Violation.Code.CURRENCY_NOT_ALLOWED, 4, i, currency));
             }
 
