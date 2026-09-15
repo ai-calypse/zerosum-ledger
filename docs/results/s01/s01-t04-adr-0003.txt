@@ -1,0 +1,9 @@
+# S01-T04 ADR-0003 checks 2026-09-15T22:11:12Z
+status line: Status:** Accepted
+test -f libs/money/src/main/java/dev/zerosum/money/ChartOfAccounts.java -> ok
+test -f libs/money/src/test/java/dev/zerosum/money/ChartOfAccountsTest.java -> ok
+test -f docs/step_01_domain_contracts.md -> ok
+test -f docs/zerosum_ledger_mvp_plan.md -> ok
+contra test method referenced by the ADR exists: 1
+contra test result: passed
+LINKS yes
