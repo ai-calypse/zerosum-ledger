@@ -1,0 +1,33 @@
+# S01-T06 seeded generators, M1(a) bulk validator test, replay and mutation sanity check 2026-09-15T22:33:42Z
+## 1. ./gradlew :libs:money:test --rerun
+exit 0
+BUILD SUCCESSFUL in 1s
+  dev.zerosum.money.ValidatorGenerativeTest tests 3 failures 0 errors 0 time 0.271
+    ZS-SEED test=dev.zerosum.money.ValidatorGenerativeTest#generatedTripSequencesValidateAndAccumulateToADirectSplit seed=-5760303105759721231
+    ZS-SEED test=dev.zerosum.money.ValidatorGenerativeTest#acceptsEveryBalancedOrderAndRejectsEveryLabeledOrder seed=2442124174651958180
+    ZS-GENERATIVE orders=10000 valid=5000 invalid=5000 families={TYPE_INVALID=586, REASON_INVALID=546, ENTRY_COUNT_OUT_OF_RANGE=569, AMOUNT_ZERO=562, AMOUNT_OUT_OF_RANGE=579, ENTITY_ID_INVALID=564, ACCOUNT_NOT_ALLOWED=528, CURRENCY_NOT_ALLOWED=505, ZERO_SUM_VIOLATED=561}
+    ZS-SEED test=dev.zerosum.money.ValidatorGenerativeTest#schemaAndValidatorAgreeOnSharedShapeConstraints seed=4876162558256256706
+  dev.zerosum.money.GeneratorDeterminismTest tests 2 failures 0 errors 0 time 0.138
+    ZS-SEED test=dev.zerosum.money.GeneratorDeterminismTest#sameSeedGivesTheSameDigestAndADifferentSeedDoesNot seed=8119415789160221247
+    ZS-DIGEST seed=8119415789160221247 sha256=19f9f8184ebf0405ab16a3cf78cde724d1ccfc5329cf86698180aa8ec98878a0
+    ZS-SEED test=dev.zerosum.money.GeneratorDeterminismTest#perturbationDisplacesElementsAtMostTheBound seed=5769168089414895431
+all libs/money classes:
+  tests 75 failures+errors 0
+## 2. replay: ZS_TEST_SEED=8119415789160221247 ./gradlew :libs:money:test --tests 'dev.zerosum.money.GeneratorDeterminismTest' --rerun
+exit 0
+run 1 : ZS-DIGEST seed=8119415789160221247 sha256=19f9f8184ebf0405ab16a3cf78cde724d1ccfc5329cf86698180aa8ec98878a0
+replay: ZS-DIGEST seed=8119415789160221247 sha256=19f9f8184ebf0405ab16a3cf78cde724d1ccfc5329cf86698180aa8ec98878a0
+REPLAY IDENTICAL
+## 3. mutation sanity check (local only, reverted): zero-sum rule disabled in ZeroSumValidator
+1
+exit 1 (non-zero expected)
+  dev.zerosum.money.ValidatorGenerativeTest tests 3 failures 1 errors 0 time 0.234
+    ZS-SEED test=dev.zerosum.money.ValidatorGenerativeTest#generatedTripSequencesValidateAndAccumulateToADirectSplit seed=6500916440498361019
+    ZS-SEED test=dev.zerosum.money.ValidatorGenerativeTest#acceptsEveryBalancedOrderAndRejectsEveryLabeledOrder seed=-2121427314518972707
+    ZS-SEED test=dev.zerosum.money.ValidatorGenerativeTest#schemaAndValidatorAgreeOnSharedShapeConstraints seed=1271709247622564141
+    FAILED acceptsEveryBalancedOrderAndRejectsEveryLabeledOrder(Seed) :: java.lang.AssertionError: order #15 labeled ZERO_SUM_VIOLATED got []: OrderCandidate[type=DISBURSEMENT, reason=refund.succeeded, entries=[Entry[entityId=driver:A4kePsLa, account=payable, currency=JPY, amountMinor=6190423191], Entry[entityId=rider:g99M, account=receivable, currency=JPY, amountMinor=10809965406], Entry[entityId=rider:bEx4_X5d, account=receivable, currency=JPY, amountMinor=-6385178899], Entry[entityId=rider:g99M, account=receivable, currency=JPY, amountMinor=2943260801], Entry[entityId=platform:eiX9, account=processing_fees, currency=JPY, amountMinor=951940246], Entry[entityId=pr
+reverted: git diff clean
+restored full run exit 0
+## 4. no property-based testing library in any dependency report
+dependency report lines: 7097
+jqwik / junit-quickcheck matches: 0
