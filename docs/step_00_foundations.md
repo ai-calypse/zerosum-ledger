@@ -706,7 +706,7 @@ Phase totals: P1 2 h · P2 3 h · P3 2 h · P4 5 h · **step total 12 h**. Run c
 | D00-4 | — | — | — | Pending | — |
 | D00-5 | — | — | — | Pending | — |
 | D00-6 | — | — | — | Pending | — |
-| D00-7 | — | — | — | Pending | — |
+| D00-7 | **SP3 passed; proceed with the proposed wiring, fallback: none.** OTel Java agent 2.31.1 exports traces; Micrometer OTLP registry exports metrics. Binding wiring findings: (1) add the `spring-boot-opentelemetry` module (not the starter) or Boot 4.1 creates no OTLP registry; (2) disable the agent's own metrics/logs exporters with `-Dotel.metrics.exporter=none -Dotel.logs.exporter=none` JVM properties, never `OTEL_*_EXPORTER` environment variables, which Boot maps onto `management.otlp.metrics.export.enabled`; (3) Kafka consumer span is a child of the producer span, not a link (input to S04-T06). Evidence: [docs/results/sp3-stack-compat.md](results/sp3-stack-compat.md), spike SHA `d4e49f0`. | Criteria A–D all passed within 0.4 h of the 2 h timebox; both B failures had wiring causes that were found and fixed, not incompatibilities | Fallback A (Prometheus scraping of `/actuator/prometheus`) and fallback B (Boot 4.0.x) not needed; `spring-boot-starter-opentelemetry` rejected because its Micrometer Tracing bridge would export traces twice | Accepted | 2026-09-15 |
 | D00-8 | — | — | — | Pending | — |
 | D00-9 | — | — | — | Pending | — |
 | D00-10 | — | — | — | Pending | — |
@@ -792,8 +792,8 @@ Phase totals: P1 2 h · P2 3 h · P3 2 h · P4 5 h · **step total 12 h**. Run c
 
 | Field | Value |
 |---|---|
-| Step status | Planned |
-| Gate result | Not evaluated |
+| Step status | In progress |
+| Gate result | **G0 Passed** (2026-09-15T21:50Z, right after S00-T07, before S00-T08; master §0.3 O2). SP3 criteria A–D passed with no fallback: [docs/results/sp3-stack-compat.md](results/sp3-stack-compat.md). |
 | Completed on | — |
 | Completed by | — |
 | Handoff accepted by next step | — |
