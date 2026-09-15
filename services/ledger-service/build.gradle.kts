@@ -3,6 +3,9 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":libs:money"))
+    implementation(project(":libs:contracts"))
+    testImplementation(testFixtures(project(":libs:money")))
     testImplementation(libs.testcontainers.postgresql)
 }
 

@@ -732,8 +732,8 @@ Execution order follows dependencies: S02-T01 → S02-T02 → S02-T03 → S02-T0
 
 | Field | Value |
 |---|---|
-| Step status | Planned |
-| Gate result | Not evaluated |
+| Step status | In progress: S02-T01 Done (`bc8a3c1`); S02-T02 next |
+| Gate result | Not evaluated (G1 after S02-T07) |
 | Completed on | — |
 | Completed by | — |
 | Handoff accepted by next step | — |
