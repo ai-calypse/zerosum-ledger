@@ -1,0 +1,20 @@
+{
+  "$comment": "Negative fixtures for zerosum.money_order.v1: each case mutates golden O1 (patch applied by MoneyOrderSchemaTest) and names the keyword expected to fail.",
+  "cases": [
+    { "name": "missing required property", "remove": "/reason", "expected_keyword": "required" },
+    { "name": "unknown top-level property", "set": { "pointer": "/extra", "value": true }, "expected_keyword": "additionalProperties" },
+    { "name": "unknown entry property", "set": { "pointer": "/entries/0/memo", "value": "x" }, "expected_keyword": "additionalProperties" },
+    { "name": "unknown source property", "set": { "pointer": "/source/principal", "value": "x" }, "expected_keyword": "additionalProperties" },
+    { "name": "wrong type enum", "set": { "pointer": "/type", "value": "TRANSFER" }, "expected_keyword": "enum" },
+    { "name": "wrong schema constant", "set": { "pointer": "/schema", "value": "zerosum.money_order.v2" }, "expected_keyword": "const" },
+    { "name": "reason pattern violation", "set": { "pointer": "/reason", "value": "Trip.Completed" }, "expected_keyword": "pattern" },
+    { "name": "entity id pattern violation", "set": { "pointer": "/entries/0/entity_id", "value": "wallet:W1" }, "expected_keyword": "pattern" },
+    { "name": "currency not allowed", "set": { "pointer": "/entries/0/currency", "value": "GBP" }, "expected_keyword": "enum" },
+    { "name": "too few entries", "keep_entries": 1, "expected_keyword": "minItems" },
+    { "name": "zero amount", "set": { "pointer": "/entries/0/amount_minor", "value": 0 }, "expected_keyword": "not" },
+    { "name": "amount as string", "set": { "pointer": "/entries/0/amount_minor", "value": "2500" }, "expected_keyword": "type" },
+    { "name": "amount with a fraction", "set": { "pointer": "/entries/0/amount_minor", "value": 2500.5 }, "expected_keyword": "type" },
+    { "name": "amount over cap", "set": { "pointer": "/entries/0/amount_minor", "value": 1000000000001 }, "expected_keyword": "maximum" },
+    { "name": "timestamp without zone", "set": { "pointer": "/created_at", "value": "2026-09-15T10:04:11.219" }, "expected_keyword": "pattern" }
+  ]
+}

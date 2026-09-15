@@ -1,0 +1,21 @@
+# S01-T02 FeeCalculator and FareSplitter tests 2026-09-15T22:06:54Z
+$ ./gradlew :libs:money:test  (exit 0; same run as S01-T01 evidence)
+  dev.zerosum.money.FeeCalculatorTest tests 12 failures 0 errors 0
+  dev.zerosum.money.FareSplitterTest tests 4 failures 0 errors 0
+RESULT PASS
+    FeeCalculatorTest zeroAndThreeDigitCurrenciesHaveNoHiddenScale() passed
+    FeeCalculatorTest rejectsInputsOutsideTheFeeDomain() passed
+    FeeCalculatorTest resultsOutsideLongRangeThrowInsteadOfTruncating() passed
+    FeeCalculatorTest "2500" × "290" bps → "72" passed
+    FeeCalculatorTest "2700" × "250" bps → "68" passed
+    FeeCalculatorTest "-2500" × "290" bps → "-72" passed
+    FeeCalculatorTest "-2700" × "250" bps → "-68" passed
+    FeeCalculatorTest "2501" × "290" bps → "73" passed
+    FeeCalculatorTest "1" × "5000" bps → "0" passed
+    FeeCalculatorTest "3" × "5000" bps → "2" passed
+    FeeCalculatorTest "0" × "290" bps → "0" passed
+    FeeCalculatorTest reproducesTheWorkedExampleCaptureFee() passed
+    FareSplitterTest cumulativeAdjustmentsEqualASplitOfTheFinalFare() passed
+    FareSplitterTest reproducesWorkedExampleO1AndO3() passed
+    FareSplitterTest partsSumExactlyToTheFareAndSplitIsSignSymmetric() passed
+    FareSplitterTest edgeCases() passed

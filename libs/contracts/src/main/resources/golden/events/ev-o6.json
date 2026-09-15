@@ -1,0 +1,13 @@
+{
+  "schema": "zerosum.payment_event.v1",
+  "event_id": "settlement:fakecard:rpt_2026_09_15:USD",
+  "event_type": "SETTLEMENT_RECEIVED",
+  "order_group_id": "settlement:fakecard:rpt_2026_09_15:USD",
+  "provider": "fakecard",
+  "report_id": "rpt_2026_09_15",
+  "currency": "USD",
+  "gross_minor": 2200,
+  "fee_minor": 102,
+  "net_minor": 2098,
+  "occurred_at": "2026-09-16T06:00:00.000Z"
+}

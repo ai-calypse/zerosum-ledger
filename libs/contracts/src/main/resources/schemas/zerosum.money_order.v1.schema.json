@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zerosum.dev/schemas/zerosum.money_order.v1.schema.json",
+  "$comment": "decision: D01-8 — docs/step_01_domain_contracts.md#decisions-and-outputs. The STORED money order, which is also the published event (master §0.3 C1). The API request is a separate contract (D03-2). Shape constraints mirror D01-5 (ValidationLimits) and D01-7 (allowed-currencies.txt); cross-field rules (zero-sum, allowed account per entity kind) are enforced by ZeroSumValidator, not by this schema.",
+  "title": "zerosum.money_order.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "order_id", "order_group_id", "type", "reason", "adjusts_order_id", "source", "entries", "metadata", "effective_at", "created_at"],
+  "properties": {
+    "schema": { "const": "zerosum.money_order.v1" },
+    "order_id": { "$ref": "#/$defs/uuid" },
+    "order_group_id": { "$ref": "#/$defs/group_id" },
+    "type": {
+      "$comment": "decision: D01-5 — rule 1 order types",
+      "enum": ["COMMERCE", "COLLECTION", "REFUND", "DISBURSEMENT", "SETTLEMENT"]
+    },
+    "reason": {
+      "$comment": "decision: D01-5 — rule 1 reason pattern and length bound",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z_]+\\.[a-z_]+$"
+    },
+    "adjusts_order_id": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/uuid" }]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "idempotency_key"],
+      "properties": {
+        "system": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "idempotency_key": {
+          "$comment": "Length limits belong to D03-3; only non-emptiness is part of this contract.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "entries": {
+      "$comment": "decision: D01-5 — rule 2 entry count bounds",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "metadata": { "type": "object" },
+    "effective_at": { "$ref": "#/$defs/timestamp" },
+    "created_at": { "$ref": "#/$defs/timestamp" }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "group_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_:.-]+$"
+    },
+    "entity_id": {
+      "$comment": "decision: D01-5 — rule 3 entity ID pattern and length bound",
+      "type": "string",
+      "maxLength": 73,
+      "pattern": "^(rider|driver|platform|provider):[A-Za-z0-9_-]{1,64}$"
+    },
+    "account_code": {
+      "$comment": "decision: D01-6 — account codes of the chart of accounts (allowed per kind is checked by ZeroSumValidator)",
+      "enum": ["receivable", "payable", "revenue", "cash", "processing_fees", "clearing", "payout_clearing"]
+    },
+    "currency_code": {
+      "$comment": "decision: D01-7 — mirrors libs/money allowed-currencies.txt",
+      "enum": ["EUR", "JPY", "KWD", "USD"]
+    },
+    "signed_minor_amount": {
+      "$comment": "decision: D01-5 — rule 2: non-zero, |amount| <= 10^12 minor units. Consumers' JSON parsers must reject non-integer lexical forms such as 12.0 (D01-8).",
+      "type": "integer",
+      "minimum": -1000000000000,
+      "maximum": 1000000000000,
+      "not": { "const": 0 }
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_id", "account", "currency", "amount_minor"],
+      "properties": {
+        "entity_id": { "$ref": "#/$defs/entity_id" },
+        "account": { "$ref": "#/$defs/account_code" },
+        "currency": { "$ref": "#/$defs/currency_code" },
+        "amount_minor": { "$ref": "#/$defs/signed_minor_amount" }
+      }
+    }
+  }
+}

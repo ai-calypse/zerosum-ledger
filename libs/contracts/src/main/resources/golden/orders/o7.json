@@ -1,0 +1,16 @@
+{
+  "schema": "zerosum.money_order.v1",
+  "order_id": "01996a3e-8f10-7c2a-9a1e-3d5c7b2e4f07",
+  "order_group_id": "payout_d1_0001",
+  "type": "DISBURSEMENT",
+  "reason": "payout.settled",
+  "adjusts_order_id": null,
+  "source": { "system": "instrument-service", "idempotency_key": "01996a3f-0001-7000-8000-000000000003:PAYOUT_SETTLED" },
+  "entries": [
+    { "entity_id": "provider:fakebank", "account": "payout_clearing", "currency": "USD", "amount_minor": 1760 },
+    { "entity_id": "platform:main", "account": "cash", "currency": "USD", "amount_minor": -1760 }
+  ],
+  "metadata": {},
+  "effective_at": "2026-09-17T09:00:00.000Z",
+  "created_at": "2026-09-17T09:00:00.310Z"
+}

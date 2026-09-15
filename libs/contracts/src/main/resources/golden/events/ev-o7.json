@@ -1,0 +1,12 @@
+{
+  "schema": "zerosum.payment_event.v1",
+  "event_id": "01996a3f-0001-7000-8000-000000000003:PAYOUT_SETTLED",
+  "event_type": "PAYOUT_SETTLED",
+  "attempt_id": "01996a3f-0001-7000-8000-000000000003",
+  "order_group_id": "payout_d1_0001",
+  "entity_id": "driver:D1",
+  "provider": "fakebank",
+  "provider_ref": "po_0001",
+  "money": { "currency": "USD", "amount_minor": 1760 },
+  "occurred_at": "2026-09-17T09:00:00.000Z"
+}

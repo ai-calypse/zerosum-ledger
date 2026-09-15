@@ -1,0 +1,30 @@
+{
+  "$comment": "decision: D01-9 — docs/step_01_domain_contracts.md#decisions-and-outputs. Every file under golden/ is listed here (GoldenManifestTest). File name = lower-case id.",
+  "write_time_generated_fields": {
+    "zerosum.money_order.v1": ["order_id", "created_at"],
+    "zerosum.payment_event.v1": []
+  },
+  "orders": [
+    { "id": "O1", "file": "golden/orders/o1.json", "source": "writer", "paired_event": null },
+    { "id": "O2", "file": "golden/orders/o2.json", "source": "mapper", "paired_event": "EV-O2" },
+    { "id": "O3", "file": "golden/orders/o3.json", "source": "writer", "paired_event": null, "adjusts": "O1" },
+    { "id": "O4", "file": "golden/orders/o4.json", "source": "mapper", "paired_event": "EV-O4" },
+    { "id": "O5", "file": "golden/orders/o5.json", "source": "mapper", "paired_event": "EV-O5" },
+    { "id": "O6", "file": "golden/orders/o6.json", "source": "mapper", "paired_event": "EV-O6" },
+    { "id": "O7", "file": "golden/orders/o7.json", "source": "mapper", "paired_event": "EV-O7" },
+    { "id": "O8", "file": "golden/orders/o8.json", "source": "mapper", "paired_event": "EV-O8", "variant": true }
+  ],
+  "events": [
+    { "id": "EV-O2", "file": "golden/events/ev-o2.json", "event_type": "CHARGE_SUCCEEDED", "produces_order": "O2" },
+    { "id": "EV-O4", "file": "golden/events/ev-o4.json", "event_type": "REFUND_SUCCEEDED", "produces_order": "O4" },
+    { "id": "EV-O5", "file": "golden/events/ev-o5.json", "event_type": "PAYOUT_ACCEPTED", "produces_order": "O5" },
+    { "id": "EV-O6", "file": "golden/events/ev-o6.json", "event_type": "SETTLEMENT_RECEIVED", "produces_order": "O6" },
+    { "id": "EV-O7", "file": "golden/events/ev-o7.json", "event_type": "PAYOUT_SETTLED", "produces_order": "O7" },
+    { "id": "EV-O8", "file": "golden/events/ev-o8.json", "event_type": "PAYOUT_RETURNED", "produces_order": "O8" },
+    { "id": "EV-CHARGE_DECLINED", "file": "golden/events/ev-charge_declined.json", "event_type": "CHARGE_DECLINED", "schema_only": true, "produces_order": null },
+    { "id": "EV-REFUND_FAILED", "file": "golden/events/ev-refund_failed.json", "event_type": "REFUND_FAILED", "schema_only": true, "produces_order": null },
+    { "id": "EV-PAYOUT_REJECTED", "file": "golden/events/ev-payout_rejected.json", "event_type": "PAYOUT_REJECTED", "schema_only": true, "produces_order": null },
+    { "id": "EV-PAYOUT_FAILED", "file": "golden/events/ev-payout_failed.json", "event_type": "PAYOUT_FAILED", "schema_only": true, "produces_order": "unpaired: mapping row exists (payout.failed) but no golden order" }
+  ],
+  "expected_balances": "golden/expected-balances.json"
+}
