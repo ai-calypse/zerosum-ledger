@@ -1,0 +1,28 @@
+# S01-T01 ISO table generation, regeneration check and tests 2026-09-15T22:06:53Z
+# source: https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml (retrieved 2026-09-15; raw XML not committed, D01-2)
+$ shasum -a 256 list-one.xml
+838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9  list-one.xml
+--- checked-in table header (libs/money/src/main/resources/dev/zerosum/money/iso4217-minor-units.csv)
+# ISO 4217 minor-unit digits per alphabetic currency code, generated from List One.
+# decision: D01-2 — docs/step_01_domain_contracts.md#decisions-and-outputs
+# source: ISO 4217 List One (SIX Financial Information AG), published 2026-01-01
+# source-sha256: 838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9
+# generated-by: libs/money/scripts/GenerateMinorUnitTable.java
+# skipped codes without numeric minor units: XAG,XAU,XBA,XBB,XBC,XBD,XDR,XPD,XPT,XSU,XTS,XUA,XXX
+# skipped entries without a currency code: ANTARCTICA; PALESTINE, STATE OF; SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS
+# format: CODE,DIGITS sorted by code; do not edit by hand, regenerate instead
+rows: 165; zero-digit: 17; three-digit: 7; four-digit: 2
+$ java libs/money/scripts/GenerateMinorUnitTable.java list-one.xml <scratch>/regen.csv && diff libs/money/src/main/resources/dev/zerosum/money/iso4217-minor-units.csv <scratch>/regen.csv
+wrote 165 currencies to /private/tmp/claude-501/-Users-yakshgandhi-Documents-Development-fintech-blogs/8d2f12f4-2483-4d36-9402-1628da230ac5/scratchpad/regen.csv
+diff: identical (no output)
+$ header source-sha256 equals input hash: yes
+$ XXE guard: input with DOCTYPE + external entity
+[Fatal Error] :1:31: DOCTYPE is disallowed when the feature "http://apache.org/xml/features/disallow-doctype-decl" set to true.
+GenerateMinorUnitTable: cannot parse /private/tmp/claude-501/-Users-yakshgandhi-Documents-Development-fintech-blogs/8d2f12f4-2483-4d36-9402-1628da230ac5/scratchpad/xxe.xml: DOCTYPE is disallowed when 
+exit 1; output written: no
+$ grep -rn "java.util.Currency" libs/money/src/main
+grep exit 1 (1 = no matches)
+$ ./gradlew :libs:money:test  (exit 0)
+  dev.zerosum.money.MoneyTest tests 13 failures 0 errors 0
+  dev.zerosum.money.CurrencyRulesTest tests 8 failures 0 errors 0
+RESULT PASS
