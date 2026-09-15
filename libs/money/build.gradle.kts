@@ -9,6 +9,8 @@ dependencies {
     // fixtures, which consumers opt into with testImplementation(testFixtures(project(":libs:money"))).
     testFixturesApi(platform(libs.spring.boot.dependencies))
     testFixturesApi(libs.junit.jupiter)
+    // MoneyArchRules (S01-T07); pinned in D00-1 / ADR-0002 (master §0.3 C16).
+    testFixturesApi(libs.archunit.junit5)
 
     // Schema/validator agreement check in ValidatorGenerativeTest (S01-T06).
     testImplementation(project(":libs:contracts"))

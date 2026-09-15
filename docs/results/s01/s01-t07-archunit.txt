@@ -1,0 +1,27 @@
+# S01-T07 ArchUnit money rules 2026-09-15T22:38:08Z
+## 1. ./gradlew :libs:money:test --rerun
+exit 0
+BUILD SUCCESSFUL in 2s
+  dev.zerosum.money.arch.MoneyArchitectureTest tests 6 failures 0 errors 0
+     realMoneyClassesSatisfyEveryRule() passed
+     ruleDFiresOnTheNonJdkDependencyCanary() passed
+     ruleEFiresOnTheJdkCurrencyCanary() passed
+     ruleCFiresOnTheRoundingModeCanary() passed
+     ruleBFiresOnTheBigDecimalCanary() passed
+     ruleAFiresOnTheFloatingPointCanary() passed
+     ZS-ARCH-CANARY NonJdkDependencyCanary -> Method <dev.zerosum.archcanary.NonJdkDependencyCanary.requirePositive(long)> calls method <org.junit.jupiter.api.Assertions.assertTrue(boolean)> in (NonJdkDependencyCanary.java:9)
+     ZS-ARCH-CANARY JdkCurrencyCanary -> Method <dev.zerosum.archcanary.JdkCurrencyCanary.digits(java.lang.String)> calls method <java.util.Currency.getDefaultFractionDigits()> in (JdkCurrencyCanary.java:9)
+     ZS-ARCH-CANARY RoundingModeCanary -> Method <dev.zerosum.archcanary.RoundingModeCanary.implicit(java.math.BigDecimal)> calls method <java.math.BigDecimal.setScale(int)> in (RoundingModeCanary.java:14)
+     ZS-ARCH-CANARY BigDecimalCanary -> Method <dev.zerosum.archcanary.BigDecimalCanary.half(long)> calls method <java.math.BigDecimal.divide(java.math.BigDecimal, int, java.math.RoundingMode)> in (BigDecimalCanary.java:10)
+     ZS-ARCH-CANARY FloatingPointCanary -> dev.zerosum.archcanary.FloatingPointCanary uses floating point: call Method <dev.zerosum.archcanary.FloatingPointCanary.fee(long)> calls method <java.lang.Math.round(double)> in (FloatingPointCanary.java:9)
+all libs/money: tests 81 failures+errors 0
+RUN1 PASS
+## 2. manual check (local only, reverted): add a double field to Money
+1
+exit 1 (non-zero expected)
+  FAILED realMoneyClassesSatisfyEveryRule() :: java.lang.AssertionError: Architecture Violation [Priority: MEDIUM] - Rule 'Rule A: money code uses no floating point' was violated (1 times): | dev.zerosum.money.Money uses floating point: field dev.zerosum.money.Money.MANUAL_CHECK_RATE
+  RULE-A-NAMES-MONEY
+reverted: git diff clean
+restored full run exit 0
+## 3. grep: libs/money main imports only java.* (Rule D cross-check)
+non-java imports in main: 0
