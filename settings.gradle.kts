@@ -29,6 +29,4 @@ include(
     "tools:simulator",
     "tools:verifier",
     "infra:tests",
-    // SP3 spike (S00-T07): temporary, removed once its SHA is recorded.
-    "spikes:sp3-stack",
 )
