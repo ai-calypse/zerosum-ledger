@@ -1,0 +1,26 @@
+# Build outputs
+build/
+.gradle/
+.kotlin/
+out/
+bin/
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets (the placeholder index .env.example is tracked)
+.env
+!.env.example
+
+# Prompt-02 documentation bundle (duplicate of docs/)
+/zerosum-ledger-docs.zip
