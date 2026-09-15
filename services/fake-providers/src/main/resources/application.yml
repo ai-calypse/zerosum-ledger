@@ -1,6 +1,17 @@
 spring:
   application:
     name: fake-providers
+  # decision: D00-4, D00-8 — docs/step_00_foundations.md#decisions-and-outputs
+  # Runtime queries use fakeproviders_app; Flyway migrates as fakeproviders_owner. Passwords have no defaults (fail fast).
+  datasource:
+    url: jdbc:postgresql://${ZS_DB_HOST:localhost}:${ZS_DB_PORT:5432}/fakeproviders
+    username: fakeproviders_app
+    password: ${ZS_FAKEPROVIDERS_APP_DB_PASSWORD}
+  flyway:
+    user: fakeproviders_owner
+    password: ${ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD}
+    # Tolerate a slow database instead of relying only on Compose start ordering.
+    connect-retries: 10
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

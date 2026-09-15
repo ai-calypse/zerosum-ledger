@@ -28,4 +28,5 @@ include(
     "services:fake-providers",
     "tools:simulator",
     "tools:verifier",
+    "infra:tests",
 )

@@ -1,0 +1,139 @@
+# decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (image tags and digests: D00-1)
+# Commands: `docker compose up -d --wait` (default profile), `docker compose --profile chaos up -d --wait`
+# (adds toxiproxy), `docker compose down -v` (reset all data; init scripts only run on an empty volume).
+# Extension rule (D00-3): later steps add containers or settings with trace comments in their own register;
+# changing an existing D00-3 choice needs a change request.
+name: zerosum-ledger
+
+services:
+  postgres:
+    # decision: D00-1
+    image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+    # decision: D00-3 — pg_stat_statements preloaded via command-line server settings (master §0.3 O12)
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${ZS_POSTGRES_SUPERUSER_PASSWORD:?set ZS_POSTGRES_SUPERUSER_PASSWORD in .env (tools/dev/generate-env.sh)}
+      # decision: D00-4 — role passwords, read only by infra/postgres/init.sh
+      ZS_ORDERS_OWNER_DB_PASSWORD: ${ZS_ORDERS_OWNER_DB_PASSWORD:?set ZS_ORDERS_OWNER_DB_PASSWORD in .env}
+      ZS_ORDERS_APP_DB_PASSWORD: ${ZS_ORDERS_APP_DB_PASSWORD:?set ZS_ORDERS_APP_DB_PASSWORD in .env}
+      ZS_LEDGER_OWNER_DB_PASSWORD: ${ZS_LEDGER_OWNER_DB_PASSWORD:?set ZS_LEDGER_OWNER_DB_PASSWORD in .env}
+      ZS_LEDGER_APP_DB_PASSWORD: ${ZS_LEDGER_APP_DB_PASSWORD:?set ZS_LEDGER_APP_DB_PASSWORD in .env}
+      ZS_INSTRUMENTS_OWNER_DB_PASSWORD: ${ZS_INSTRUMENTS_OWNER_DB_PASSWORD:?set ZS_INSTRUMENTS_OWNER_DB_PASSWORD in .env}
+      ZS_INSTRUMENTS_APP_DB_PASSWORD: ${ZS_INSTRUMENTS_APP_DB_PASSWORD:?set ZS_INSTRUMENTS_APP_DB_PASSWORD in .env}
+      ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD: ${ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD:?set ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD in .env}
+      ZS_FAKEPROVIDERS_APP_DB_PASSWORD: ${ZS_FAKEPROVIDERS_APP_DB_PASSWORD:?set ZS_FAKEPROVIDERS_APP_DB_PASSWORD in .env}
+      ZS_VERIFIER_DB_PASSWORD: ${ZS_VERIFIER_DB_PASSWORD:?set ZS_VERIFIER_DB_PASSWORD in .env}
+      ZS_STATS_DB_PASSWORD: ${ZS_STATS_DB_PASSWORD:?set ZS_STATS_DB_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      # decision: D00-4 — init.sh runs once on an empty volume and executes /zs/postgres/init.sql
+      - ./infra/postgres:/zs/postgres:ro
+      - ./infra/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      # TCP check: the temporary server used while init scripts run listens on the socket only, so a
+      # half-initialized database never reports healthy.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    stop_grace_period: 30s
+    restart: "no"
+
+  kafka:
+    # decision: D00-1
+    image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # INTERNAL for the Compose network, HOST for clients on the host, CONTROLLER for KRaft.
+      KAFKA_LISTENERS: INTERNAL://:29092,HOST://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,HOST://127.0.0.1:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Fixed cluster ID so volumes stay reproducible.
+      CLUSTER_ID: ZeroSumLedgerKRaft00Aw
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # Single broker: internal topics cannot replicate.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are provisioned explicitly by S04-T01.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: -Xms1g -Xmx1g
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    ports:
+      - "127.0.0.1:9092:9092"
+    healthcheck:
+      # The bundled CLI inherits KAFKA_HEAP_OPTS; give it a small heap so it fits beside the broker.
+      test: ["CMD-SHELL", "KAFKA_HEAP_OPTS=-Xmx128m /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:29092 > /dev/null"]
+      interval: 10s
+      timeout: 20s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    stop_grace_period: 30s
+    restart: "no"
+
+  otel-lgtm:
+    # decision: D00-1
+    image: grafana/otel-lgtm:0.33.0@sha256:475319e883b66594d1a2f22ef168c2459802bb94548e6f25d9782bd5f5c19a3a
+    ports:
+      - "127.0.0.1:3000:3000"
+      # Local-only OTLP ports (D00-3 exception): host-run spikes and tools export here.
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+    restart: "no"
+
+  toxiproxy:
+    # decision: D00-1
+    image: ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e
+    profiles: [chaos]
+    ports:
+      - "127.0.0.1:8474:8474"
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    restart: "no"
+
+volumes:
+  postgres-data:
+  kafka-data:
