@@ -1,0 +1,17 @@
+{
+  "$comment": "Negative fixtures for zerosum.payment_event.v1: each case mutates a golden event (by id) and names the keyword expected to fail.",
+  "cases": [
+    { "name": "unknown event type", "base": "EV-O2", "set": { "pointer": "/event_type", "value": "CHARGE_REVERSED" }, "expected_keyword": "enum" },
+    { "name": "missing type-specific field (provider_ref on CHARGE_SUCCEEDED)", "base": "EV-O2", "remove": "/provider_ref", "expected_keyword": "required" },
+    { "name": "missing source_order_id on a charge event", "base": "EV-O2", "remove": "/source_order_id", "expected_keyword": "required" },
+    { "name": "missing failure_code on CHARGE_DECLINED", "base": "EV-CHARGE_DECLINED", "remove": "/failure_code", "expected_keyword": "required" },
+    { "name": "failure_code on a successful event", "base": "EV-O2", "set": { "pointer": "/failure_code", "value": "x" }, "expected_keyword": "false" },
+    { "name": "settlement event carrying attempt_id", "base": "EV-O6", "set": { "pointer": "/attempt_id", "value": "01996a3f-0001-7000-8000-000000000001" }, "expected_keyword": "false" },
+    { "name": "settlement event carrying entity_id", "base": "EV-O6", "set": { "pointer": "/entity_id", "value": "rider:R1" }, "expected_keyword": "false" },
+    { "name": "settlement event missing net_minor", "base": "EV-O6", "remove": "/net_minor", "expected_keyword": "required" },
+    { "name": "attempt event carrying settlement fields", "base": "EV-O5", "set": { "pointer": "/report_id", "value": "rpt_x" }, "expected_keyword": "false" },
+    { "name": "payout event carrying source_order_id", "base": "EV-O5", "set": { "pointer": "/source_order_id", "value": "01996a3e-8f10-7c2a-9a1e-3d5c7b2e4f01" }, "expected_keyword": "false" },
+    { "name": "non-positive money amount", "base": "EV-O2", "set": { "pointer": "/money/amount_minor", "value": 0 }, "expected_keyword": "exclusiveMinimum" },
+    { "name": "unknown property", "base": "EV-O2", "set": { "pointer": "/extra", "value": 1 }, "expected_keyword": "additionalProperties" }
+  ]
+}

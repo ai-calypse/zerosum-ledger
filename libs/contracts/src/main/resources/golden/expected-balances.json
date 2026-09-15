@@ -1,0 +1,32 @@
+{
+  "$comment": "decision: D01-9 — docs/step_01_domain_contracts.md#decisions-and-outputs. Transcribed from docs/zerosum_ledger_mvp_plan.md#worked-example. signed_minor: debit +, credit − (ADR-0003); presented_minor: on the account's normal side. Accounts not listed have no entries in the scenario.",
+  "scenarios": [
+    {
+      "id": "after_O1_O7",
+      "orders": ["O1", "O2", "O3", "O4", "O5", "O6", "O7"],
+      "balances": [
+        { "entity_id": "rider:R1", "account": "receivable", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "driver:D1", "account": "payable", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "provider:fakecard", "account": "clearing", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "provider:fakebank", "account": "payout_clearing", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "platform:main", "account": "revenue", "currency": "USD", "signed_minor": -440, "presented_minor": 440 },
+        { "entity_id": "platform:main", "account": "processing_fees", "currency": "USD", "signed_minor": 102, "presented_minor": 102 },
+        { "entity_id": "platform:main", "account": "cash", "currency": "USD", "signed_minor": 338, "presented_minor": 338 }
+      ]
+    },
+    {
+      "id": "after_O1_O8_variant",
+      "$comment": "O8 (payout returned) applied after O1–O7: cash becomes 2098 and the driver is owed 1760 again.",
+      "orders": ["O1", "O2", "O3", "O4", "O5", "O6", "O7", "O8"],
+      "balances": [
+        { "entity_id": "rider:R1", "account": "receivable", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "driver:D1", "account": "payable", "currency": "USD", "signed_minor": -1760, "presented_minor": 1760 },
+        { "entity_id": "provider:fakecard", "account": "clearing", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "provider:fakebank", "account": "payout_clearing", "currency": "USD", "signed_minor": 0, "presented_minor": 0 },
+        { "entity_id": "platform:main", "account": "revenue", "currency": "USD", "signed_minor": -440, "presented_minor": 440 },
+        { "entity_id": "platform:main", "account": "processing_fees", "currency": "USD", "signed_minor": 102, "presented_minor": 102 },
+        { "entity_id": "platform:main", "account": "cash", "currency": "USD", "signed_minor": 2098, "presented_minor": 2098 }
+      ]
+    }
+  ]
+}

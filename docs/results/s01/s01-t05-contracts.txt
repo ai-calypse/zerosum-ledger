@@ -1,0 +1,35 @@
+# S01-T05 JSON Schemas, golden O1–O8, schema validation tests 2026-09-15T22:27:53Z
+$ ./gradlew :libs:contracts:test   (BUILD SUCCESSFUL)
+  dev.zerosum.contracts.GoldenManifestTest tests 2 failures 0 errors 0
+      manifestListsExactlyTheGoldenFiles() passed
+      manifestIdsResolveThroughTheLoaderAndPairingsPointToExistingEntries() passed
+  dev.zerosum.contracts.MoneyOrderSchemaTest tests 4 failures 0 errors 0
+      everyGoldenOrderIsValid() passed
+      everyNegativeFixtureIsRejectedWithItsExpectedKeyword() passed
+      schemaTypeEnumAndLimitsMatchTheLibraryConstants() passed
+      documentsThatAZeroFractionIntegerPassesTheSchema() passed
+  dev.zerosum.contracts.PaymentEventSchemaTest tests 4 failures 0 errors 0
+      everyGoldenEventIsValid() passed
+      everyNegativeFixtureIsRejectedWithItsExpectedKeyword() passed
+      goldenEventsFollowTheEventIdAndSettlementRules() passed
+      eventTypeEnumIsExactlyTheC5ListAndEveryTypeHasAPositiveFixture() passed
+  dev.zerosum.contracts.WorkedExampleGoldenTest tests 5 failures 0 errors 0
+      feeCalculatorOnTheCapturedAmountEqualsTheSettlementProcessingFee() passed
+      cumulativeBalancesMatchTheExpectedBalanceFixtures() passed
+      pairedEventsMatchTheirOrdersAndMapperOrdersFollowC7() passed
+      timestampsIncreaseFromO1ToO8() passed
+      everyGoldenOrderPassesTheValidatorAndSumsToZeroPerCurrency() passed
+negative cases exercised: money order 15, payment event 12
+  money-order keywords: ['additionalProperties', 'const', 'enum', 'maximum', 'minItems', 'not', 'pattern', 'required', 'type']
+  payment-event keywords: ['additionalProperties', 'enum', 'exclusiveMinimum', 'false', 'required']
+goldens: 8 orders, 10 events (4 schema-only), expected balances: golden/expected-balances.json
+RESULT PASS
+--- dialect: "$schema": "https://json-schema.org/draft/2020-12/schema"
+--- documented: a zero-fraction integer (2500.0) passes the schema (MoneyOrderSchemaTest.documentsThatAZeroFractionIntegerPassesTheSchema); consumers' parsers must reject it (D01-8)
+--- Jackson resolution on :libs:contracts testRuntimeClasspath
+com.networknt:json-schema-validator:3.0.7
+tools.jackson.core:jackson-databind:3.1.5 -> 3.2.1 (c)
+tools.jackson.core:jackson-databind:3.2.1
+tools.jackson.core:jackson-databind:3.2.1 (*)
+tools.jackson.core:jackson-databind:3.2.1 (c)
+note: resolves Jackson 3.2.1 via the validator's jackson-bom; services importing the Boot 4.1.1 BOM would pin 3.1.5 — S03 must run a contract test there (H.5)

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zerosum.dev/schemas/zerosum.payment_event.v1.schema.json",
+  "$comment": "decision: D01-8 — docs/step_01_domain_contracts.md#decisions-and-outputs. Payment event payload (master §5.4, §0.3 C5, C6). Envelope and Kafka headers are not part of this contract. Cross-field rules JSON Schema cannot express — event_id = <attempt_id>:<event_type> for attempt events, event_id = settlement:<provider>:<report_id>:<currency> = order_group_id for settlement events, and net_minor + fee_minor = gross_minor — are asserted by producers' contract tests (D05-5, D06-3) and by PaymentEventSchemaTest on the goldens.",
+  "title": "zerosum.payment_event.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "event_id", "event_type", "order_group_id", "provider", "occurred_at"],
+  "properties": {
+    "schema": { "const": "zerosum.payment_event.v1" },
+    "event_id": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9_:.-]+$" },
+    "event_type": {
+      "$comment": "Exactly the v1.2 list of master §5.4 (§0.3 C5).",
+      "enum": [
+        "CHARGE_SUCCEEDED", "CHARGE_DECLINED",
+        "REFUND_SUCCEEDED", "REFUND_FAILED",
+        "PAYOUT_ACCEPTED", "PAYOUT_REJECTED", "PAYOUT_FAILED", "PAYOUT_SETTLED", "PAYOUT_RETURNED",
+        "SETTLEMENT_RECEIVED"
+      ]
+    },
+    "order_group_id": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/group_id" },
+    "provider": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$" },
+    "occurred_at": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/timestamp" },
+
+    "attempt_id": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/uuid" },
+    "source_order_id": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/uuid" },
+    "entity_id": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/entity_id" },
+    "provider_ref": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "failure_code": { "type": "string", "pattern": "^[A-Za-z0-9_]{1,32}$" },
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "amount_minor"],
+      "properties": {
+        "currency": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/currency_code" },
+        "amount_minor": {
+          "$comment": "A positive magnitude; the mapping (master §5.5) applies signs.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000000
+        }
+      }
+    },
+
+    "report_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "currency": { "$ref": "zerosum.money_order.v1.schema.json#/$defs/currency_code" },
+    "gross_minor": { "type": "integer", "minimum": 0, "maximum": 1000000000000 },
+    "fee_minor": { "type": "integer", "minimum": 0, "maximum": 1000000000000 },
+    "net_minor": { "type": "integer", "minimum": 0, "maximum": 1000000000000 }
+  },
+  "allOf": [
+    {
+      "$comment": "Settlement events (§0.3 C6): one per provider, report and currency; no attempt or entity fields.",
+      "if": { "properties": { "event_type": { "const": "SETTLEMENT_RECEIVED" } }, "required": ["event_type"] },
+      "then": {
+        "required": ["report_id", "currency", "gross_minor", "fee_minor", "net_minor"],
+        "properties": {
+          "attempt_id": false, "source_order_id": false, "entity_id": false,
+          "provider_ref": false, "failure_code": false, "money": false
+        }
+      },
+      "else": {
+        "required": ["attempt_id", "entity_id", "money"],
+        "properties": { "report_id": false, "currency": false, "gross_minor": false, "fee_minor": false, "net_minor": false }
+      }
+    },
+    {
+      "$comment": "Charge and refund attempts come from a COMMERCE order; payout attempts come from a payout run and carry no source order.",
+      "if": { "properties": { "event_type": { "enum": ["CHARGE_SUCCEEDED", "CHARGE_DECLINED", "REFUND_SUCCEEDED", "REFUND_FAILED"] } }, "required": ["event_type"] },
+      "then": { "required": ["source_order_id"] },
+      "else": { "properties": { "source_order_id": false } }
+    },
+    {
+      "$comment": "Events for operations the provider accepted carry its reference.",
+      "if": { "properties": { "event_type": { "enum": ["CHARGE_SUCCEEDED", "REFUND_SUCCEEDED", "PAYOUT_ACCEPTED", "PAYOUT_FAILED", "PAYOUT_SETTLED", "PAYOUT_RETURNED"] } }, "required": ["event_type"] },
+      "then": { "required": ["provider_ref"] }
+    },
+    {
+      "$comment": "Unsuccessful outcomes carry a failure code; successful ones never do.",
+      "if": { "properties": { "event_type": { "enum": ["CHARGE_DECLINED", "REFUND_FAILED", "PAYOUT_REJECTED", "PAYOUT_FAILED", "PAYOUT_RETURNED"] } }, "required": ["event_type"] },
+      "then": { "required": ["failure_code"] },
+      "else": { "properties": { "failure_code": false } }
+    }
+  ]
+}

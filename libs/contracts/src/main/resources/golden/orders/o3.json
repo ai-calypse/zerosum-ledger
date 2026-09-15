@@ -1,0 +1,17 @@
+{
+  "schema": "zerosum.money_order.v1",
+  "order_id": "01996a3e-8f10-7c2a-9a1e-3d5c7b2e4f03",
+  "order_group_id": "trip_8f2c",
+  "type": "COMMERCE",
+  "reason": "fare.adjusted",
+  "adjusts_order_id": "01996a3e-8f10-7c2a-9a1e-3d5c7b2e4f01",
+  "source": { "system": "trip-simulator", "idempotency_key": "trip_8f2c:adjusted:1" },
+  "entries": [
+    { "entity_id": "rider:R1", "account": "receivable", "currency": "USD", "amount_minor": -300 },
+    { "entity_id": "driver:D1", "account": "payable", "currency": "USD", "amount_minor": 240 },
+    { "entity_id": "platform:main", "account": "revenue", "currency": "USD", "amount_minor": 60 }
+  ],
+  "metadata": { "trip_id": "trip_8f2c", "commission_bps": 2000, "old_fare_minor": 2500, "new_fare_minor": 2200 },
+  "effective_at": "2026-09-15T10:20:00.000Z",
+  "created_at": "2026-09-15T10:20:00.015Z"
+}
