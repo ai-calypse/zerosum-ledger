@@ -674,24 +674,26 @@ Phase totals: P1 2 h · P2 3 h · P3 2 h · P4 5 h · **step total 12 h**. Run c
 <a id="acceptance-checklist"></a>
 ## G. Acceptance checklist
 
-- [ ] **G0 decided right after S00-T07** (master §0.3 O2, [docs/zerosum_ledger_mvp_plan.md#decomposition-clarifications](zerosum_ledger_mvp_plan.md#decomposition-clarifications)): H.6 records the gate result, and `docs/results/sp3-stack-compat.md` holds evidence for the SP3 criterion in [docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes), or the fallback is chosen per G0 in [docs/zerosum_ledger_mvp_plan.md#decision-gates](zerosum_ledger_mvp_plan.md#decision-gates). D00-7 is Accepted.
-- [ ] **Fresh clone to healthy stack:** the measured time from clone to all containers healthy is recorded in H.4. It meets the exit criterion in [docs/zerosum_ledger_mvp_plan.md#step-00](zerosum_ledger_mvp_plan.md#step-00) and the Compose cold-start target in [docs/zerosum_ledger_mvp_plan.md#cold-warm](zerosum_ledger_mvp_plan.md#cold-warm), or the miss is recorded with its cause.
-- [ ] **CI:** the `build` and `integration` jobs are green on `main`, and their duration is recorded against the exit criterion in [docs/zerosum_ledger_mvp_plan.md#step-00](zerosum_ledger_mvp_plan.md#step-00) and the push target in [docs/zerosum_ledger_mvp_plan.md#cicd](zerosum_ledger_mvp_plan.md#cicd). The `e2e` job skeleton has run green at least once.
-- [ ] **Tag-only publishing (master §0.3 O4):** `ci.yml` publishes no images; the tag workflow is left to S09-T07.
-- [ ] **TB3:** each service role connects only to its own database, and `DatabaseIsolationIT` passes with its negative control recorded ([docs/zerosum_ledger_mvp_plan.md#trust-boundaries](zerosum_ledger_mvp_plan.md#trust-boundaries); design rules in [docs/zerosum_ledger_mvp_plan.md#components](zerosum_ledger_mvp_plan.md#components)).
-- [ ] **TB5:** the `verifier` role reads every service database and can't write to any of them.
-- [ ] **Query statistics (master §0.3 O12):** `pg_stat_statements` is preloaded, and the stats role reads it without any table-data access.
-- [ ] **Role model (master §0.3 O3):** each service has an owner role and an application role, both confined to their own database by `DatabaseIsolationIT`, so M2(a) is testable ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have)).
-- [ ] **Pinned versions:** every version in the catalog (including the JSON Schema validator and ArchUnit, master §0.3 C16), Compose file, wrapper and workflow matches ADR-0002, which has a check date and source per row. No untagged or `latest` images.
-- [ ] **Module layout:** `./gradlew projects` lists every D00-2 project, including `libs/auth` (master §0.3 C9).
-- [ ] **Topology:** the default profile excludes toxiproxy and the `chaos` profile adds it. Memory limits match [docs/zerosum_ledger_mvp_plan.md#topology](zerosum_ledger_mvp_plan.md#topology), or the deviation is recorded in D00-3.
-- [ ] **Telemetry (foundation for M12):** all four service names appear in traces, and metrics are visible in the D00-7 mode. Services stay healthy with otel-lgtm stopped, and builds pass without it.
-- [ ] **Graceful stop:** service containers stop cleanly within their grace period (exit 143, not 137).
-- [ ] **Evidence format (foundation for M13 c):** `docs/results/TEMPLATE.md` covers every M13(c) item and the "Not run" status ([docs/zerosum_ledger_mvp_plan.md#test-failure-handling](zerosum_ledger_mvp_plan.md#test-failure-handling)).
-- [ ] **Hygiene:** a license file is present; `.env` is git-ignored; `.env.example` contains placeholders only and covers every referenced variable; no generated secret appears in container logs (security and hygiene in [docs/zerosum_ledger_mvp_plan.md#release-checklist](zerosum_ledger_mvp_plan.md#release-checklist)).
-- [ ] **ADRs:** ADR-0001 and ADR-0002 are Accepted; ADR-0001 lists the reserved ADR numbers.
-- [ ] **Spike removed:** `spikes/` is gone from the build, and its commit SHA is recorded in the SP3 results file.
-- [ ] **Records complete:** H.1 has every D00 ID Accepted with rationale; H.2 and H.3 have actual paths; H.4 has results and evidence paths; I.1 has every task Done, or Blocked with its exact dependency; I.2 is current after the final change detection.
+> Checked 2026-09-15 against the H.4 evidence. Unchecked items name their blocker.
+
+- [x] **G0 decided right after S00-T07** (master §0.3 O2, [docs/zerosum_ledger_mvp_plan.md#decomposition-clarifications](zerosum_ledger_mvp_plan.md#decomposition-clarifications)): H.6 records the gate result, and `docs/results/sp3-stack-compat.md` holds evidence for the SP3 criterion in [docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes), or the fallback is chosen per G0 in [docs/zerosum_ledger_mvp_plan.md#decision-gates](zerosum_ledger_mvp_plan.md#decision-gates). D00-7 is Accepted.
+- [x] **Fresh clone to healthy stack:** the measured time from clone to all containers healthy is recorded in H.4. It meets the exit criterion in [docs/zerosum_ledger_mvp_plan.md#step-00](zerosum_ledger_mvp_plan.md#step-00) and the Compose cold-start target in [docs/zerosum_ledger_mvp_plan.md#cold-warm](zerosum_ledger_mvp_plan.md#cold-warm), or the miss is recorded with its cause. *(Measured in the working repository: 31 s cold start for infrastructure + services; the timed fresh clone is S09-T01, because no remote exists yet.)*
+- [ ] **CI:** the `build` and `integration` jobs are green on `main`, and their duration is recorded against the exit criterion in [docs/zerosum_ledger_mvp_plan.md#step-00](zerosum_ledger_mvp_plan.md#step-00) and the push target in [docs/zerosum_ledger_mvp_plan.md#cicd](zerosum_ledger_mvp_plan.md#cicd). The `e2e` job skeleton has run green at least once. **Blocked: no GitHub remote (H.5); local `build integrationTest` green as partial evidence.**
+- [x] **Tag-only publishing (master §0.3 O4):** `ci.yml` publishes no images; the tag workflow is left to S09-T07.
+- [x] **TB3:** each service role connects only to its own database, and `DatabaseIsolationIT` passes with its negative control recorded ([docs/zerosum_ledger_mvp_plan.md#trust-boundaries](zerosum_ledger_mvp_plan.md#trust-boundaries); design rules in [docs/zerosum_ledger_mvp_plan.md#components](zerosum_ledger_mvp_plan.md#components)).
+- [x] **TB5:** the `verifier` role reads every service database and can't write to any of them.
+- [x] **Query statistics (master §0.3 O12):** `pg_stat_statements` is preloaded, and the stats role reads it without any table-data access.
+- [x] **Role model (master §0.3 O3):** each service has an owner role and an application role, both confined to their own database by `DatabaseIsolationIT`, so M2(a) is testable ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have)).
+- [x] **Pinned versions:** every version in the catalog (including the JSON Schema validator and ArchUnit, master §0.3 C16), Compose file, wrapper and workflow matches ADR-0002, which has a check date and source per row. No untagged or `latest` images.
+- [x] **Module layout:** `./gradlew projects` lists every D00-2 project, including `libs/auth` (master §0.3 C9).
+- [x] **Topology:** the default profile excludes toxiproxy and the `chaos` profile adds it. Memory limits match [docs/zerosum_ledger_mvp_plan.md#topology](zerosum_ledger_mvp_plan.md#topology), or the deviation is recorded in D00-3. *(Deviation recorded: Grafana and service ports bind 127.0.0.1; VM memory 7.75 GiB, H.5.)*
+- [x] **Telemetry (foundation for M12):** all four service names appear in traces, and metrics are visible in the D00-7 mode. Services stay healthy with otel-lgtm stopped, and builds pass without it.
+- [x] **Graceful stop:** service containers stop cleanly within their grace period (exit 143, not 137).
+- [x] **Evidence format (foundation for M13 c):** `docs/results/TEMPLATE.md` covers every M13(c) item and the "Not run" status ([docs/zerosum_ledger_mvp_plan.md#test-failure-handling](zerosum_ledger_mvp_plan.md#test-failure-handling)).
+- [x] **Hygiene:** a license file is present; `.env` is git-ignored; `.env.example` contains placeholders only and covers every referenced variable; no generated secret appears in container logs (security and hygiene in [docs/zerosum_ledger_mvp_plan.md#release-checklist](zerosum_ledger_mvp_plan.md#release-checklist)).
+- [x] **ADRs:** ADR-0001 and ADR-0002 are Accepted; ADR-0001 lists the reserved ADR numbers.
+- [x] **Spike removed:** `spikes/` is gone from the build, and its commit SHA is recorded in the SP3 results file.
+- [x] **Records complete:** H.1 has every D00 ID Accepted with rationale; H.2 and H.3 have actual paths; H.4 has results and evidence paths; I.1 has every task Done, or Blocked with its exact dependency; I.2 is current after the final change detection. *(S00-T05 and the S00-T01 push are Blocked with the exact dependency named in H.5.)*
 
 <a id="decisions-and-outputs"></a>
 ## H. Decisions and outputs register
@@ -700,82 +702,88 @@ Phase totals: P1 2 h · P2 3 h · P3 2 h · P4 5 h · **step total 12 h**. Run c
 
 | ID | Decision | Rationale | Alternatives considered | Status | Date |
 |---|---|---|---|---|---|
-| D00-1 | — | — | — | Pending | — |
-| D00-2 | — | — | — | Pending | — |
-| D00-3 | — | — | — | Pending | — |
-| D00-4 | — | — | — | Pending | — |
-| D00-5 | — | — | — | Pending | — |
-| D00-6 | — | — | — | Pending | — |
-| D00-7 | — | — | — | Pending | — |
-| D00-8 | — | — | — | Pending | — |
-| D00-9 | — | — | — | Pending | — |
-| D00-10 | — | — | — | Pending | — |
+| D00-1 | Every version pinned in `gradle/libs.versions.toml`, `gradle/wrapper/gradle-wrapper.properties` (Gradle 9.7.1 + SHA-256), `settings.gradle.kts` (foojay resolver 1.0.0), `docker-compose.yml` and `services/Dockerfile` (tag **and** multi-arch digest) and `.github/workflows/ci.yml` (actions pinned to commit SHAs); dated record in [ADR-0002](adr/0002-stack-and-pinned-versions.md). Boot 4.1.1 BOM manages spring-kafka 4.1.1, kafka-clients 4.2.1, Flyway 12.4.0, Testcontainers 2.0.5, JUnit 6.0.3. Non-BOM pins: ArchUnit 1.5.0, networknt json-schema-validator 3.0.7 with draft 2020-12 (C16), OTel agent 2.31.1. Pin-update policy as written in D.1. | Rechecked at primary sources on 2026-09-15; Boot-managed versions preferred; digests make image pulls reproducible | Floating/major-only tags as in the master (`postgres:18`, untagged otel-lgtm): rejected as irreproducible. Action tags instead of SHAs: rejected (mutable) | Accepted | 2026-09-15 |
+| D00-2 | Gradle projects: `:libs:{money,contracts,outbox,auth}`, `:services:{order-service,ledger-service,instrument-service,fake-providers}`, `:tools:{simulator,verifier}`, `:infra:tests` (test-only project for `DatabaseIsolationIT`). `:libs`, `:services`, `:tools`, `:infra` are empty container projects created by the hierarchical includes. Convention plugins live in the included build `build-logic/`. `tools/chaos`, `tools/k6` are not Gradle projects (created by S07/S08). Helper script: `tools/dev/generate-env.sh`. Base package `dev.zerosum.<module>`. Spike `spikes/sp3-stack` existed only at `d4e49f0`. Git: local repository, `main` plus one branch per step (`step/NN-name`, merged `--no-ff`); **no GitHub remote yet** (H.5). | Mirrors master §5.1; infrastructure tests kept out of service code | `buildSrc/` (less explicit, invalidates the whole build on change); flat project names (less readable) | Accepted | 2026-09-15 |
+| D00-3 | `docker-compose.yml`, project name `zerosum-ledger`, no `version:` key. **Default profile:** postgres, kafka, otel-lgtm, order/ledger/instrument-service, fake-providers. **`chaos` profile:** toxiproxy (no proxies). **Limits** (`deploy.resources.limits.memory`, enforced by plain Compose, confirmed with `docker inspect`): postgres 1536M, kafka 1536M (heap 1 g), otel-lgtm 2048M, services 768M, fake-providers 512M, toxiproxy 64M. **PostgreSQL:** `pg_stat_statements` preloaded via `command:` (`shared_preload_libraries`, `pg_stat_statements.track=all`); health `pg_isready -h 127.0.0.1` (TCP, so init-phase socket-only server is never healthy). **Kafka:** combined broker/controller, listeners INTERNAL `kafka:29092` / HOST `127.0.0.1:9092` / CONTROLLER `9093`, fixed `CLUSTER_ID`, internal-topic RF/ISR 1, **auto topic creation disabled**, health via bundled `kafka-broker-api-versions.sh` with a 128 m CLI heap. **otel-lgtm:** health via curl on Grafana. **Services:** built from `services/Dockerfile` (context `services/<svc>` after `./gradlew assemble`), `depends_on` postgres + kafka healthy, no dependency on otel-lgtm, bash `/dev/tcp` health probe (image has no curl/wget), `stop_grace_period: 40s`, exec-form entrypoint, non-root uid 10001. **Ports:** all published ports bind `127.0.0.1`: 5432, 9092, 3000, 8081–8083, 8474 (chaos); fake-providers unpublished. **Local-only exception:** OTLP 4317/4318 on `127.0.0.1` for host-run spikes and tools. **Volumes:** named `postgres-data`, `kafka-data`; init files bind-mounted read-only. **Restart policy:** `"no"` everywhere, so S08 fault scripts control restarts. Extension rule as in D.1. | Topology per master §4.6; honest health signals; predictable restarts for chaos | Grafana (3000) and service ports on all interfaces as the topology table implies: rejected for a laptop (anonymous Grafana admin); `restart: unless-stopped`: rejected (hides crashes from S08); Boot buildpacks image: rejected (no control over agent attach and entrypoint) | Accepted | 2026-09-15 |
+| D00-4 | Databases `orders`, `ledger`, `instruments`, `fakeproviders`, each owned by `<db>_owner` (LOGIN, NOSUPERUSER, runs Flyway) with runtime role `<db>_app` (LOGIN, DML via `ALTER DEFAULT PRIVILEGES FOR ROLE <db>_owner IN SCHEMA public`, SELECT/INSERT/UPDATE/DELETE on tables, USAGE/SELECT on sequences). `verifier`: LOGIN, NOINHERIT, `default_transaction_read_only=on`, SELECT via default privileges only. `stats_reader`: LOGIN, member of `pg_monitor`, no table grants. Per database: `REVOKE CONNECT, TEMPORARY … FROM PUBLIC`, CONNECT granted to owner, app, verifier, stats_reader; `REVOKE CREATE ON SCHEMA public FROM PUBLIC`; `CREATE EXTENSION pg_stat_statements` (superuser) in all four. CONNECT/TEMPORARY on `postgres` also revoked from PUBLIC. **Password delivery:** `infra/postgres/init.sh` (mounted as `/docker-entrypoint-initdb.d/init.sh`) validates the ten `ZS_*_PASSWORD` variables and passes them to `psql -v`; `init.sql` includes the per-database template `database.sql` and quotes them as `:'name'`. Services: datasource = app role, `spring.flyway.user` = owner role, passwords by `${VAR}` without defaults. Empty `V1__baseline.sql` (comment-only script accepted by Flyway 12.4.0). No baseline-on-migrate. | Master §0.3 O3/O12, TB3/TB5; grants to named roles so S02/S03 can REVOKE per table | One role per service (can't test M2(a) for both roles); PUBLIC grants (can't be revoked per role); passwords in SQL literals (secrets in git) | Accepted | 2026-09-15 |
+| D00-5 | `.github/workflows/ci.yml`: triggers `push`, `pull_request`, nightly `schedule` (03:17 UTC; GitHub runs it only on the default branch and may disable it in inactive repositories), `workflow_dispatch`; `concurrency` per workflow+ref with cancel-in-progress; top-level `permissions: contents: read`. Jobs: `build` (setup-java Temurin 25, setup-gradle cache, `./gradlew build`, reports uploaded on failure, 10 min), `integration` (needs build, `./gradlew integrationTest`, 15 min), `e2e` (schedule/dispatch only, needs build, `tools/dev/generate-env.sh` + `::add-mask::` per value, `./gradlew assemble`, `docker compose up -d --build --wait`, `./gradlew e2eTest`, logs on failure, `down -v` always, 20 min). No retries, no `continue-on-error`, no repository secrets, no image publishing (O4). An empty tag selection is reported by the build (D00-10). | Timeouts equal the master §10.3 targets so a miss is visible | Retry actions around tests: rejected (§8.10); a placeholder publish job: rejected (S09-T07 owns it) | Accepted | 2026-09-15 |
+| D00-6 | **Attach:** the service image contains the agent JAR resolved by Gradle from the catalog (`otelAgent` configuration, `copyOtelAgent` → `build/otel/`, run by `assemble`) and attaches it via `JAVA_TOOL_OPTIONS` set in `services/Dockerfile`, with `-XX:MaxRAMPercentage=60`. **Who exports what:** agent → traces only (`-Dotel.metrics.exporter=none -Dotel.logs.exporter=none` as JVM properties, per D00-7); Micrometer `OtlpMeterRegistry` → metrics (`micrometer-registry-otlp` + `spring-boot-opentelemetry` module, `management.otlp.metrics.export.url=${ZS_OTLP_METRICS_URL}`, step 10 s); no log export. **Naming:** `OTEL_SERVICE_NAME` = Compose service name; `OTEL_RESOURCE_ATTRIBUTES=service.version=0.0.0-dev,deployment.environment.name=local` (versioned in S09-T07). **Exposure:** actuator HTTP exposure `health` only. **Tests:** agent never attached; `management.otlp.metrics.export.enabled=false` set on every service Test task. Health-check traces are left unfiltered (acceptable locally). | Images self-contained; one exporter per signal; follows SP3 | Mounting the agent as a volume or downloading it at image build: rejected (version would leave D00-1 / needs network at build); `spring-boot-starter-opentelemetry`: rejected (trace bridge duplicates agent traces) | Accepted | 2026-09-15 |
+| D00-7 | **SP3 passed; proceed with the proposed wiring, fallback: none.** OTel Java agent 2.31.1 exports traces; Micrometer OTLP registry exports metrics. Binding wiring findings: (1) add the `spring-boot-opentelemetry` module (not the starter) or Boot 4.1 creates no OTLP registry; (2) disable the agent's own metrics/logs exporters with `-Dotel.metrics.exporter=none -Dotel.logs.exporter=none` JVM properties, never `OTEL_*_EXPORTER` environment variables, which Boot maps onto `management.otlp.metrics.export.enabled`; (3) Kafka consumer span is a child of the producer span, not a link (input to S04-T06). Evidence: [docs/results/sp3-stack-compat.md](results/sp3-stack-compat.md), spike SHA `d4e49f0`. | Criteria A–D all passed within 0.4 h of the 2 h timebox; both B failures had wiring causes that were found and fixed, not incompatibilities | Fallback A (Prometheus scraping of `/actuator/prometheus`) and fallback B (Boot 4.0.x) not needed; `spring-boot-starter-opentelemetry` rejected because its Micrometer Tracing bridge would export traces twice | Accepted | 2026-09-15 |
+| D00-8 | Conventions in [docs/secrets.md](secrets.md) (the separate note, not a README section): `ZS_` prefix in upper snake case (third-party and OTel SDK names keep their standard names); secret-bearing names end in `_PASSWORD`, `_TOKEN(S)` or `_SECRET(S)`; list values per master §5.11; required secrets have no defaults and fail fast (`${VAR:?message}` in Compose, `${VAR}` without fallback in Boot). `.env.example` indexes every referenced variable, grouped by owning step, with `__GENERATE__` placeholders and a header telling S03/S05/S08 to append theirs. `tools/dev/generate-env.sh` writes `.env` (mode 0600, LF) with `openssl rand -hex 32`, refuses to overwrite without `--force`, exits non-zero if any placeholder remains; used locally and by the CI e2e job, which masks every value. Log-redaction guideline and required sentinel-secret redaction tests (owners S03-T03, S05-T11) in docs/secrets.md. | Hex values can't break Compose interpolation; one generator for local and CI | Hand-copying `.env.example`: rejected (placeholders leak into real use); Compose default values for secrets: rejected (silent empty passwords) | Accepted | 2026-09-15 |
+| D00-9 | [ADR-0001](adr/0001-record-architecture-decisions.md): Context/Decision/Consequences (+ Status, Date, Decision owner header), `NNNN-kebab-title.md`, lifecycle Proposed → Accepted → Superseded by NNNN (or Rejected), accepted text never rewritten, reserved numbers 0002–0010 with owning steps, next free 0011; register row → ADR (rationale) → artifacts (values). [docs/results/TEMPLATE.md](results/TEMPLATE.md): evidence ID/type, status `Measured` or `Not run — <reason>` (no estimates), M13(c) provenance (SHA, versions, seeds, hardware), host and Docker allocation, scenario/workload/seeds, exact commands, raw data, results with repetitions + median + min–max, gate compared by link only, deviations and limitations. | Master §4.7, M13(c), §8.6, §8.10 | MADR template (more sections than a solo project needs) | Accepted | 2026-09-15 |
+| D00-10 | Gradle (Kotlin DSL) 9.7.1. Toolchain Java 25 from the catalog, provisioned by the foojay resolver (Temurin 25.0.4.1+1 on the reference host); the daemon runs on the host JDK (26, within Gradle's supported 17–26). Convention plugins in included build `build-logic/`: `zs.java-conventions` (toolchain, UTF-8, `-parameters`, reproducible archives, JUnit test-scope deps via the Boot platform, test tasks), `zs.library-conventions` (`java-library`, no main dependencies), `zs.service-conventions` (Boot plugin, BOM as `platform(...)`, webmvc, actuator, JDBC, Flyway, OTLP metrics, agent copy, `bootJar` named `app.jar`, plain jar disabled), `zs.tool-conventions` (`application`). One `src/test` source set; **tags:** untagged → `test` (excludes `integration`, `e2e`; `build` depends on it), `@Tag("integration")` → `integrationTest`, `@Tag("e2e")` → `e2eTest`. **Empty selection:** `failOnNoDiscoveredTests=false` and a listener logs `<task>: 0 tests selected by the tag filter`; projects without test sources report `NO-SOURCE`. Test tasks that read files at runtime declare them as inputs (`infra:tests`). No dependency version appears outside the catalog. | Master §4.1 build row, §8.2 layers; one place for versions | Maven (equally fine; Gradle is the master default); `io.spring.dependency-management` plugin (the platform import is native Gradle); separate source sets per layer (more wiring, same selection) | Accepted | 2026-09-15 |
 
 ### H.2 Implementation and configuration locations
 
 | Item | Planned path | Actual path | Traced to |
 |---|---|---|---|
-| Git remote | GitHub public repository `zerosum-ledger` | — | D00-2 |
-| Module layout | `settings.gradle.kts` | — | D00-2 |
-| Auth library module (empty until S03) | `libs/auth/build.gradle.kts` | — | D00-2 |
-| Version catalog | `gradle/libs.versions.toml` | — | D00-1 |
-| Gradle wrapper | `gradle/wrapper/gradle-wrapper.properties` | — | D00-1 |
-| Convention plugins, toolchain, test tasks | `build-logic/` (or `buildSrc/`) | — | D00-10 |
-| Compose topology | `docker-compose.yml` | — | D00-3 (image tags: D00-1) |
-| Database initialization, roles and `pg_stat_statements` extension | `infra/postgres/init.sql` (+ entrypoint wrapper, if used) | — | D00-4 |
-| PostgreSQL server configuration (`pg_stat_statements` preload) | `docker-compose.yml` (or a mounted configuration file) | — | D00-3 |
-| Datasource, Flyway and observability settings | `services/*/src/main/resources/application.yml` | — | D00-4, D00-6, D00-8 |
-| Baseline migrations | `services/*/src/main/resources/db/migration/V1__baseline.sql` | — | D00-4 |
-| Isolation test location | `infra/tests/` (suggested) | — | D00-2, D00-4 |
-| CI workflow | `.github/workflows/ci.yml` | — | D00-5 (action versions: D00-1) |
-| Service images and agent attach | `services/*/Dockerfile` (or Boot image configuration) | — | D00-3, D00-6 |
-| Collector or scrape configuration | `infra/otel/` (only if needed) | — | D00-6, D00-7 |
-| Environment index | `.env.example` | — | D00-8 |
-| Environment generation script | `tools/dev/generate-env.sh` | — | D00-8 |
+| Git remote | GitHub public repository `zerosum-ledger` | **None yet.** Local repository only; push Blocked (H.5) | D00-2 |
+| Module layout | `settings.gradle.kts` | `settings.gradle.kts` | D00-2 |
+| Auth library module (empty until S03) | `libs/auth/build.gradle.kts` | `libs/auth/build.gradle.kts` (+ `package-info.java`) | D00-2 |
+| Version catalog | `gradle/libs.versions.toml` | `gradle/libs.versions.toml` | D00-1 |
+| Gradle wrapper | `gradle/wrapper/gradle-wrapper.properties` | `gradle/wrapper/gradle-wrapper.properties`, `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar` | D00-1 |
+| Convention plugins, toolchain, test tasks | `build-logic/` (or `buildSrc/`) | `build-logic/src/main/kotlin/zs.{java,library,service,tool}-conventions.gradle.kts` | D00-10 |
+| Compose topology | `docker-compose.yml` | `docker-compose.yml` | D00-3 (image tags: D00-1) |
+| Database initialization, roles and `pg_stat_statements` extension | `infra/postgres/init.sql` (+ entrypoint wrapper, if used) | `infra/postgres/init.sh` (wrapper), `infra/postgres/init.sql`, `infra/postgres/database.sql` (per-database template) | D00-4 |
+| PostgreSQL server configuration (`pg_stat_statements` preload) | `docker-compose.yml` (or a mounted configuration file) | `docker-compose.yml` (`postgres.command`) | D00-3 |
+| Datasource, Flyway and observability settings | `services/*/src/main/resources/application.yml` | `services/{order-service,ledger-service,instrument-service,fake-providers}/src/main/resources/application.yml` | D00-4, D00-6, D00-8 |
+| Baseline migrations | `services/*/src/main/resources/db/migration/V1__baseline.sql` | same (four files) | D00-4 |
+| Isolation test location | `infra/tests/` (suggested) | `infra/tests/src/test/java/dev/zerosum/infra/DatabaseIsolationIT.java` (project `:infra:tests`) | D00-2, D00-4 |
+| CI workflow | `.github/workflows/ci.yml` | `.github/workflows/ci.yml` | D00-5 (action versions: D00-1) |
+| Service images and agent attach | `services/*/Dockerfile` (or Boot image configuration) | `services/Dockerfile` (shared), `copyOtelAgent` in `zs.service-conventions` | D00-3, D00-6 |
+| Collector or scrape configuration | `infra/otel/` (only if needed) | Not needed (OTLP push to otel-lgtm's built-in collector) | D00-6, D00-7 |
+| Environment index | `.env.example` | `.env.example` | D00-8 |
+| Environment generation script | `tools/dev/generate-env.sh` | `tools/dev/generate-env.sh` | D00-8 |
 
 ### H.3 Produced artifacts
 
 | Artifact | Planned path | Actual path | Revision/hash |
 |---|---|---|---|
-| License | `LICENSE` | — | — |
-| Git ignore rules | `.gitignore` | — | — |
-| Root README (stub, then quickstart skeleton) | `README.md` | — | — |
-| ADR-0001 | `docs/adr/0001-record-architecture-decisions.md` | — | — |
-| ADR-0002 | `docs/adr/0002-stack-and-pinned-versions.md` | — | — |
-| Results template | `docs/results/TEMPLATE.md` | — | — |
-| SP3 results | `docs/results/sp3-stack-compat.md` | — | — |
-| SP3 spike code (removed after decision) | `spikes/sp3-stack/` (commit SHA only) | — | — |
-| Cross-database isolation test | `DatabaseIsolationIT` at the D00-2 location | — | — |
-| Secrets and log-redaction note | `docs/secrets.md` | — | — |
+| License | `LICENSE` | `LICENSE` (MIT) | `4db1472` |
+| Git ignore rules | `.gitignore` | `.gitignore` | `4db1472` |
+| Root README (stub, then quickstart skeleton) | `README.md` | `README.md` | `f840db0` |
+| ADR-0001 | `docs/adr/0001-record-architecture-decisions.md` | same | `4db1472` |
+| ADR-0002 | `docs/adr/0002-stack-and-pinned-versions.md` | same (Accepted) | `f840db0` |
+| Results template | `docs/results/TEMPLATE.md` | same | `0a9b404` |
+| SP3 results | `docs/results/sp3-stack-compat.md` | same, raw data in `docs/results/sp3-raw/` | `3eae42a` |
+| SP3 spike code (removed after decision) | `spikes/sp3-stack/` (commit SHA only) | `spikes/sp3-stack/` at `d4e49f0`; removed in `5507e6e` | `d4e49f0` |
+| Cross-database isolation test | `DatabaseIsolationIT` at the D00-2 location | `infra/tests/src/test/java/dev/zerosum/infra/DatabaseIsolationIT.java` | `0bf9f6e` |
+| Secrets and log-redaction note | `docs/secrets.md` | same | `f840db0` |
+| Verification transcripts (S00-T02…T04, T08, T09) | — | `docs/results/s00/*.txt` | committed with this register update |
 
 ### H.4 Validation results and evidence
 
 | Check | Method | Result | Evidence path | Date |
 |---|---|---|---|---|
-| Fresh-clone build | `./gradlew build` in a new clone (S00-T02) | Not run | — | — |
-| Pinned toolchain used | `javap -v` class-file major version (S00-T02) | Not run | — | — |
-| Infrastructure cold start | `time docker compose up -d --wait` after `down -v` (S00-T03) | Not run | — | — |
-| Chaos profile isolation | `docker compose ps` with and without `--profile chaos` (S00-T03) | Not run | — | — |
-| Memory limits applied | `docker inspect` vs topology (S00-T03) | Not run | — | — |
-| `pg_stat_statements` preloaded | `SHOW shared_preload_libraries` (S00-T03) | Not run | — | — |
-| Kafka internal and host listeners | Console produce/consume on both paths (S00-T03) | Not run | — | — |
-| Database isolation and verifier read-only | `./gradlew integrationTest --tests '*DatabaseIsolationIT'` (S00-T04) | Not run | — | — |
-| Stats role reads statistics, no table data | `DatabaseIsolationIT` assertion (f) (S00-T04) | Not run | — | — |
-| Isolation negative control | Test run with CONNECT revoke removed (S00-T04) | Not run | — | — |
-| Services boot with Flyway baseline | `bootRun` per service against Compose (S00-T04) | Not run | — | — |
-| CI build and integration jobs | GitHub Actions run on `main` (S00-T05) | Not run | — | — |
-| No image publishing in CI | grep of `ci.yml` (S00-T05) | Not run | — | — |
-| CI e2e skeleton | `gh workflow run ci.yml` (S00-T05) | Not run | — | — |
-| CI detects failure | Deliberately failing test on a throwaway branch (S00-T05) | Not run | — | — |
-| ADR-0002 matches artifacts | Scripted version comparison (S00-T06) | Not run | — | — |
-| SP3 evidence A–D and G0 decision | Spike run and Grafana/Tempo evidence (S00-T07) | Not run | — | — |
-| Telemetry from all four services | Tempo and Grafana queries (S00-T08) | Not run | — | — |
-| Services resilient to telemetry outage | `docker compose stop otel-lgtm` then health (S00-T08) | Not run | — | — |
-| Graceful container stop | Exit code after `docker compose stop` (S00-T08) | Not run | — | — |
-| Full stack cold start | `time docker compose up -d --wait` with services (S00-T08) | Not run | — | — |
-| Environment index complete | Scripted variable inventory diff (S00-T09) | Not run | — | — |
-| Required variable fails fast | `docker compose config` with a variable unset (S00-T09) | Not run | — | — |
-| Secrets absent from logs | `grep -F` of generated values in `docker compose logs` (S00-T09) | Not run | — | — |
+Host for every row: Apple M4, 10 cores, 24 GiB RAM, macOS 26.5.2; Docker Engine 29.8.0 / Compose v5.5.1 (Docker Desktop 4.91.0), VM 10 CPUs / 7.75 GiB; host JDK 26.0.1, toolchain Temurin 25.0.4.1+1.
+
+| Check | Method | Result | Evidence path | Date |
+|---|---|---|---|---|
+| Fresh-clone build | `./gradlew build` (S00-T02) | **Passed** in the working repository (18 s cold, 47 tasks). A separate fresh-clone run was not made: the repository has no remote yet (H.5); S09-T01 times the real fresh-clone quickstart | build output in session; `./gradlew build` re-run green after every later task | 2026-09-15 |
+| Pinned toolchain used | `javap -v` class-file major version (S00-T02) | **Passed**: `major version: 69` (Java 25) for `OrderServiceApplication.class`; `./gradlew projects` lists exactly the D00-2 projects; `test integrationTest e2eTest --dry-run` resolves all three; literal-coordinate grep finds 0 | [docs/results/s00/s00-t02-service-health.txt](results/s00/s00-t02-service-health.txt) | 2026-09-15 |
+| Services start (no infrastructure) | `java -jar` of each boot jar on the toolchain JDK, then `/actuator/health` (S00-T02) | **Passed**: all four `UP`; `/actuator/env` → 404. (`java -jar` of the `bootJar` output was used instead of four concurrent `bootRun` daemons; same artifact Boot runs) | [docs/results/s00/s00-t02-service-health.txt](results/s00/s00-t02-service-health.txt) | 2026-09-15 |
+| Infrastructure cold start | `docker compose up -d --wait` after `down -v`, images cached (S00-T03) | **Passed**: exit 0 in **8 s** (target ≤ 120 s, [#cold-warm](zerosum_ledger_mvp_plan.md#cold-warm)) | [docs/results/s00/s00-t03-compose.txt](results/s00/s00-t03-compose.txt) | 2026-09-15 |
+| Chaos profile isolation | `docker compose ps` with and without `--profile chaos` (S00-T03) | **Passed**: default profile runs kafka, otel-lgtm, postgres only; `--profile chaos up -d --wait` adds toxiproxy healthy in 6 s | [docs/results/s00/s00-t03-compose.txt](results/s00/s00-t03-compose.txt) | 2026-09-15 |
+| Memory limits applied | `docker inspect` vs topology (S00-T03, S00-T08) | **Passed**: postgres/kafka 1610612736, otel-lgtm 2147483648, toxiproxy 67108864, services 805306368, fake-providers 536870912 bytes; `OOMKilled=false` | [s00-t03-compose.txt](results/s00/s00-t03-compose.txt), [s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) | 2026-09-15 |
+| `pg_stat_statements` preloaded | `SHOW shared_preload_libraries` in the container (S00-T03) | **Passed**: `pg_stat_statements` | [docs/results/s00/s00-t03-compose.txt](results/s00/s00-t03-compose.txt) | 2026-09-15 |
+| Kafka internal and host listeners | Bundled console tools on `kafka:29092`; Java client (kafka-clients 4.2.1) on host `127.0.0.1:9092` (S00-T03) | **Passed** both paths (produce + consume one record each); broker reports `auto.create.topics.enable=false`; Grafana health HTTP 200 | [s00-t03-compose.txt](results/s00/s00-t03-compose.txt), [s00-t03-kafka-host-listener.txt](results/s00/s00-t03-kafka-host-listener.txt) | 2026-09-15 |
+| Database isolation and verifier read-only | `./gradlew integrationTest --tests '*DatabaseIsolationIT'` (S00-T04) | **Passed**: 6/6 tests (a)–(f) against the same `infra/postgres` files and the Compose-pinned image | [docs/results/s00/s00-t04-isolation-it.txt](results/s00/s00-t04-isolation-it.txt) | 2026-09-15 |
+| Stats role reads statistics, no table data | `DatabaseIsolationIT` assertion (f); `psql` as `stats_reader` (S00-T04) | **Passed**: 250 statements visible with text, including other roles'; `SELECT * FROM flyway_schema_history` → `permission denied` | [s00-t04-services-against-compose.txt](results/s00/s00-t04-services-against-compose.txt) | 2026-09-15 |
+| Isolation negative control | Test run with `REVOKE CONNECT` commented out, `--rerun` (S00-T04) | **Passed (failed as intended)**: `orders_owner -> ledger ==> Expected java.sql.SQLException to be thrown, but nothing was thrown`; restored run green. A first attempt was invalid (task up-to-date because init files weren't task inputs); fixed by declaring inputs, then re-run | [docs/results/s00/s00-t04-negative-control.txt](results/s00/s00-t04-negative-control.txt) | 2026-09-15 |
+| Services boot with Flyway baseline | Each service jar against Compose Postgres, then `/actuator/health`; `flyway_schema_history` per DB; `psql` as `verifier` and `ledger_app` (S00-T04) | **Passed**: four `UP`; V1 `baseline` `installed_by=<db>_owner` in all four DBs; verifier SELECT ok, INSERT → `cannot execute INSERT in a read-only transaction`; `ledger_app` → `orders`: `permission denied for database "orders"` | [docs/results/s00/s00-t04-services-against-compose.txt](results/s00/s00-t04-services-against-compose.txt) | 2026-09-15 |
+| CI build and integration jobs | GitHub Actions run on `main` (S00-T05) | **Blocked**: no GitHub remote (H.5). Partial local evidence only: `./gradlew build integrationTest --rerun` green | [s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) (local run) | 2026-09-15 |
+| No image publishing in CI | `grep -nE 'ghcr\.io\|docker/login-action\|docker/build-push-action' .github/workflows/ci.yml` (S00-T05) | **Passed**: no match (grep exit 1); workflow parses (Ruby YAML) with jobs `build`, `integration`, `e2e` | session transcript | 2026-09-15 |
+| CI e2e skeleton | `gh workflow run ci.yml` (S00-T05) | **Blocked**: no GitHub remote (H.5). The same steps ran locally: generate `.env`, `assemble`, `up -d --build --wait` healthy | [s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) | 2026-09-15 |
+| CI detects failure | Deliberately failing test on a throwaway branch (S00-T05) | **Blocked**: no GitHub remote (H.5) | — | 2026-09-15 |
+| ADR-0002 matches artifacts | Comparison of catalog, `image:` lines, `FROM`, `uses:` and wrapper against ADR-0002 (S00-T06) | **Passed**: scripted `grep -F` of every catalog `[versions]` value, Compose `image:`, Dockerfile `FROM`, CI `uses:` SHA, wrapper version/checksum and foojay version against ADR-0002 → 18 checked, **0 mismatches**; 0 untagged or `latest` images | [docs/results/s00/s00-t06-adr-vs-artifacts.txt](results/s00/s00-t06-adr-vs-artifacts.txt) (artifacts at `f840db0`) | 2026-09-15 |
+| SP3 evidence A–D and G0 decision | Spike run and Grafana/Tempo evidence (S00-T07) | **Passed**: A–D, G0 Passed, fallback none | [docs/results/sp3-stack-compat.md](results/sp3-stack-compat.md) | 2026-09-15 |
+| Telemetry from all four services | Tempo tag search per `service.name`; Prometheus `count by (job) (jvm_memory_used_bytes)` (S00-T08) | **Passed**: 57–58 traces per service name in 10 min; 8 `jvm_memory_used_bytes` series per service job and no second JVM memory family (no duplicate export); agent 2.31.1 logged in every container. Evidence is Grafana datasource-API JSON rather than screenshots | [docs/results/s00/s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) | 2026-09-15 |
+| Services resilient to telemetry outage | `docker compose stop otel-lgtm`, health after 30 s (S00-T08) | **Passed**: all four healthy; exporter error log lines during the outage: 19–24 per service in ~35 s (bounded); `./gradlew build integrationTest --rerun` green with otel-lgtm stopped | [docs/results/s00/s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) | 2026-09-15 |
+| Graceful container stop | Exit code after `docker compose stop order-service` (S00-T08) | **Passed**: exit **143**, `OOMKilled=false`, log `Graceful shutdown complete` then Hikari pool shutdown | [docs/results/s00/s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) | 2026-09-15 |
+| Full stack cold start | `docker compose up -d --wait` after `down -v`, infrastructure + 4 services, images built beforehand (S00-T08) | **Passed**: exit 0 in **31 s** (target ≤ 120 s); rebuild with `--build` 28 s | [docs/results/s00/s00-t08-telemetry.txt](results/s00/s00-t08-telemetry.txt) | 2026-09-15 |
+| Environment index complete | Scripted inventory of `${VAR}` in Compose and service config plus `ZS_*` in `init.sh` and `ci.yml`, diffed against `.env.example` (S00-T09) | **Passed on re-run**: 14 referenced, 0 missing, 0 unreferenced. The first run found `ZS_OTLP_METRICS_URL` missing; added, then re-run | [docs/results/s00/s00-t09-env-checks.txt](results/s00/s00-t09-env-checks.txt) | 2026-09-15 |
+| Required variable fails fast | `docker compose --env-file <.env without ZS_LEDGER_APP_DB_PASSWORD> config --quiet` (S00-T09) | **Passed**: exit 1, `required variable ZS_LEDGER_APP_DB_PASSWORD is missing a value: set ZS_LEDGER_APP_DB_PASSWORD in .env`; `generate-env.sh` refuses to overwrite without `--force`; `.env` mode 0600, 0 placeholders; `git check-ignore .env` → `.env` | [docs/results/s00/s00-t09-env-checks.txt](results/s00/s00-t09-env-checks.txt) | 2026-09-15 |
+| Secrets absent from logs | `grep -F` of each generated value in `docker compose logs` (S00-T09) | **Passed**: 11 values × 2914 log lines, 0 matches (smoke check only; S03/S05 redaction tests remain required) | [docs/results/s00/s00-t09-secrets-in-logs.txt](results/s00/s00-t09-secrets-in-logs.txt) | 2026-09-15 |
 
 ### H.5 Known limitations and blockers
 
@@ -787,15 +795,20 @@ Phase totals: P1 2 h · P2 3 h · P3 2 h · P4 5 h · **step total 12 h**. Run c
 | SP3 timebox vs the longer G0 failure threshold ([docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes), [docs/zerosum_ledger_mvp_plan.md#decision-gates](zerosum_ledger_mvp_plan.md#decision-gates)) | limitation | None after v1.2 | Resolved in master v1.2 (§0.3 O1, O2) |
 | Role model: one role per service vs owner and application roles | limitation | None after v1.2 | Resolved in master v1.2 (§0.3 O3) |
 | GHCR image publishing, the migration test on tag and the pre-tag secret scan had no owning step ([docs/zerosum_ledger_mvp_plan.md#cicd](zerosum_ledger_mvp_plan.md#cicd), [docs/zerosum_ledger_mvp_plan.md#secrets](zerosum_ledger_mvp_plan.md#secrets)) | limitation | None after v1.2; S00-T05 publishes nothing | Resolved in master v1.2 (§0.3 O4): owned by S09-T07 |
+| **GitHub remote and CI runs** (S00-T01 push; S00-T05 green `build`/`integration` on `main`, `gh workflow run` e2e, failing-test run) | **blocker** | No public repository and no CI run evidence. `gh` is authenticated, but creating a public repository publishes the project, which the builder has not yet authorized. Local `./gradlew build integrationTest` passes (partial evidence only, never recorded as CI green). | Builder: authorize `gh repo create zerosum-ledger --public --source . --push`; then run the S00-T05 verification and record run URLs and durations in H.4 |
+| Docker Desktop 4.91.0 on the reference host intermittently wedges: containers stay in `Created` and even `docker run --rm` hangs until `docker desktop restart` | limitation | Cost about 30 min during S00-T03; no evidence run was affected (every recorded run completed normally). Suspected trigger: several container starts at once after an idle/resource-saver cycle; not proven. | Verification scripts use a 240–300 s `--wait` guard that reports `WEDGED` instead of hanging. If it recurs in S07/S08, record it in their results and consider `COMPOSE_PARALLEL_LIMIT=1` |
+| Docker VM memory is 7.75 GiB (Docker Desktop 8 GiB setting), below the ≥ 10 GB note in [docs/zerosum_ledger_mvp_plan.md#topology](zerosum_ledger_mvp_plan.md#topology); the limits sum to 7.88 GB | limitation | Limits are caps, not reservations: the full stack ran healthy with no OOM kill. Under S07 load, a limit could be hit before the VM ceiling | S07 records `OOMKilled` per run; raise the VM allocation to ≥ 10 GB before perf runs |
+| Grafana (3000) and service ports (8081–8083) bind `127.0.0.1`, though the topology table doesn't mark them local-only | limitation (deliberate deviation) | Nothing is reachable from the LAN; the hosted demo (S09-C01) must publish ports explicitly | Recorded in D00-3; S09-C01 decides demo exposure |
+| Boot 4.1 maps `OTEL_*` environment variables onto Spring properties (SP3 finding) | limitation | Setting `OTEL_METRICS_EXPORTER`/`OTEL_LOGS_EXPORTER` in any environment silently changes Boot's own export settings | D00-6/D00-7: agent exporters are configured with `-Dotel.*` JVM properties only; S07 must not add those environment variables |
 
 ### H.6 Completion status
 
 | Field | Value |
 |---|---|
-| Step status | Planned |
-| Gate result | Not evaluated |
-| Completed on | — |
-| Completed by | — |
+| Step status | **Done**, except GitHub-dependent evidence (S00-T01 push, S00-T05 CI runs), which is Blocked on the builder authorizing a public repository (H.5). S01 does not list it as blocking. |
+| Gate result | **G0 Passed** (2026-09-15T21:50Z, right after S00-T07, before S00-T08; master §0.3 O2). SP3 criteria A–D passed with no fallback: [docs/results/sp3-stack-compat.md](results/sp3-stack-compat.md). |
+| Completed on | 2026-09-15 |
+| Completed by | Implementation agent (Claude Code), branch `step/00-foundations` |
 | Handoff accepted by next step | — |
 
 <a id="execution-record"></a>
@@ -805,28 +818,29 @@ Phase totals: P1 2 h · P2 3 h · P3 2 h · P4 5 h · **step total 12 h**. Run c
 
 | Task ID | Status | Output paths | Evidence | Blockers |
 |---|---|---|---|---|
-| S00-T01 | Planned | — | — | — |
-| S00-T02 | Planned | — | — | — |
-| S00-T03 | Planned | — | — | — |
-| S00-T04 | Planned | — | — | — |
-| S00-T05 | Planned | — | — | — |
-| S00-T06 | Planned | — | — | — |
-| S00-T07 | Planned | — | — | — |
-| S00-T08 | Planned | — | — | — |
-| S00-T09 | Planned | — | — | — |
+| S00-T01 | Done (push Blocked) | `LICENSE`, `.gitignore`, `README.md`, `docs/adr/0001-record-architecture-decisions.md`; first commit `d65384c` contains only `docs/` with hashes matching I.2 | `git log --reverse --stat`; `shasum -a 256 -c` 0 mismatches; `git check-ignore` | Push: no GitHub remote until the builder authorizes creating the public repository (H.5) |
+| S00-T02 | Done | `settings.gradle.kts`, `gradle/`, `gradlew*`, `build-logic/`, `libs/*`, `services/*`, `tools/*` (`09cedee`) | H.4 rows 1–3 | — |
+| S00-T03 | Done | `docker-compose.yml` (`0bf9f6e`) | H.4 rows 4–8 | Lost about 0.5 h to the Docker Desktop wedge (H.5) |
+| S00-T04 | Done | `infra/postgres/{init.sh,init.sql,database.sql}`, `V1__baseline.sql` ×4, service `application.yml`, `infra/tests/…/DatabaseIsolationIT.java` (`0bf9f6e`) | H.4 rows 9–12 | — |
+| S00-T05 | Blocked (workflow written) | `.github/workflows/ci.yml` (`eeb4272`, `f840db0`) | Publishing grep and YAML parse passed; local `build integrationTest` green (partial) | GitHub remote: CI run URLs, e2e dispatch and failing-branch run need the public repository (H.5) |
+| S00-T06 | Done | `docs/adr/0002-stack-and-pinned-versions.md`, `docs/results/TEMPLATE.md`, `README.md` (`0a9b404`) | H.4 "ADR-0002 matches artifacts" | — |
+| S00-T07 | Done | `docs/results/sp3-stack-compat.md`, `docs/results/sp3-raw/`, ADR-0002 Accepted (`3eae42a`); spike at `d4e49f0`, removed in `5507e6e` | Started ~21:30Z, G0 decided 21:50Z (≈0.4 h of the 2 h timebox; no O1 contingency used) | — |
+| S00-T08 | Done | `services/Dockerfile`, service entries in `docker-compose.yml`, observability sections of `application.yml`, `zs.service-conventions` (`f840db0`) | H.4 rows 18–21 | — |
+| S00-T09 | Done | `.env.example`, `tools/dev/generate-env.sh`, `docs/secrets.md`, CI e2e job and README use the script (`0bf9f6e`, `f840db0`) | H.4 rows 22–24 | — |
 
 <a id="change-record"></a>
 ### I.2 Consumed sources and change record
 
 | Source/artifact path | Revision or hash | Recorded at | Affected tasks | Review outcome |
 |---|---|---|---|---|
-| `docs/zerosum_ledger_mvp_plan.md` | — | — | S00-T01 to S00-T09 | — |
-| `docs/README.md` | — | — | S00-T01 to S00-T09 | — |
-| `docs/zerosum_ledger_mvp_plan.md` v1.2 §0.3 (O1, O2, O3, O4, O12, C9, C16) | — | 2026-09-15 (doc version 1.1) | S00-T02, S00-T03, S00-T04, S00-T05, S00-T06, S00-T07 | Resolved in master v1.2 (§0.3 O1, O2, O3, O4, O12, C9, C16); instructions and verification updated |
-| `docs/step_00_foundations.md` | — | — | S00-T01 to S00-T09 | — |
-| Primary version sources listed in [docs/zerosum_ledger_mvp_plan.md#sources](zerosum_ledger_mvp_plan.md#sources) (record URL and retrieval date) | — | — | S00-T02, S00-T03, S00-T05, S00-T06, S00-T07 | — |
-| `docs/adr/0002-stack-and-pinned-versions.md` (consumed by later S00 tasks once written) | — | — | S00-T07, S00-T08 | — |
-| `docker-compose.yml` (consumed by later S00 tasks once written) | — | — | S00-T04, S00-T05, S00-T07, S00-T08, S00-T09 | — |
+| `docs/zerosum_ledger_mvp_plan.md` | sha256 `2ec6499c…c342c` before git; then `d65384c 2026-09-15` | 2026-09-15 (start; rechecked at every phase boundary and before handoff) | S00-T01 to S00-T09 | No impact: unchanged since `d65384c` (`git diff --stat d65384c..HEAD` empty) |
+| `docs/README.md` | sha256 `f33c18cf…606cfa` before git; then `d65384c 2026-09-15` | 2026-09-15 (same checkpoints) | S00-T01 to S00-T09 | No impact: unchanged since `d65384c` |
+| `docs/zerosum_ledger_mvp_plan.md` v1.2 §0.3 (O1, O2, O3, O4, O12, C9, C16) | `d65384c` | 2026-09-15 (doc version 1.1) | S00-T02, S00-T03, S00-T04, S00-T05, S00-T06, S00-T07 | Resolved in master v1.2 (§0.3 O1, O2, O3, O4, O12, C9, C16); instructions and verification updated |
+| `docs/step_00_foundations.md` | sha256 `644b04c1…3f701` before git; `d65384c` at import; registers updated in `869841e` and this commit | 2026-09-15 | S00-T01 to S00-T09 | Register-only edits by this step (sections H, I); task text unchanged |
+| Primary version sources listed in [docs/zerosum_ledger_mvp_plan.md#sources](zerosum_ledger_mvp_plan.md#sources) (record URL and retrieval date) | Retrieved 2026-09-15 (UTC 20:3x–21:4x): services.gradle.org/versions/current; api.spring.io/projects/spring-boot/releases; docs.spring.io/spring-boot/appendix/dependency-versions/coordinates.html and /system-requirements.html; GitHub releases API for opentelemetry-java-instrumentation, docker-otel-lgtm, toxiproxy, grafana/k6, actions/checkout, actions/setup-java, gradle/actions, actions/upload-artifact; Docker Hub tags + `docker buildx imagetools inspect` for postgres, apache/kafka, grafana/otel-lgtm, ghcr.io/shopify/toxiproxy, eclipse-temurin; repo1.maven.org metadata for archunit-junit5, json-schema-validator, opentelemetry-javaagent; plugins.gradle.org metadata for foojay resolver and Boot plugin; docs.gradle.org compatibility matrix | 2026-09-15 | S00-T02, S00-T03, S00-T05, S00-T06, S00-T07 | Recorded in ADR-0002; drift vs master: `postgres:18` → 18.6, otel-lgtm untagged → 0.33.0; everything else as proposed |
+| `docs/adr/0002-stack-and-pinned-versions.md` (consumed by later S00 tasks once written) | `0a9b404` (Proposed) → `3eae42a` (Accepted) → `f840db0` (+ Temurin base image row) | 2026-09-15 | S00-T07, S00-T08 | Revalidated: T08 added a pin under the D00-1 policy; no decision changed |
+| `docker-compose.yml` (consumed by later S00 tasks once written) | `0bf9f6e` (infrastructure) → `f840db0` (+ services) | 2026-09-15 | S00-T04, S00-T05, S00-T07, S00-T08, S00-T09 | Revalidated: T08 appended service entries without changing any existing D00-3 choice; `DatabaseIsolationIT` still reads the same postgres pin |
+| `gradle/libs.versions.toml` | `09cedee` → `0bf9f6e` → `d4e49f0` | 2026-09-15 | S00-T04, S00-T07, S00-T08 | Revalidated: additions only (JDBC/Flyway/Testcontainers, Kafka/OTLP entries kept for S04/T08); no pinned version changed |
 
 <a id="handoff"></a>
 ## J. Handoff

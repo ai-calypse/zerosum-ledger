@@ -1,0 +1,23 @@
+> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE
+> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE
+> Task :build-logic:compilePluginsBlocks UP-TO-DATE
+> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE
+> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE
+> Task :build-logic:compileKotlin UP-TO-DATE
+> Task :build-logic:compileJava NO-SOURCE
+> Task :build-logic:pluginDescriptors UP-TO-DATE
+> Task :build-logic:processResources UP-TO-DATE
+> Task :build-logic:classes UP-TO-DATE
+> Task :build-logic:jar UP-TO-DATE
+> Task :infra:tests:compileJava NO-SOURCE
+> Task :infra:tests:processResources NO-SOURCE
+> Task :infra:tests:classes UP-TO-DATE
+> Task :infra:tests:compileTestJava
+> Task :infra:tests:processTestResources NO-SOURCE
+> Task :infra:tests:testClasses
+> Task :infra:tests:integrationTest
+
+BUILD SUCCESSFUL in 4s
+11 actionable tasks: 2 executed, 9 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

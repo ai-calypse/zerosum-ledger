@@ -1,0 +1,5 @@
+[otel.javaagent 2026-09-15 14:38:43:083 -0700] [main] INFO io.opentelemetry.javaagent.tooling.VersionLogger - opentelemetry-javaagent - version: 2.31.1
+2026-09-15T14:38:45.568-07:00  INFO 79932 --- [sp3-stack] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "sp3_spike" to version "1 - spike tables"
+2026-09-15T14:38:45.582-07:00  INFO 79932 --- [sp3-stack] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 1 migration to schema "sp3_spike", now at version v1 (execution time 00:00.007s)
+2026-09-15T14:38:46.324-07:00  INFO 79932 --- [sp3-stack] [           main] dev.zerosum.spike.sp3.Sp3Application     : Started Sp3Application in 2.079 seconds (process running for 3.339)
+2026-09-15T14:38:46.372-07:00  INFO 79932 --- [sp3-stack] [ntainer#0-0-C-1] o.s.k.l.KafkaMessageListenerContainer    : sp3-spike: partitions assigned: [sp3.spike-0]

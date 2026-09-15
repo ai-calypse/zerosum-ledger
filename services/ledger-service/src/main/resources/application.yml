@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: ledger-service
+  lifecycle:
+    # decision: D00-3 — graceful shutdown timeout per master §5.11; Compose stop_grace_period is longer
+    timeout-per-shutdown-phase: 30s
+  # decision: D00-4, D00-8 — docs/step_00_foundations.md#decisions-and-outputs
+  # Runtime queries use ledger_app; Flyway migrates as ledger_owner. Passwords have no defaults (fail fast).
+  datasource:
+    url: jdbc:postgresql://${ZS_DB_HOST:localhost}:${ZS_DB_PORT:5432}/ledger
+    username: ledger_app
+    password: ${ZS_LEDGER_APP_DB_PASSWORD}
+  flyway:
+    user: ledger_owner
+    password: ${ZS_LEDGER_OWNER_DB_PASSWORD}
+    # Tolerate a slow database instead of relying only on Compose start ordering.
+    connect-retries: 10
+
+server:
+  # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # decision: D00-6 — actuator HTTP exposure limited to health
+        include: health
+  otlp:
+    metrics:
+      export:
+        # decision: D00-6, D00-7 — Micrometer OTLP push is the single metrics exporter (the agent exports traces only)
+        url: ${ZS_OTLP_METRICS_URL:http://localhost:4318/v1/metrics}
+        step: 10s

@@ -1,0 +1,6 @@
+# S00-T03 Kafka host listener probe 2026-09-15T21:36:15Z
+# single-file Java client (kafka-clients 4.2.1 from Maven Central) on the host, bootstrap 127.0.0.1:9092
+$ java -cp kafka-clients-4.2.1.jar:slf4j-api-2.0.17.jar Probe.java
+produced offset 0
+consumed hello-from-host at offset 0
+exit 0

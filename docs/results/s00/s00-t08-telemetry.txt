@@ -1,0 +1,110 @@
+# S00-T08 service containers and telemetry 2026-09-15T21:54:35Z
+$ ./gradlew assemble
+services/fake-providers/build/libs/fake-providers-plain.jar services/fake-providers/build/libs/fake-providers.jar services/fake-providers/build/otel/opentelemetry-javaagent.jar services/instrument-service/build/libs/instrument-service-plain.jar services/instrument-service/build/libs/instrument-service.jar services/instrument-service/build/otel/opentelemetry-javaagent.jar services/ledger-service/build/libs/ledger-service-plain.jar services/ledger-service/build/libs/ledger-service.jar services/ledger-service/build/otel/opentelemetry-javaagent.jar services/order-service/build/libs/order-service-plain.jar services/order-service/build/libs/order-service.jar services/order-service/build/otel/opentelemetry-javaagent.jar 
+$ docker compose config --quiet
+exit 0
+$ docker compose build
+ Image zerosum-ledger-fake-providers Built 
+ Image zerosum-ledger-instrument-service Built 
+ Image zerosum-ledger-ledger-service Built 
+exit 0
+$ docker compose down -v
+done
+$ docker compose up -d --wait   (timed; infrastructure + 4 services)
+exit 0
+elapsed: 31 s (target: master #cold-warm)
+fake-providers Up 23 seconds (healthy)
+instrument-service Up 23 seconds (healthy)
+kafka Up 30 seconds (healthy)
+ledger-service Up 23 seconds (healthy)
+order-service Up 23 seconds (healthy)
+otel-lgtm Up 29 seconds (healthy)
+postgres Up 30 seconds (healthy)
+$ docker inspect memory limits (768M=805306368, 512M=536870912) and user
+/zerosum-ledger-fake-providers-1 mem=536870912 user=app oom=false
+/zerosum-ledger-instrument-service-1 mem=805306368 user=app oom=false
+/zerosum-ledger-ledger-service-1 mem=805306368 user=app oom=false
+/zerosum-ledger-order-service-1 mem=805306368 user=app oom=false
+$ published ports
+fake-providers 
+instrument-service 127.0.0.1:8083->8083/tcp
+ledger-service 127.0.0.1:8082->8082/tcp
+order-service 127.0.0.1:8081->8081/tcp
+$ agent attached (container logs)
+order-service: Picked up JAVA_TOOL_OPTIONS
+ledger-service: Picked up JAVA_TOOL_OPTIONS
+instrument-service: Picked up JAVA_TOOL_OPTIONS
+fake-providers: Picked up JAVA_TOOL_OPTIONS
+# waiting 40 s for trace batches and 3+ Micrometer steps
+$ Tempo: traces per service name (tag search, last 10 min)
+order-service: 57 traces; root names: ['ALTER TABLE "public"."flyway_schema_history"', 'CREATE INDEX orders', 'CREATE TABLE "public"."flyway_schema_history"', 'GET /actuator/health']
+ledger-service: 57 traces; root names: ['ALTER TABLE "public"."flyway_schema_history"', 'CREATE INDEX ledger', 'CREATE TABLE "public"."flyway_schema_history"', 'GET /actuator/health']
+instrument-service: 57 traces; root names: ['ALTER TABLE "public"."flyway_schema_history"', 'CREATE INDEX instruments', 'CREATE TABLE "public"."flyway_schema_history"', 'GET /actuator/health']
+fake-providers: 58 traces; root names: ['ALTER TABLE "public"."flyway_schema_history"', 'CREATE INDEX fakeproviders', 'CREATE TABLE "public"."flyway_schema_history"', 'GET /actuator/health']
+$ Prometheus: jvm_memory_used_bytes series per job
+  fake-providers 8
+  ledger-service 8
+  instrument-service 8
+  order-service 8
+$ duplicate metrics check: JVM memory metric families per service job
+  fake-providers jvm_memory_used_bytes 8
+  ledger-service jvm_memory_used_bytes 8
+  instrument-service jvm_memory_used_bytes 8
+  order-service jvm_memory_used_bytes 8
+
+# Rebuild with fixed boot jar name 2026-09-15T21:56:44Z
+$ ./gradlew assemble
+services/fake-providers/build/libs/: app.jar fake-providers-plain.jar fake-providers.jar  services/instrument-service/build/libs/: app.jar instrument-service-plain.jar instrument-service.jar  services/ledger-service/build/libs/: app.jar ledger-service-plain.jar ledger-service.jar  services/order-service/build/libs/: app.jar order-service-plain.jar order-service.jar 
+$ docker compose up -d --build --wait
+exit 0  elapsed 28 s
+fake-providers Up 22 seconds (healthy)
+instrument-service Up 22 seconds (healthy)
+kafka Up 2 minutes (healthy)
+ledger-service Up 23 seconds (healthy)
+order-service Up 23 seconds (healthy)
+otel-lgtm Up 2 minutes (healthy)
+postgres Up 2 minutes (healthy)
+$ agent version per container
+order-service: opentelemetry-javaagent - version: 2.31.1
+ledger-service: opentelemetry-javaagent - version: 2.31.1
+instrument-service: opentelemetry-javaagent - version: 2.31.1
+fake-providers: opentelemetry-javaagent - version: 2.31.1
+$ /app contents
+app.jar
+
+# Telemetry outage: docker compose stop otel-lgtm 2026-09-15T21:57:18Z
+ Container zerosum-ledger-otel-lgtm-1 Stopped 
+GET :8081/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+GET :8082/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+GET :8083/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+fake-providers (internal) health status: healthy
+fake-providers Up 56 seconds (healthy)
+instrument-service Up 56 seconds (healthy)
+ledger-service Up 57 seconds (healthy)
+order-service Up 57 seconds (healthy)
+$ exporter error log lines per service during the 30 s outage (bounded rate check)
+order-service: 19
+ledger-service: 19
+instrument-service: 19
+fake-providers: 24
+$ ./gradlew build integrationTest --rerun   (otel-lgtm stopped)
+BUILD SUCCESSFUL in 3s
+
+# Graceful stop 2026-09-15T21:57:55Z
+$ docker compose stop order-service
+ Container zerosum-ledger-order-service-1 Stopped 
+stop took 10 s
+order-service exit code: 143 oom=false
+order-service-1  | 2026-09-15T21:57:55.575Z  INFO 1 --- [order-service] [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+order-service-1  | 2026-09-15T21:57:55.581Z  INFO 1 --- [order-service] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+order-service-1  | 2026-09-15T21:57:55.585Z  INFO 1 --- [order-service] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+
+# Restore 2026-09-15T21:58:05Z
+ Container zerosum-ledger-order-service-1 Healthy 
+fake-providers Up About a minute (healthy)
+instrument-service Up About a minute (healthy)
+kafka Up 3 minutes (healthy)
+ledger-service Up About a minute (healthy)
+order-service Up 5 seconds (healthy)
+otel-lgtm Up 6 seconds (healthy)
+postgres Up 3 minutes (healthy)

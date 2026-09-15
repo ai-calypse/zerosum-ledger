@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"sp3_spike_consumed_total","job":"sp3-stack","service_name":"sp3-stack"},"value":[1789508727.756,"0"]}]}}

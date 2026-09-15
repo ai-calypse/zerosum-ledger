@@ -1,0 +1,11 @@
+# SP3 host run 2 2026-09-15T21:42:11Z: + spring-boot-opentelemetry module; agent attached; Micrometer OTLP step 10s
+auto-config matched: OtlpLoggingAutoConfiguration
+auto-config matched: OtlpLoggingConfigurations.ConnectionDetails#openTelemetryLoggingConnectionDetails
+auto-config NOT matched: OtlpMetricsExportAutoConfiguration
+POST body=sp3-four -> {"id":"0957b0ed-0df8-4cff-9342-bae3b50c662c","offset":4}
+POST body=sp3-five -> {"id":"14d7a796-aefe-49ed-abb1-84e364758f6a","offset":5}
+POST body=sp3-six -> {"id":"f15294ea-be2e-402a-a2e7-7be1ec751365","offset":6}
+B: sp3_spike_consumed_total series: []
+B: series with job=sp3-stack: []
+run-2 traces: 34 span scopes: {'io.opentelemetry.jdbc': 38, 'io.opentelemetry.kafka-clients-0.11': 3, 'io.opentelemetry.tomcat-10.0': 5, 'io.opentelemetry.spring-kafka-2.7': 3}
+duplicate-export check: Micrometer/Spring tracing scopes present: False

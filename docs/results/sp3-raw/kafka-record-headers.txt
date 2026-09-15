@@ -1,0 +1,2 @@
+Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.
+traceparent:00-d503d5c662ad692f60103916b180c22a-d03cadf83b38fcba-03	9e741d5f-c5c5-42e2-972d-5c83f307a35c	sp3-one

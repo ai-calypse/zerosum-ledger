@@ -1,0 +1,2 @@
+-- decision: D00-4 — docs/step_00_foundations.md#decisions-and-outputs
+-- Empty baseline for the instruments database; applied by Flyway as instruments_owner. Never edited once applied.
