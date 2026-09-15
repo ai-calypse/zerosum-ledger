@@ -1,0 +1,6 @@
+# S00-T02 service health check, 2026-09-15T20:56:23Z
+# JVM: openjdk version "25.0.4.1" 2026-08-18 LTS
+java -jar services/order-service/build/libs/order-service.jar ; curl http://127.0.0.1:8081/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"} ; /actuator/env -> HTTP 404
+java -jar services/ledger-service/build/libs/ledger-service.jar ; curl http://127.0.0.1:8082/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"} ; /actuator/env -> HTTP 404
+java -jar services/instrument-service/build/libs/instrument-service.jar ; curl http://127.0.0.1:8083/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"} ; /actuator/env -> HTTP 404
+java -jar services/fake-providers/build/libs/fake-providers.jar ; curl http://127.0.0.1:8090/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"} ; /actuator/env -> HTTP 404

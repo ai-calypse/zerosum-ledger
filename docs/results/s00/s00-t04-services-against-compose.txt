@@ -1,0 +1,36 @@
+# S00-T04 services against the Compose database 2026-09-15T21:36:23Z
+# credentials from .env (values not shown); JVM openjdk version "25.0.4.1" 2026-08-18 LTS
+java -jar services/order-service/build/libs/order-service.jar ; GET :8081/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+    flyway: Migrating schema "public" to version "1 - baseline"
+    flyway: Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.006s)
+java -jar services/ledger-service/build/libs/ledger-service.jar ; GET :8082/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+    flyway: Migrating schema "public" to version "1 - baseline"
+    flyway: Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.007s)
+java -jar services/instrument-service/build/libs/instrument-service.jar ; GET :8083/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+    flyway: Migrating schema "public" to version "1 - baseline"
+    flyway: Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.003s)
+java -jar services/fake-providers/build/libs/fake-providers.jar ; GET :8090/actuator/health -> {"groups":["liveness","readiness"],"status":"UP"}
+    flyway: Migrating schema "public" to version "1 - baseline"
+    flyway: Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.006s)
+$ flyway_schema_history per database (superuser, inside the postgres container)
+orders: 1 baseline installed_by=orders_owner success=true
+ledger: 1 baseline installed_by=ledger_owner success=true
+instruments: 1 baseline installed_by=instruments_owner success=true
+fakeproviders: 1 baseline installed_by=fakeproviders_owner success=true
+$ psql as verifier (ledger): SELECT ok, INSERT fails
+ version | installed_by 
+---------+--------------
+ 1       | ledger_owner
+(1 row)
+
+ERROR:  cannot execute INSERT in a read-only transaction
+$ psql as stats_reader (orders): pg_stat_statements readable, table data not
+ statements_visible | with_text 
+--------------------+-----------
+                250 |       250
+(1 row)
+
+ERROR:  permission denied for table flyway_schema_history
+$ psql as ledger_app connecting to orders (must fail)
+psql: error: connection to server at "127.0.0.1", port 5432 failed: FATAL:  permission denied for database "orders"
+DETAIL:  User does not have CONNECT privilege.

@@ -1,0 +1,12 @@
+# S00-T04 negative control 2026-09-15T21:33:56Z
+# REVOKE CONNECT commented out in infra/postgres/database.sql:
+12:-- NEGATIVE CONTROL: REVOKE CONNECT, TEMPORARY ON DATABASE :"db" FROM PUBLIC;
+$ ./gradlew :infra:tests:integrationTest --tests "*DatabaseIsolationIT" --rerun
+DatabaseIsolationIT > ownerAndAppRolesCannotConnectToAnotherServiceDatabase() FAILED
+    org.opentest4j.AssertionFailedError: orders_owner -> ledger ==> Expected java.sql.SQLException to be thrown, but nothing was thrown.
+6 tests completed, 1 failed
+> Task :infra:tests:integrationTest FAILED
+BUILD FAILED in 3s
+# restored: git diff clean
+# Restored run
+BUILD SUCCESSFUL in 2s

@@ -1,0 +1,51 @@
+# S00-T03 Compose verification 2026-09-15T21:34:02Z
+## host: Apple M4, 10 cores, 24 GiB; macOS 26.5.2
+## docker: engine 29.8.0, compose 5.5.1, VM 10 CPUs, 8319504384 bytes
+$ docker compose config --quiet
+exit 0
+$ docker compose down -v
+done
+$ docker compose up -d --wait   (timed)
+exit 0
+ Container zerosum-ledger-otel-lgtm-1 Waiting 
+ Container zerosum-ledger-otel-lgtm-1 Healthy 
+ Container zerosum-ledger-postgres-1 Healthy 
+ Container zerosum-ledger-kafka-1 Healthy 
+elapsed: 8 s
+$ docker compose ps
+kafka Up About a minute (healthy)
+otel-lgtm Up About a minute (healthy)
+postgres Up About a minute (healthy)
+$ docker inspect memory limits (bytes; 1536M=1610612736, 2048M=2147483648, 64M=67108864)
+/zerosum-ledger-kafka-1 1610612736 oom=false
+/zerosum-ledger-otel-lgtm-1 2147483648 oom=false
+/zerosum-ledger-postgres-1 1610612736 oom=false
+$ health-check tools present in images
+/usr/bin/curl
+/opt/kafka/bin/kafka-broker-api-versions.sh
+/usr/bin/pg_isready
+$ SHOW shared_preload_libraries
+pg_stat_statements
+$ databases / non-system roles
+fakeproviders,instruments,ledger,orders,postgres
+fakeproviders_app,fakeproviders_owner,instruments_app,instruments_owner,ledger_app,ledger_owner,orders_app,orders_owner,postgres,stats_reader,verifier
+$ Kafka internal listener (kafka:29092): create topic, produce, consume with bundled CLI
+Created topic zs-s00-internal-probe.
+The consumer rebalance protocol (KIP-848) is production-ready! Set group.protocol=consumer to try it out. See https://kafka.apache.org/documentation/#consumer_rebalance_protocol
+hello-internal
+Processed a total of 1 messages
+$ broker auto.create.topics.enable
+auto.create.topics.enable=false
+$ Grafana
+GET http://127.0.0.1:3000/api/health -> HTTP 200
+$ chaos profile
+default profile running: kafka otel-lgtm postgres 
+ Container zerosum-ledger-toxiproxy-1 Healthy 
+chaos up exit 0 in 6 s
+kafka Up 2 minutes (healthy)
+otel-lgtm Up 2 minutes (healthy)
+postgres Up 2 minutes (healthy)
+toxiproxy Up 5 seconds (healthy)
+/zerosum-ledger-toxiproxy-1 67108864
+$ docker compose --profile chaos rm -sf toxiproxy
+kafka otel-lgtm postgres 
