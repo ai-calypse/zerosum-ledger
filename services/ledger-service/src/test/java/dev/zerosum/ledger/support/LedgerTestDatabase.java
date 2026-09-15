@@ -89,6 +89,13 @@ public final class LedgerTestDatabase implements AutoCloseable {
         return DriverManager.getConnection(jdbcUrl(), container.getUsername(), container.getPassword());
     }
 
+    /** A {@link javax.sql.DataSource} for one of the D00-4 roles, for wiring the apply engine in tests. */
+    public javax.sql.DataSource dataSource(String role) {
+        var dataSource = new org.springframework.jdbc.datasource.DriverManagerDataSource(jdbcUrl(), role, passwords.get(role));
+        dataSource.setDriverClassName("org.postgresql.Driver");
+        return dataSource;
+    }
+
     @Override
     public void close() {
         container.stop();

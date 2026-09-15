@@ -16,6 +16,18 @@ spring:
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
 
+ledger:
+  apply:
+    # decision: D02-4 — docs/step_02_ledger_core.md#decisions-and-outputs (master §5.11 timeouts)
+    lock-timeout: 2s
+    statement-timeout: 5s
+    # decision: D02-4 — jittered exponential backoff, transient SQLSTATEs only
+    max-attempts: 10
+    backoff-min: 100ms
+    backoff-max: 5s
+    # decision: D02-3 — per-order mode by default; S04 chooses the batch size, revisited by SP1 (D02-10)
+    default-batch-size: 1
+
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8082
