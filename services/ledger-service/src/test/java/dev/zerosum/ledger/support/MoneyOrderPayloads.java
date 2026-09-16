@@ -12,12 +12,18 @@ public final class MoneyOrderPayloads {
     }
 
     public static String render(UUID orderId, String groupId, OrderCandidate order) {
+        return render(orderId, groupId, order, null);
+    }
+
+    /** {@code adjustsOrderId} is the adjusted order for a {@code fare.adjusted} order, or null (D01-8). */
+    public static String render(UUID orderId, String groupId, OrderCandidate order, UUID adjustsOrderId) {
         String entries = order.entries().stream()
                 .map(e -> "{\"entity_id\":\"" + e.entityId() + "\",\"account\":\"" + e.account() + "\",\"currency\":\""
                         + e.currency() + "\",\"amount_minor\":" + e.amountMinor() + "}")
                 .collect(Collectors.joining(","));
         return "{\"schema\":\"zerosum.money_order.v1\",\"order_id\":\"" + orderId + "\",\"order_group_id\":\"" + groupId
-                + "\",\"type\":\"" + order.type() + "\",\"reason\":\"" + order.reason() + "\",\"adjusts_order_id\":null,"
+                + "\",\"type\":\"" + order.type() + "\",\"reason\":\"" + order.reason() + "\",\"adjusts_order_id\":"
+                + (adjustsOrderId == null ? "null" : "\"" + adjustsOrderId + "\"") + ","
                 + "\"source\":{\"system\":\"trip-simulator\",\"idempotency_key\":\"" + orderId + "\"},"
                 + "\"entries\":[" + entries + "],\"metadata\":{},"
                 + "\"effective_at\":\"2026-09-15T10:00:00.000Z\",\"created_at\":\"2026-09-15T10:00:00.001Z\"}";

@@ -225,11 +225,16 @@ public class LedgerApplyEngine {
             }
             List<String> sortedEntities = List.copyOf(entityIds);
             store.provisionEntities(sortedEntities, kinds);
-            store.provisionAccounts(List.copyOf(accountKeys), normalSides);
 
+            // Lock the entities before provisioning accounts. accounts.entity_id references entities (D02-1), so an
+            // account insert takes FOR KEY SHARE on its parent entity row; locking afterwards would upgrade that
+            // shared lock to FOR UPDATE, and two batches sharing an entity then deadlock whatever order they use.
+            // Sorted locking (ADR-0005) prevents ordering cycles, never a lock-strength upgrade.
             long lockStart = System.nanoTime();
             Map<String, EntityRow> locked = store.lockEntities(sortedEntities);
             lockWaitNanos += System.nanoTime() - lockStart;
+
+            store.provisionAccounts(List.copyOf(accountKeys), normalSides);
 
             Map<AccountKey, Long> balances = new HashMap<>(store.readBalances(sortedEntities));
             accountKeys.forEach(key -> balances.putIfAbsent(key, 0L));

@@ -74,7 +74,10 @@ public class LedgerStore {
      */
     public Set<UUID> insertAppliedOrders(List<DecodedOrder> orders, Map<UUID, SourcePosition> positions) {
         Set<UUID> inserted = new HashSet<>();
-        for (DecodedOrder order : orders) {
+        // Insert in order-ID order rather than batch order. ON CONFLICT DO NOTHING makes a concurrent batch wait on
+        // the speculative insert, so two batches carrying the same order IDs in opposite order would wait on each
+        // other and deadlock. One deterministic key order removes the cycle, as it does for entity locks (ADR-0005).
+        for (DecodedOrder order : orders.stream().sorted(java.util.Comparator.comparing(DecodedOrder::orderId)).toList()) {
             SourcePosition position = positions.get(order.orderId());
             List<UUID> returned = jdbc.sql("""
                     INSERT INTO applied_orders (order_id, order_group_id, source_system, idempotency_key,

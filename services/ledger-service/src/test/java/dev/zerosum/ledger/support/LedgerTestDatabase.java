@@ -89,6 +89,20 @@ public final class LedgerTestDatabase implements AutoCloseable {
         return DriverManager.getConnection(jdbcUrl(), container.getUsername(), container.getPassword());
     }
 
+    /**
+     * A pooled {@link javax.sql.DataSource}; the pool must be at least as large as the writer count, or the stress test
+     * would measure pool waits instead of lock contention (S02-T03).
+     */
+    public com.zaxxer.hikari.HikariDataSource pooledDataSource(String role, int poolSize) {
+        var config = new com.zaxxer.hikari.HikariConfig();
+        config.setJdbcUrl(jdbcUrl());
+        config.setUsername(role);
+        config.setPassword(passwords.get(role));
+        config.setMaximumPoolSize(poolSize);
+        config.setPoolName("stress-" + role);
+        return new com.zaxxer.hikari.HikariDataSource(config);
+    }
+
     /** A {@link javax.sql.DataSource} for one of the D00-4 roles, for wiring the apply engine in tests. */
     public javax.sql.DataSource dataSource(String role) {
         var dataSource = new org.springframework.jdbc.datasource.DriverManagerDataSource(jdbcUrl(), role, passwords.get(role));
@@ -111,6 +125,11 @@ public final class LedgerTestDatabase implements AutoCloseable {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
+    }
+
+    /** The pinned PostgreSQL image, so the stress harness can record the container configuration it ran against. */
+    public static String postgresImage() {
+        return composeImage("postgres");
     }
 
     /** The image pinned in docker-compose.yml, so tests never carry their own copy of the pin. */
