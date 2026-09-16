@@ -1,0 +1,84 @@
+{
+  "_comment": "decision: D02-6 \u2014 known-answer vectors for changelog canonical form version 1 (docs/step_02_ledger_core.md#decisions-and-outputs). Digests were computed by an independent reference implementation written from the specification, not by the Java hasher, so HashChainKnownAnswerTest is a cross-implementation check. Covers the first row of an entity (prev_hash null), a multi-currency entity, and negative deltas and balances.",
+  "form_version": 1,
+  "algorithm": "SHA-256",
+  "rows": [
+    {
+      "entity_id": "rider:R1",
+      "seq": 1,
+      "order_id": "11111111-1111-4111-8111-111111111111",
+      "account_code": "receivable",
+      "currency": "USD",
+      "delta_minor": 2500,
+      "balance_after_minor": 2500,
+      "prev_hash": null,
+      "row_hash": "234924678814ba914f45718ff1c40a1287212b82fabb32d7eef1190def4609e5"
+    },
+    {
+      "entity_id": "rider:R1",
+      "seq": 2,
+      "order_id": "22222222-2222-4222-8222-222222222222",
+      "account_code": "receivable",
+      "currency": "USD",
+      "delta_minor": -500,
+      "balance_after_minor": 2000,
+      "prev_hash": "234924678814ba914f45718ff1c40a1287212b82fabb32d7eef1190def4609e5",
+      "row_hash": "4b97764dc0844169102b88a90b19adce60dae3c4a18996da71857af88aeba121"
+    },
+    {
+      "entity_id": "driver:D1",
+      "seq": 1,
+      "order_id": "33333333-3333-4333-8333-333333333333",
+      "account_code": "payable",
+      "currency": "USD",
+      "delta_minor": -2000,
+      "balance_after_minor": -2000,
+      "prev_hash": null,
+      "row_hash": "4d0c0963248448e2f2653392f658b9376034f7983694d9e2406220ef89de50a3"
+    },
+    {
+      "entity_id": "platform:main",
+      "seq": 1,
+      "order_id": "44444444-4444-4444-8444-444444444444",
+      "account_code": "revenue",
+      "currency": "USD",
+      "delta_minor": -500,
+      "balance_after_minor": -500,
+      "prev_hash": null,
+      "row_hash": "aa5ec0cd3e55b0de2fe793e78324624799f8b19a65703d46d67da91061999c8e"
+    },
+    {
+      "entity_id": "platform:main",
+      "seq": 2,
+      "order_id": "55555555-5555-4555-8555-555555555555",
+      "account_code": "revenue",
+      "currency": "JPY",
+      "delta_minor": -100,
+      "balance_after_minor": -100,
+      "prev_hash": "aa5ec0cd3e55b0de2fe793e78324624799f8b19a65703d46d67da91061999c8e",
+      "row_hash": "16bec6a0538437e50a870a32d2821a587e16be863b3ad39c6fad3c1d7fdaacd1"
+    },
+    {
+      "entity_id": "platform:main",
+      "seq": 3,
+      "order_id": "66666666-6666-4666-8666-666666666666",
+      "account_code": "cash",
+      "currency": "KWD",
+      "delta_minor": -1234567,
+      "balance_after_minor": -1234567,
+      "prev_hash": "16bec6a0538437e50a870a32d2821a587e16be863b3ad39c6fad3c1d7fdaacd1",
+      "row_hash": "d3ca0fd5ebbdf1608efac03c5d07278b98b872bd7849aed77a439a5af995b958"
+    },
+    {
+      "entity_id": "platform:main",
+      "seq": 4,
+      "order_id": "77777777-7777-4777-8777-777777777777",
+      "account_code": "revenue",
+      "currency": "USD",
+      "delta_minor": 499,
+      "balance_after_minor": -1,
+      "prev_hash": "d3ca0fd5ebbdf1608efac03c5d07278b98b872bd7849aed77a439a5af995b958",
+      "row_hash": "345534aab2a49ba9ef011351aedaf4f78cbbcd2911ee2b5a411367c43e6a5d32"
+    }
+  ]
+}

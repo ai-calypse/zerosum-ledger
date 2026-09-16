@@ -160,6 +160,25 @@ public class LedgerStore {
                 rows.stream().map(r -> new Object[] {r.lastSeq(), r.lastHash(), r.entityId()}).toList());
     }
 
+    /** The entity's changelog in sequence order, for the chain verifier (D02-6) and verify (D02-7). */
+    public List<ChangelogRow> readChangelog(String entityId) {
+        return jdbc.sql("""
+                SELECT entity_id, seq, order_id, account_code, currency, delta_minor, balance_after_minor,
+                       hash_version, prev_hash, row_hash
+                FROM entity_changelog WHERE entity_id = :entityId ORDER BY seq""")
+                .param("entityId", entityId)
+                .query((rs, rowNumber) -> new ChangelogRow(rs.getString("entity_id"), rs.getLong("seq"),
+                        rs.getObject("order_id", UUID.class), rs.getString("account_code"),
+                        rs.getString("currency").strip(), rs.getLong("delta_minor"), rs.getLong("balance_after_minor"),
+                        rs.getShort("hash_version"), rs.getBytes("prev_hash"), rs.getBytes("row_hash")))
+                .list();
+    }
+
+    /** Every entity ID that has changelog rows, in lock order; used to verify I5 across the whole ledger. */
+    public List<String> allEntityIds() {
+        return jdbc.sql("SELECT entity_id FROM entities ORDER BY entity_id").query(String.class).list();
+    }
+
     public void insertChangelog(List<ChangelogRow> rows) {
         template.batchUpdate("""
                 INSERT INTO entity_changelog (entity_id, seq, order_id, account_code, currency, delta_minor,

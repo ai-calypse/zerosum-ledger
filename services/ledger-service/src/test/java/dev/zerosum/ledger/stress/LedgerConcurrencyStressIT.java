@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.zerosum.ledger.apply.ApplyBatchResult;
 import dev.zerosum.ledger.apply.ApplyOutcome;
 import dev.zerosum.ledger.apply.ApplyRecord;
+import dev.zerosum.ledger.changelog.ChainVerifier;
+import dev.zerosum.ledger.changelog.ChangelogHasher;
+import dev.zerosum.ledger.store.LedgerStore;
 import dev.zerosum.ledger.support.ApplyTestDriver;
 import dev.zerosum.ledger.support.LedgerQueries;
 import dev.zerosum.ledger.support.LedgerTestDatabase;
@@ -43,6 +46,8 @@ import java.util.random.RandomGenerator;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * Concurrency stress with duplicates (D02-11): many threads apply a seeded trip stream in per-order and batched mode.
@@ -153,6 +158,23 @@ class LedgerConcurrencyStressIT {
                         "one applied-order record per unique order");
                 assertEquals(0, LedgerQueries.count(c, "SELECT count(*) FROM quarantined_orders"));
             }
+
+            // Full I5 verification of every entity, not just the SQL link check above (S02-T06 instruction 7).
+            LedgerStore store = new LedgerStore(JdbcClient.create(pool), new JdbcTemplate(pool));
+            ChainVerifier chainVerifier = new ChainVerifier(new ChangelogHasher());
+            long entities = 0;
+            long verifiedRows = 0;
+            for (String entityId : store.allEntityIds()) {
+                ChainVerifier.Result result = chainVerifier.verify(store.readChangelog(entityId));
+                if (!result.consistent()) {
+                    throw new AssertionError("entity " + entityId + " fails I5 at seq " + result.firstBadSeq()
+                            + " (" + result.failure() + "): " + result.detail());
+                }
+                entities++;
+                verifiedRows += result.rowsChecked();
+            }
+            assertTrue(entities > 0 && verifiedRows > 0, "the chain verification must have covered rows");
+            System.out.printf("ZS-STRESS chain mode=%s entities=%d rowsVerified=%d%n", mode, entities, verifiedRows);
             // A deadlock retry is a lock-ordering or lock-strength defect even when everything above passes: it means
             // a shared lock on an entity row was upgraded to FOR UPDATE, or two batches disagreed on lock order.
             assertEquals(0, retries[0], "deadlock retries must be zero (entity locks precede every FK child insert)");

@@ -1,0 +1,77 @@
+# S02-T06 hash-chained changelog: canonical form, known-answer vectors, tamper detection  2026-09-16T00:45Z
+
+ENVIRONMENT
+  PostgreSQL  postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 (the Compose pin)
+  Docker      29.8.0, 10 CPUs, 8.3 GB VM
+  Minimum cut NOT invoked, so D02-6 is implemented in full rather than recorded as Dropped.
+
+CANONICAL FORM (D02-6, version 1)
+  Specified in ChangelogHasher and used by both apply and verification; there is no second implementation.
+  SHA-256 over, in fixed order: form version (1 byte); previous-hash presence byte (0 for an entity's first row,
+  else 1 followed by 32 bytes); entity ID (4-byte big-endian length + UTF-8); seq (8 bytes BE); order ID (16 bytes,
+  most significant half first); account code and currency (each length-prefixed); delta and balance_after (each
+  8 bytes BE two's complement). recorded_at is excluded: hashing it would force a read-back of the database-assigned
+  value inside the apply transaction and fixes no audit fact the other fields do not.
+
+--------------------------------------------------------------------------------------------------
+KNOWN-ANSWER VECTORS - a cross-implementation check, not the hasher confirming itself
+--------------------------------------------------------------------------------------------------
+services/ledger-service/src/test/resources/hash-chain/known-answer.json, 7 rows.
+The digests were computed by a separate reference implementation written from the specification above (Python,
+independent of the Java code). HashChainKnownAnswerTest then asserts the Java hasher reproduces them exactly.
+Coverage asserted by the test itself, so it cannot silently erode: an entity's first row (prev_hash null), an
+entity whose chain spans several currencies, a negative delta, and a negative balance.
+
+  HashChainKnownAnswerTest                                   tests=3 failures+errors=0 time=0.06s
+      ok  everyVectorMatchesTheHasherAndTheStatedForm()
+      ok  theVectorsKeepTheCoverageTheSpecificationRequires()
+      ok  theVectorChainsVerifyWithTheProductionVerifier()
+
+NEGATIVE CONTROL (do the vectors have teeth?)
+  One hex digit of row 1's stored hash was flipped: 234924678814… -> f34924678814…
+    ./gradlew :services:ledger-service:test --tests '*HashChainKnownAnswerTest' --rerun   (exit 1)
+    everyVectorMatchesTheHasherAndTheStatedForm()      FAILED
+    theVectorChainsVerifyWithTheProductionVerifier()   FAILED
+      "rider:R1: stored hash does not match the hash recomputed from this row's fields ==> expected: <null> but was: <1>"
+  File restored; sha256 before and after identical; the test is green again (exit 0).
+
+--------------------------------------------------------------------------------------------------
+TAMPER DETECTION (I5, should-have S1)
+--------------------------------------------------------------------------------------------------
+entity_changelog is append-only (D02-2 triggers + REVOKE), so each tamper needs a superuser session with triggers
+disabled - possible only inside the test container, and exactly the "malicious owner" case recorded in H.5.
+
+  HashChainTamperIT                                          tests=7 failures+errors=0 time=7.294s
+      ok  anUntamperedChainVerifies()                                   consistent, 4 rows checked
+      ok  aModifiedFieldIsDetectedOnItsOwnRow()                         HASH_MISMATCH at seq 2
+      ok  aModifiedRowWithItsOwnHashRecomputedBreaksTheFollowingLink()  BROKEN_LINK   at seq 3
+      ok  aRemovedRowIsDetectedAsASequenceBreak()                       SEQUENCE_BREAK at seq 3
+      ok  aRemovedRowWithLaterRowsRenumberedIsDetectedAsABrokenLink()   BROKEN_LINK   at seq 3
+      ok  anInsertedRowIsDetected()                                     BROKEN_LINK   at seq 5
+      ok  reorderedRowsAreDetected()                                    BROKEN_LINK   at seq 2
+
+FINDING - the reorder case corrected an expectation, not the code.
+  The first run failed with "expected: <HASH_MISMATCH> but was: <BROKEN_LINK>"; the first-bad-sequence assertion
+  passed. Swapping rows 2 and 3 leaves the row now claiming seq 2 holding the old row 3's previous-hash, and the
+  verifier reads that link before it recomputes the hash, so the swap surfaces as a broken link at the same sequence
+  number. The verifier was right and the test expectation was wrong. D02-6 now fixes the per-row check order
+  (sequence, form version, link, hash) so the reported failure class is part of the contract rather than incidental.
+
+--------------------------------------------------------------------------------------------------
+FULL CHAIN VERIFICATION IN THE STRESS RUN (T06 instruction 7)
+--------------------------------------------------------------------------------------------------
+LedgerConcurrencyStressIT now verifies every entity's chain with the production ChainVerifier after each run,
+replacing reliance on the SQL link check alone.
+
+  batched-25  entities=208  rowsVerified=6405   durationMs=498   deadlock/lockTimeout/connection retries all 0
+  per-order   entities=208  rowsVerified=6411   durationMs=1916  deadlock/lockTimeout/connection retries all 0
+  (row counts differ because each test method draws its own seed; both verified every entity.)
+
+WHOLE LEDGER SUITE
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest --rerun --continue   (exit 0)
+  TOTAL tests=66 failures+errors=0
+
+REPRODUCE
+  ./gradlew :services:ledger-service:test --tests '*HashChainKnownAnswerTest' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*HashChainTamperIT' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*LedgerConcurrencyStressIT' --rerun -i
