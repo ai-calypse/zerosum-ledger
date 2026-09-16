@@ -16,6 +16,13 @@ spring:
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
 
+orders:
+  store:
+    # decision: D03-3 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+    # Bound on waiting for a concurrent transaction that holds the same idempotency key. The master's cross-cutting
+    # lock_timeout is 2s; exceeding it returns 409 idempotency_key_in_progress rather than holding the request open.
+    lock-timeout: 2s
+
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8081

@@ -1,0 +1,78 @@
+# S03-T01 orders schema, request canonicalization and idempotent order store  2026-09-16T04:24Z
+
+ENVIRONMENT
+  PostgreSQL  postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 (the Compose pin)
+  Docker      29.8.0, 10 CPUs, 8.3 GB VM; container started with fsync=off, as every integration test does
+  Fixture     OrderTestDatabase runs the real infra/postgres init scripts and migrates as orders_owner. It mirrors
+              ledger-service's LedgerTestDatabase; S02 recorded that a THIRD service needing it triggers a change
+              request to D00-2 for a shared fixture. order-service is the second, so the copy stands and S05 is
+              expected to raise that request.
+
+RESULTS
+  ./gradlew :services:order-service:test :services:order-service:integrationTest --rerun --continue   (exit 0)
+
+  dev.zerosum.order.order.RequestHasherTest    tests=6 failures+errors=0 time=0.084s
+      ok  reorderedJsonKeysGiveTheSameHash()
+      ok  absentAndNullMetadataGiveTheSameHash()
+      ok  reorderedEntriesGiveADifferentHash()
+      ok  theVersionTagIsPartOfTheHashedBytes()
+      ok  everyHashedFieldChangesTheDigest()
+      ok  canonicalMetadataSortsNestedKeysAndKeepsArrayOrder()
+  dev.zerosum.order.order.OrderStoreIT         tests=9 failures+errors=0 time=3.62s
+      ok  createdThenReplayedReturnsTheOriginalIdsAndTimestamps()
+      ok  theSameKeyWithADifferentBodyIsKeyReused()
+      ok  theSameKeyFromTwoPrincipalsCreatesTwoOrders()
+      ok  fiftyConcurrentRequestsOnOneKeyLeaveExactlyOneOrder(Seed)
+      ok  whenTheFirstWriterRollsBackTheWaiterStillCreates()
+      ok  anUnknownAdjustedOrderIsRejected()
+      ok  anAdjustmentInAnotherGroupIsRejectedWithItsOwnError()
+      ok  readsByIdAndByGroupReturnEntriesInLineOrder()
+      ok  migrationsValidateAndRerunningThemIsANoOp()
+
+  TOTAL tests=15 failures+errors=0
+
+THE FOUR PINNED CANONICALIZATION VECTORS (D03-3)
+  Reordered metadata keys      same hash. Whitespace and 2000 vs 2000.0 also give the same hash.
+  Absent vs null vs {}         same hash: all three normalize to one representation.
+  Reordered entries            DIFFERENT hash: entry order is significant, because line numbers are part of the order.
+  Version tag                  Asserted structurally, not by inspecting a digest: canonicalBytes(order, version)[0] is
+                               the form version, the same request under versions 1 and 2 produces different bytes of
+                               equal length, and hash(order) is exactly the SHA-256 of those bytes.
+  A sixth vector asserts every client-supplied input (source system, key, type, group, adjusts id, metadata, effective
+  time) changes the digest, which is what catches a field being dropped from the form.
+
+M3 (c) CONCURRENCY - 50 REQUESTS ON ONE KEY
+  ZS-ORDERS concurrent key: callers=50 created=1 replayed=49 inProgress=0 seed=-21388374799318065
+
+  Exactly one order row, one CREATED, and 49 REPLAYED. Every waiter blocked on the unique index, then read the winner's
+  committed row inside its own transaction and replayed it.
+
+  NOT EXERCISED BY THIS RUN: inProgress=0, so the 2 s lock-wait bound was never reached. The IN_PROGRESS path is
+  implemented and reachable - it is what the 409 idempotency_key_in_progress response will use - but this run does not
+  evidence it. Provoking it needs a holder that keeps the key beyond the bound, which S03-T03 can do through the API
+  once the endpoint exists. Recorded as not-yet-evidenced rather than claimed.
+
+WHAT ELSE THE ASSERTIONS COVER
+  Replay identity   A replay returns the ORIGINAL order_id, created_at and entries, which is what makes
+                    database-assigned identifiers the right choice (D03-1): the store never mints an id it would
+                    discard on conflict.
+  Key reuse         The same key with a different body returns KEY_REUSED and no order, leaving one row.
+  Two principals    The same key from trip-simulator and instrument-service creates two orders: uniqueness is scoped
+                    by source system.
+  First writer rolls back  A holder takes the key in its own transaction and rolls back; the waiter then CREATES and
+                    writes its own entries. The rollback here is explicit rather than caused by the deferred zero-sum
+                    trigger, because that trigger is S03-T02's and does not exist yet. This exercises the waiting
+                    path, not the trigger path.
+  Adjustments       An unknown adjusts_order_id raises UnknownAdjustedOrderException (M2 (c)); one that exists but sits
+                    in another order group raises AdjustmentGroupMismatchException (§0.3 C2) - a distinct error rather
+                    than a constraint violation surfacing as a 500. Neither writes a row.
+  Flyway            validate() passes, re-running migrations executes 0, and the applied versions are exactly 1 then 2.
+
+NOT COVERED HERE
+  The deferred zero-sum trigger and the append-only triggers are S03-T02. Until they exist, an unbalanced order
+  inserted directly by the owner would not be rejected at COMMIT, and the owner can still mutate rows: the migration
+  narrows the RUNTIME role's privileges only.
+
+REPRODUCE
+  ./gradlew :services:order-service:test --tests '*RequestHasherTest' --rerun
+  ./gradlew :services:order-service:integrationTest --tests '*OrderStoreIT' --rerun -i
