@@ -1,0 +1,17 @@
+# S00-T05 CI evidence (GitHub Actions, public repo authorized 2026-09-15) 2026-09-15T23:47:39Z
+repo: https://github.com/ai-calypse/zerosum-ledger  main=2f5dbcf
+$ gh workflow run ci.yml --ref main   (dispatch for the e2e job)
+https://github.com/ai-calypse/zerosum-ledger/actions/runs/35037237318
+$ gh run list --branch main
+35037237318 workflow_dispatch completed/success https://github.com/ai-calypse/zerosum-ledger/actions/runs/35037237318
+35037158088 push completed/cancelled https://github.com/ai-calypse/zerosum-ledger/actions/runs/35037158088
+--- run 35037237318
+event=workflow_dispatch conclusion=success started=2026-09-15T23:47:40Z ended=2026-09-15T23:53:02Z
+  job build + unit: success 2026-09-15T23:48:00Z -> 2026-09-15T23:50:05Z
+  job integration (Testcontainers): success 2026-09-15T23:50:08Z -> 2026-09-15T23:51:16Z
+  job e2e (Compose): success 2026-09-15T23:50:09Z -> 2026-09-15T23:53:01Z
+--- run 35037158088
+event=push conclusion=cancelled started=2026-09-15T23:46:34Z ended=2026-09-15T23:47:58Z
+  job build + unit: cancelled 2026-09-15T23:46:39Z -> 2026-09-15T23:47:57Z
+  job e2e (Compose): cancelled 2026-09-15T23:47:58Z -> 2026-09-15T23:47:57Z
+  job integration (Testcontainers): cancelled 2026-09-15T23:47:58Z -> 2026-09-15T23:47:57Z
