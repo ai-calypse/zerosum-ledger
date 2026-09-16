@@ -171,6 +171,29 @@ class ZeroSumValidatorTest {
     }
 
     @Test
+    void ledgerRuleSetChecksOnlyTheAccountForTheKindAndZeroSum() {
+        ZeroSumValidator.RuleSet ledger = ZeroSumValidator.RuleSet.LEDGER;
+        WORKED_EXAMPLE.forEach((id, o) -> assertEquals(List.of(), validator.validate(o, ledger), id));
+        // Order-service rules are not re-applied: unknown type, bad reason, non-allow-listed currency, one line of zero.
+        assertEquals(List.of(), validator.validate(order("TRANSFER", "Bad Reason",
+                Entry.of("rider:R1", "receivable", "GBP", 7), Entry.of("platform:main", "revenue", "GBP", -7)), ledger));
+        assertEquals(List.of(), validator.validate(commerce(Entry.of("rider:R1", "receivable", "USD", 0),
+                Entry.of("platform:main", "revenue", "USD", 0)), ledger));
+        // The ‡ rules still hold.
+        assertEquals(List.of(Violation.atEntry(Code.ACCOUNT_NOT_ALLOWED, 3, 1)), validator.validate(commerce(
+                Entry.of("rider:R1", "receivable", "USD", 1), Entry.of("platform:main", "payable", "USD", -1)), ledger));
+        assertEquals(List.of(new Violation(Code.ZERO_SUM_VIOLATED, 5, null, "GBP")), validator.validate(commerce(
+                Entry.of("rider:R1", "receivable", "GBP", 5), Entry.of("platform:main", "revenue", "GBP", -4)), ledger));
+        assertEquals(List.of(Violation.atEntry(Code.ENTITY_ID_INVALID, 3, 0)), validator.validate(commerce(
+                Entry.of("wallet:W1", "receivable", "USD", 1), Entry.of("platform:main", "revenue", "USD", -1)), ledger));
+        assertEquals(List.of(Violation.of(Code.ORDER_MISSING, 1)), validator.validate(null, ledger));
+        // The default is unchanged.
+        assertEquals(validator.validate(commerce(Entry.of("rider:R1", "receivable", "GBP", 1),
+                        Entry.of("platform:main", "revenue", "GBP", -1)), ZeroSumValidator.RuleSet.FULL),
+                validator.validate(commerce(Entry.of("rider:R1", "receivable", "GBP", 1), Entry.of("platform:main", "revenue", "GBP", -1))));
+    }
+
+    @Test
     void allowListNamingAnUnknownCurrencyFailsToLoad() {
         String resource = "dev/zerosum/money/test-tables/allow-unknown.txt";
         var e = assertThrows(IllegalStateException.class, () -> CurrencyRules.load(CurrencyRules.TABLE_RESOURCE, resource));

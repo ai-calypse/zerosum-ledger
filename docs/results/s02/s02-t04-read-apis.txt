@@ -1,0 +1,80 @@
+# S02-T04 balances and changelog read APIs: contract, paging and execution plan  2026-09-16T00:58Z
+
+ENVIRONMENT
+  PostgreSQL  postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 (the Compose pin)
+  Docker      29.8.0, 10 CPUs, 8.3 GB VM
+  These are the first Spring-context tests in the repository. The application boots against the shared
+  LedgerTestDatabase container, bound with @DynamicPropertySource; @ServiceConnection is avoided because the image is
+  digest-pinned. Flyway is disabled in the context because the container already migrated as the owner.
+
+RESULTS
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest --rerun --continue   (exit 0)
+
+  dev.zerosum.ledger.api.BalancesApiIT                     tests=5 failures+errors=0 time=3.004s
+      ok  everyAccountShowsTheExpectedBalanceOnItsNormalSide()
+      ok  asOfSequenceEqualsTheEntitysLastSequence()
+      ok  normalSideIsReportedPerAccount()
+      ok  anEncodedColonAddressesTheSameEntity()
+      ok  anUnknownEntityIsNotFoundAndAMalformedOneIsRejected()
+  dev.zerosum.ledger.api.ChangelogApiIT                    tests=4 failures+errors=0 time=0.224s
+      ok  pagingReturnsEveryRowExactlyOnceInSequenceOrder()
+      ok  everyRowCarriesItsOrderAndSourceIdempotencyKey()
+      ok  aRequestPastTheLastSequenceIsAnEmptyPageNotANotFound()
+      ok  invalidCursorsAndLimitsAreRejected()
+  dev.zerosum.ledger.api.LedgerOpenApiContractIT           tests=3 failures+errors=0 time=0.065s
+      ok  theBalancesResponseValidatesAgainstTheSpecification()
+      ok  theChangelogResponseValidatesAgainstTheSpecification()
+      ok  problemResponsesValidateAgainstTheSpecification()
+  dev.zerosum.ledger.store.ChangelogPagePlanIT             tests=1 failures+errors=0 time=1.187s
+      ok  thePageQueryWalksThePrimaryKeyRange()
+
+  WHOLE LEDGER SUITE: TOTAL tests=79 failures+errors=0
+
+WHAT THE ASSERTIONS COVER
+  Balances    After golden O1-O7, every account matches the D01-9 expected balances on BOTH presented_minor (the
+              account's normal side) and signed_minor (as stored). as_of_seq equals the entity's changelog row count.
+              driver:D1 payable reports normal_side CREDIT. An unknown entity is 404 entity_not_found; a malformed ID
+              is 400 invalid_entity_id.
+  Changelog   Paging with limit=7 over 25 applied orders returns every row exactly once, in sequence order, starting at
+              seq 1, with no repeats across pages. Every row carries a UUID order_id and a non-blank source.system and
+              source.idempotency_key - that join to applied_orders is the M6 (a) link. A request past the last sequence
+              returns an empty page with no cursor, not a 404. limit=0, limit=501, limit=abc, after_seq=-1 and
+              after_seq=abc are each 400 with the stable code; an unknown entity is 404 on this operation too.
+  Contract    Real responses validate against openapi/ledger-service.yaml with the same pinned validator as D01-8.
+
+EXECUTION PLAN (captured 2026-09-16T00:54Z; the statement is the shared LedgerStore.CHANGELOG_PAGE_SQL constant)
+  ZS-PLAN changelog page (500 rows for rider:R_PLAN):
+  Limit  (cost=0.55..16.62 rows=1 width=160)
+    ->  Nested Loop  (cost=0.55..16.62 rows=1 width=160)
+          ->  Index Scan using entity_changelog_pkey on entity_changelog c  (cost=0.28..8.29 rows=1 width=96)
+                Index Cond: ((entity_id = 'rider:R_PLAN'::text) AND (seq > 250))
+          ->  Index Scan using applied_orders_pkey on applied_orders o  (cost=0.27..8.29 rows=1 width=80)
+                Index Cond: (order_id = c.order_id)
+  The test asserts the primary-key index is used and that entity_changelog is never sequentially scanned. Because the
+  test and the service share one SQL constant, this evidence cannot drift from the statement actually executed.
+
+TWO FINDINGS, BOTH IN THE TESTS RATHER THAN THE SERVICE
+  1. Twelve API tests failed at context startup: "No qualifying bean ... 'restClientBuilder'". Boot 4.1 splits
+     auto-configuration into modules and ledger-service carries no RestClient client module, so no RestClient.Builder
+     bean exists. The tests do not need one; they now call RestClient.create(baseUrl). No production change.
+  2. anEncodedColonAddressesTheSameEntity() then failed with 400, and the problem body showed the request path as
+     /v1/entities/rider%253AR1/balances. RestClient's String uri(...) overload treats its argument as a URI template and
+     encoded the percent sign itself, so the test had never sent a percent-encoded colon at all. Passing a java.net.URI
+     sends %3A unchanged, and the endpoint then resolves it to the same entity as the literal colon. The capability was
+     unverified rather than broken, and is now genuinely verified.
+
+SERIALIZATION DECISION, CHECKED RATHER THAN ASSUMED
+  The API is snake_case throughout. Instead of annotating every response record, ledger-service sets
+  spring.jackson.property-naming-strategy: SNAKE_CASE once. Every schema in the specification sets
+  "additionalProperties": false, so LedgerOpenApiContractIT checks the serialized field names one by one; a naming slip
+  fails the build. The contract tests passing is what confirms the setting works under Boot 4.1 with Jackson 3.
+
+NOT COVERED HERE
+  401/403 are declared in the specification but not enforced: S03-T03 wires libs/auth (master 0.3 C9), and until then
+  the service port stays local-only. The invariants and verify operations, and the 503 database-unavailable path, are
+  added and exercised by S02-T05.
+
+REPRODUCE
+  ./gradlew :services:ledger-service:integrationTest --tests '*BalancesApiIT' --tests '*ChangelogApiIT' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*LedgerOpenApiContractIT' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*ChangelogPagePlanIT' --rerun -i

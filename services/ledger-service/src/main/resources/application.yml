@@ -1,6 +1,10 @@
 spring:
   application:
     name: ledger-service
+  jackson:
+    # decision: D02-7 — the read API is snake_case throughout, matching openapi/ledger-service.yaml. Setting it once
+    # beats annotating every response record; LedgerOpenApiContractIT fails on any mismatch (additionalProperties: false).
+    property-naming-strategy: SNAKE_CASE
   lifecycle:
     # decision: D00-3 — graceful shutdown timeout per master §5.11; Compose stop_grace_period is longer
     timeout-per-shutdown-phase: 30s
@@ -15,6 +19,32 @@ spring:
     password: ${ZS_LEDGER_OWNER_DB_PASSWORD}
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
+
+ledger:
+  apply:
+    # decision: D02-4 — docs/step_02_ledger_core.md#decisions-and-outputs (master §5.11 timeouts)
+    lock-timeout: 2s
+    statement-timeout: 5s
+    # decision: D02-4 — jittered exponential backoff, transient SQLSTATEs only
+    max-attempts: 10
+    backoff-min: 100ms
+    backoff-max: 5s
+    # decision: D02-3 — per-order mode by default; S04 chooses the batch size, revisited by SP1 (D02-10)
+    default-batch-size: 1
+  api:
+    # decision: D02-7 — docs/step_02_ledger_core.md#decisions-and-outputs
+    # Changelog paging. The ceiling is the master §5.6 proposal of 500 rows per page; the default keeps an
+    # unparameterised call small. Assertions read these values rather than hard-coding them.
+    default-page-size: 100
+    max-page-size: 500
+    # decision: D02-8 — operational reads (invariants, verify) scan, so they raise the per-transaction statement
+    # timeout above the global apply limit of 5s (master §0.3 C19). Chosen against the P4 targets in master §6.2:
+    # invariants over 1M changelog rows <= 10s and verify over 10,000 rows <= 2s, with headroom on a busy database.
+    # The global statement-timeout is unchanged; this applies only inside the operational read transaction.
+    operational-statement-timeout: 15s
+    # decision: D02-8 — verify streams the changelog in sequence order at this fetch size, so a very large entity is
+    # never materialized in full.
+    verify-fetch-size: 500
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

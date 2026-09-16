@@ -75,4 +75,18 @@ class ChartOfAccountsTest {
         assertEquals(-300, ChartOfAccounts.presentOnNormalSide("receivable", -300));
         assertThrows(ArithmeticException.class, () -> ChartOfAccounts.presentOnNormalSide("payable", Long.MIN_VALUE));
     }
+
+    @Test
+    void clearingAccountsAreClassifiedNotHardCodedByConsumers() {
+        // decision: D01-6, CR-S02-04 — ledger-service reports non-zero clearing balances (I9) and must not carry its
+        // own copy of these codes. Every clearing code must also be an account the provider kind is allowed to hold.
+        assertEquals(Set.of("clearing", "payout_clearing"), ChartOfAccounts.clearingAccounts());
+        assertTrue(ChartOfAccounts.isClearing("clearing"));
+        assertTrue(ChartOfAccounts.isClearing("payout_clearing"));
+        assertFalse(ChartOfAccounts.isClearing("cash"));
+        assertFalse(ChartOfAccounts.isClearing("receivable"));
+        assertFalse(ChartOfAccounts.isClearing(null));
+        assertFalse(ChartOfAccounts.isClearing("not_an_account"));
+        assertTrue(ChartOfAccounts.allowedAccounts(EntityKind.PROVIDER).containsAll(ChartOfAccounts.clearingAccounts()));
+    }
 }

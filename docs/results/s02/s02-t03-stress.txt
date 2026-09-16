@@ -1,0 +1,92 @@
+# S02-T03 concurrency stress with duplicates: two lock defects found, fixed and controlled  2026-09-16T00:30Z
+
+ENVIRONMENT (recorded because container starvation can look like lock contention)
+  PostgreSQL  postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 (the Compose pin)
+  Docker      29.8.0, 10 CPUs, 8.3 GB VM; container started with fsync=off, as every ledger IT does
+  Pool        writers + 2 connections, so the run measures lock contention and not pool waits
+  NOTE        fsync=off means no duration below is a throughput measurement. SP1 (S02-T07) owns timing; the
+              numbers here exist only to compare runs against each other on one machine.
+
+PARAMETERS (services/ledger-service/src/test/resources/stress/stress.properties, D02-11)
+  full  32 threads x 20000 orders, 30% duplicates   (master 8.2; nightly CI, -Pzs.stress.size=full)
+  pr     8 threads x  2000 orders, 30% duplicates   (push and pull-request CI, default)
+  batched mode 25 records per apply call; per-order mode 1. Sampler interval 20 ms.
+
+--------------------------------------------------------------------------------------------------
+DEFECT 1 - accounts were provisioned before the entity lock was taken (ADR-0005 decision point 3)
+--------------------------------------------------------------------------------------------------
+First run of the harness, pr size, before any fix. The test passed its data assertions, but reported
+deadlock retries, which the step document treats as a lock-ordering defect even when assertions pass:
+
+  batched-25  durationMs=9794  samples=353  deadlockRetries=14  lockTimeoutRetries=3  seed=5699988079246323783
+  per-order   durationMs=5951  samples=228  deadlockRetries=3   lockTimeoutRetries=6  seed=-6534429403456541701
+
+Root cause: accounts.entity_id REFERENCES entities (D02-1), so inserting an account takes FOR KEY SHARE on
+its parent entity row. The engine provisioned accounts and only then took FOR UPDATE on the same rows. Two
+batches sharing an entity each held FOR KEY SHARE and each waited for the other's FOR UPDATE. That is a
+lock-strength upgrade, which no sort order can prevent; sorted locking only removes ordering cycles.
+
+Fix: provision entities, take the FOR UPDATE lock, then provision accounts (LedgerApplyEngine.applyOrders).
+
+NEGATIVE CONTROL (deliberate revert of the fix, with the zero-deadlock assertion in place):
+  broken    batched-25  durationMs=19782  samples=794  deadlockRetries=24  lockTimeoutRetries=7  -> FAILED
+            per-order   durationMs=8017   samples=334  deadlockRetries=7                         -> FAILED
+            AssertionError: deadlock retries must be zero ... expected: <0> but was: <24>
+  restore   LedgerApplyEngine.java sha256 4adc61026f8ff79602b6907eb40ea5d706851a6b1a1991ddc875071cf883a818
+            before and after the control: identical
+  restored  batched-25 durationMs=558 deadlockRetries=0; per-order durationMs=2032 deadlockRetries=0; BUILD SUCCESSFUL
+Both modes fail when the fix is reverted, so the defect is mode-independent and the assertion detects it.
+
+--------------------------------------------------------------------------------------------------
+DEFECT 2 - applied_orders rows were inserted in batch order (ADR-0005 decision point 4)
+--------------------------------------------------------------------------------------------------
+With defect 1 fixed and the zero-deadlock assertion added, the next run still failed, in batched mode only:
+
+  batched-25  durationMs=1377  samples=51  deadlockRetries=1  -> FAILED
+              AssertionError: deadlock retries must be zero ... expected: <0> but was: <1>
+  per-order   durationMs=1982  samples=90  deadlockRetries=0  -> passed
+  (35 tests completed, 1 failed)
+
+This run is itself the negative control for defect 2: the assertion was already in place, the sort was not.
+
+Root cause: INSERT ... ON CONFLICT DO NOTHING makes a concurrent transaction wait on the speculative insert,
+so it is a lock. applied_orders rows were inserted in batch input order, so two batches carrying the same
+order IDs in opposite order waited on each other. The harness submits the same order concurrently from two
+threads, which is exactly that case. Per-order mode issues one insert per transaction and cannot form a cycle,
+which is why only batched mode failed.
+
+Fix: insert applied_orders in ascending order_id order (LedgerStore.insertAppliedOrders).
+
+--------------------------------------------------------------------------------------------------
+RESULTS AFTER BOTH FIXES
+--------------------------------------------------------------------------------------------------
+pr size (8 threads x 2000 orders, 30% duplicates):
+  batched-25  submissions=2624  batches=105   durationMs=542   samples=23  deadlock=0 lockTimeout=0 connection=0
+  per-order   submissions=2624  batches=2624  durationMs=2002  samples=89  deadlock=0 lockTimeout=0 connection=0
+
+full size (32 threads x 20000 orders, 30% duplicates - the master 8.2 parameters):
+  batched-25  submissions=26058 batches=1043  durationMs=3665  samples=166 deadlock=0 lockTimeout=0 connection=0
+  per-order   submissions=26001 batches=26001 durationMs=20865 samples=946 deadlock=0 lockTimeout=0 connection=0
+  BUILD SUCCESSFUL
+
+Asserted after every run above, in both modes: balances equal the in-memory Money oracle; I2 (global sum per
+currency is zero); I3 (balances equal changelog delta sums and every running balance is correct); I4 (gapless
+per-entity sequences); every changelog row's prev_hash equals the prior row's row_hash; applied_orders row count
+equals the unique order count; quarantined_orders empty; no writer raised an exception, so RetriesExhaustedException
+was never raised; the sampler read the global sum at least once and every sample was zero.
+
+DETERMINISM (same seed twice, ZS_TEST_SEED=7416534795971365381, pr size)
+  run A  batched-25 balances=51e726f4b9eafd02   per-order balances=51e726f4b9eafd02
+  run B  batched-25 balances=51e726f4b9eafd02   per-order balances=51e726f4b9eafd02
+  Identical across both runs and across both modes: the final balances depend on the set of unique orders,
+  not on submission order, batching or duplication.
+DIFFERENT SEEDS: every run recorded above drew its own seed and was green, including the full-size pair.
+
+WHOLE LEDGER SUITE, FINAL STATE
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest --rerun --continue   (exit 0)
+  TOTAL tests=56 failures+errors=0   (LedgerConcurrencyStressIT 2 tests, 4.596s)
+
+REPRODUCE
+  ./gradlew :services:ledger-service:integrationTest --tests '*LedgerConcurrencyStressIT' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*LedgerConcurrencyStressIT' -Pzs.stress.size=full --rerun
+  ZS_TEST_SEED=<seed> ./gradlew :services:ledger-service:integrationTest --tests '*LedgerConcurrencyStressIT' --rerun

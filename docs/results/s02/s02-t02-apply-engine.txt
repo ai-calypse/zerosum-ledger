@@ -1,0 +1,101 @@
+# S02-T02 apply engine: worked example, duplicates, quarantine, retries, isolation 2026-09-15T23:58:35Z
+$ ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest --rerun --continue   (exit 0)
+  dev.zerosum.ledger.apply.ApplyConnectionLossIT             tests=  1 failures+errors=0 time=2.204s
+      terminatingTheApplyBackendStillAppliesTheOrderExactlyOnce()
+  dev.zerosum.ledger.apply.ApplyDuplicateIT                  tests=  1 failures+errors=0 time=1.013s
+      repeatedApplicationLeavesBalancesSequencesAndChangelogUnchanged()
+  dev.zerosum.ledger.apply.ApplyLockTimeoutRetryIT           tests=  2 failures+errors=0 time=4.479s
+      aLockHeldPastTheWholeScheduleRaisesTheTypedExceptionAndAppliesNothing()
+      aLockHeldBrieflyCausesARetryAndTheOrderIsStillAppliedOnce()
+  dev.zerosum.ledger.apply.ApplyOverflowIT                   tests=  1 failures+errors=0 time=1.049s
+      overflowingOrderIsIsolatedAndQuarantinedWhileTheRestOfTheBatchApplies()
+  dev.zerosum.ledger.apply.ApplyQuarantineIT                 tests=  4 failures+errors=0 time=0.921s
+      ledgerRuleViolationIsQuarantinedWhileValidOrdersInTheSameBatchApply()
+      amountWithAZeroFractionIsRejectedEvenThoughTheSchemaAcceptsIt()
+      redeliveringTheSameInvalidRecordIsANoOp()
+      garbagePayloadIsQuarantinedWithoutAnOrderId()
+  dev.zerosum.ledger.apply.NegativeBalanceIT                 tests=  1 failures+errors=0 time=1.074s
+      anOrderDrivingADriverPayableIntoDebitIsApplied()
+  dev.zerosum.ledger.apply.SeededApplyPermutationIT          tests=  1 failures+errors=0 time=3.236s
+      perOrderAndBatchedModeAgreeUnderShufflingAndDuplicates(Seed)
+  dev.zerosum.ledger.apply.WorkedExampleApplyIT              tests=  2 failures+errors=0 time=2.06s
+      perOrderModeReproducesTheExpectedBalancesAfterO1ToO7()
+      batchedModeReproducesTheSameBalancesIncludingTheO8Variant()
+  dev.zerosum.ledger.schema.LedgerAppendOnlyIT               tests= 13 failures+errors=0 time=1.0s
+      conflictSkippingDuplicateInsertsSucceedWithoutFiringTheTriggers()
+      "applied_orders" UPDATE as "ledger_app"
+      "applied_orders" UPDATE as "ledger_owner"
+      "applied_orders" DELETE as "ledger_app"
+      "applied_orders" DELETE as "ledger_owner"
+      "applied_orders" TRUNCATE as "ledger_app"
+      "applied_orders" TRUNCATE as "ledger_owner"
+      "entity_changelog" UPDATE as "ledger_app"
+      "entity_changelog" UPDATE as "ledger_owner"
+      "entity_changelog" DELETE as "ledger_app"
+      "entity_changelog" DELETE as "ledger_owner"
+      "entity_changelog" TRUNCATE as "ledger_app"
+      "entity_changelog" TRUNCATE as "ledger_owner"
+  dev.zerosum.ledger.schema.LedgerGrantsIT                   tests=  4 failures+errors=0 time=0.888s
+      laterLedgerTablesDoNotInheritRuntimeUpdateOrDelete()
+      verifierSelectsFromEveryLedgerTableButCannotInsert()
+      runtimeRoleCannotDeleteFromMutableTables()
+      runtimeRoleUpdatesMutableStateAndOnlyTheQuarantineResolution()
+  dev.zerosum.ledger.schema.LedgerSchemaMigrationIT          tests=  3 failures+errors=0 time=0.947s
+      migratesFromTheBaselineAndValidatesOnASecondStart()
+      quarantineInsertIsANoOpForARepeatedKafkaPositionButNullPositionsNeverConflict()
+      keyColumnsUseByteOrderCollationMatchingJavaStringOrder()
+  dev.zerosum.ledger.apply.ApplyRetryClassifierTest          tests= 21 failures+errors=0 time=0.04s
+      cyclicCauseChainTerminates()
+      failuresWithoutASqlStateAreNonTransient()
+      [1] sqlState = "40P01"
+      [2] sqlState = "40001"
+      [3] sqlState = "55P03"
+      [4] sqlState = "57P01"
+      [5] sqlState = "57P03"
+      [6] sqlState = "08000"
+      [7] sqlState = "08003"
+      [8] sqlState = "08006"
+      [9] sqlState = "08001"
+      [10] sqlState = "08007"
+      classifiesTheDeepestSqlExceptionInTheCauseChain()
+      [1] sqlState = "23505"
+      [2] sqlState = "23514"
+      [3] sqlState = "22003"
+      [4] sqlState = "42501"
+      [5] sqlState = "42P01"
+      [6] sqlState = "53100"
+      [7] sqlState = "57014"
+      [8] sqlState = "XX000"
+TOTAL tests=54 failures+errors=0
+RESULT PASS
+--- engine configuration (application.yml, D02-3/D02-4)
+ledger:
+  apply:
+    # decision: D02-4 — docs/step_02_ledger_core.md#decisions-and-outputs (master §5.11 timeouts)
+    lock-timeout: 2s
+    statement-timeout: 5s
+    # decision: D02-4 — jittered exponential backoff, transient SQLSTATEs only
+    max-attempts: 10
+    backoff-min: 100ms
+    backoff-max: 5s
+    # decision: D02-3 — per-order mode by default; S04 chooses the batch size, revisited by SP1 (D02-10)
+    default-batch-size: 1
+
+server:
+  # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # decision: D00-6 — actuator HTTP exposure limited to health
+        include: health
+  otlp:
+    metrics:
+      export:
+        # decision: D00-6, D00-7 — Micrometer OTLP push is the single metrics exporter (the agent exports traces only)
+        url: ${ZS_OTLP_METRICS_URL:http://localhost:4318/v1/metrics}
+        step: 10s
+--- transient SQLSTATEs (D02-4)
+    /** decision: D02-4 — every SQLSTATE class retried in full. */

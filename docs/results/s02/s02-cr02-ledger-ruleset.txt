@@ -1,0 +1,20 @@
+# CR-S02-02 → D01-5: ZeroSumValidator.RuleSet.LEDGER, revalidation of S01-T03 2026-09-15T22:51:38Z
+$ ./gradlew :libs:money:test :libs:contracts:test --rerun --continue
+EXIT=0
+BUILD SUCCESSFUL in 2s
+  dev.zerosum.contracts.GoldenManifestTest tests 2 failures+errors 0
+  dev.zerosum.contracts.MoneyOrderSchemaTest tests 4 failures+errors 0
+  dev.zerosum.contracts.PaymentEventSchemaTest tests 4 failures+errors 0
+  dev.zerosum.contracts.WorkedExampleGoldenTest tests 5 failures+errors 0
+  dev.zerosum.money.ChartOfAccountsTest tests 20 failures+errors 0
+  dev.zerosum.money.CurrencyRulesTest tests 8 failures+errors 0
+  dev.zerosum.money.FareSplitterTest tests 4 failures+errors 0
+  dev.zerosum.money.FeeCalculatorTest tests 12 failures+errors 0
+  dev.zerosum.money.GeneratorDeterminismTest tests 2 failures+errors 0
+  dev.zerosum.money.MoneyTest tests 13 failures+errors 0
+  dev.zerosum.money.ValidatorGenerativeTest tests 3 failures+errors 0
+  dev.zerosum.money.ZeroSumValidatorTest tests 14 failures+errors 0
+      ledgerRuleSetChecksOnlyTheAccountForTheKindAndZeroSum() passed
+  dev.zerosum.money.arch.MoneyArchitectureTest tests 6 failures+errors 0
+TOTAL tests=97 failures+errors=0
+RESULT PASS
