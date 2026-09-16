@@ -34,4 +34,26 @@ final class LedgerReadResponses {
     /** The M6 (a) link back to the money order that caused the row (master §0.3 C17). */
     record ChangelogSource(String system, String idempotencyKey) {
     }
+
+    /**
+     * @param consistent                 true when I2, I3 and I4 all hold; I5 is reported separately
+     * @param i5                         whether I5 was evaluated here, and where it is evaluated instead (D02-8)
+     * @param unresolvedQuarantinedCount unresolved quarantine rows only (D02-9)
+     * @param nonZeroClearingBalances    clearing accounts that have not returned to zero (§0.3 C13)
+     */
+    record Invariants(boolean consistent, List<String> i2NonZeroCurrencies, List<String> i3Violations,
+            List<String> i4Violations, I5Status i5, long unresolvedQuarantinedCount,
+            List<ClearingBalance> nonZeroClearingBalances) {
+    }
+
+    record I5Status(boolean evaluated, String reason) {
+    }
+
+    record ClearingBalance(String entityId, String account, String currency, long signedMinor) {
+    }
+
+    /** {@code firstBadSeq}, {@code failure} and {@code detail} are null exactly when {@code consistent} is true. */
+    record Verification(String entityId, boolean consistent, long rowsChecked, Long firstBadSeq, String failure,
+            String detail) {
+    }
 }

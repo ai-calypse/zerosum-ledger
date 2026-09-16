@@ -65,11 +65,30 @@ class LedgerOpenApiContractIT extends LedgerApiTestBase {
         assertEquals(List.of(), errors("#/components/schemas/Problem", body));
     }
 
+    @Test
+    void theInvariantsResponseValidatesAgainstTheSpecification() {
+        String body = http().get().uri("/v1/invariants").retrieve().body(String.class);
+        assertEquals(List.of(), errors(responseSchemaRef("/v1/invariants"), body));
+    }
+
+    @Test
+    void theVerifyResponseValidatesAgainstTheSpecification() {
+        String body = http().post().uri("/v1/entities/{id}/verify", "platform:main").retrieve().body(String.class);
+        assertEquals(List.of(), errors(postResponseSchemaRef("/v1/entities/{entity_id}/verify"), body));
+    }
+
     /** The 200 response schema reference of an operation, as written in the specification. */
     private static String responseSchemaRef(String path) {
-        JsonNode schema = openApi.get("paths").get(path).get("get").get("responses").get("200")
-                .get("content").get("application/json").get("schema");
-        return schema.get("$ref").asString();
+        return schemaRef(path, "get");
+    }
+
+    private static String postResponseSchemaRef(String path) {
+        return schemaRef(path, "post");
+    }
+
+    private static String schemaRef(String path, String method) {
+        return openApi.get("paths").get(path).get(method).get("responses").get("200")
+                .get("content").get("application/json").get("schema").get("$ref").asString();
     }
 
     /**

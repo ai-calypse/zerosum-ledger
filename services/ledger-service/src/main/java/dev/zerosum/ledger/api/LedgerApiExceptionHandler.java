@@ -12,7 +12,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * Turns read-API failures into RFC 9457 problem details with a stable {@code code}, per the master's REST conventions.
  * Callers branch on {@code code}, never on the human-readable title.
  */
-@RestControllerAdvice(assignableTypes = LedgerReadController.class)
+@RestControllerAdvice(assignableTypes = {LedgerReadController.class, LedgerVerificationController.class})
 class LedgerApiExceptionHandler {
 
     @ExceptionHandler(LedgerApiException.class)
@@ -36,6 +36,16 @@ class LedgerApiExceptionHandler {
      * The database is unreachable: fail with 503 after the pool connection timeout rather than returning a partial
      * page (master §6.6).
      */
+    /**
+     * An operational read that exceeds its own statement timeout is reported as a distinct problem, never as
+     * "consistent": a caller must not read a timeout as a clean ledger (D02-8).
+     */
+    @ExceptionHandler(org.springframework.dao.QueryTimeoutException.class)
+    ProblemDetail handle(org.springframework.dao.QueryTimeoutException failure) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "operational_read_timeout",
+                "the invariants or verify read exceeded its statement timeout before completing");
+    }
+
     @ExceptionHandler(DataAccessResourceFailureException.class)
     ProblemDetail handle(DataAccessResourceFailureException failure) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "database_unavailable", "the ledger database is unreachable");

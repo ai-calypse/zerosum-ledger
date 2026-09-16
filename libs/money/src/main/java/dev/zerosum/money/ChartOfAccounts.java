@@ -19,6 +19,13 @@ public final class ChartOfAccounts {
             EntityKind.PLATFORM, Set.of("revenue", "cash", "processing_fees"),
             EntityKind.PROVIDER, Set.of("clearing", "payout_clearing"));
 
+    /**
+     * Clearing accounts (D01-6, CR-S02-04). Money rests here only while it is in flight with a provider, so a balance
+     * that stays non-zero after quiesce is the I9 health signal (ADR-0003). Consumers ask this instead of naming the
+     * account codes themselves, so adding a provider account changes one place.
+     */
+    private static final Set<String> CLEARING_ACCOUNTS = Set.of("clearing", "payout_clearing");
+
     // decision: D01-6 — normal side per account code
     private static final Map<String, NormalSide> NORMAL_SIDES = Map.of(
             "receivable", NormalSide.DEBIT,
@@ -48,6 +55,16 @@ public final class ChartOfAccounts {
             }
         }
         return Optional.empty();
+    }
+
+    /** Whether this account code is a clearing account (D01-6, CR-S02-04). Never throws; unknown codes are not clearing. */
+    public static boolean isClearing(String account) {
+        return account != null && CLEARING_ACCOUNTS.contains(account);
+    }
+
+    /** Every clearing account code, for reports that scan balances rather than test one code (D01-6, CR-S02-04). */
+    public static Set<String> clearingAccounts() {
+        return CLEARING_ACCOUNTS;
     }
 
     public static boolean isAllowed(EntityKind kind, String account) {

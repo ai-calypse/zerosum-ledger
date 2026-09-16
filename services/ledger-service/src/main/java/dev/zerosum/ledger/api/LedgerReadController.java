@@ -9,7 +9,6 @@ import dev.zerosum.ledger.store.LedgerStore;
 import dev.zerosum.ledger.store.LedgerStore.BalancesSnapshot;
 import dev.zerosum.ledger.store.LedgerStore.ChangelogPageRow;
 import dev.zerosum.money.ChartOfAccounts;
-import dev.zerosum.money.ValidationLimits;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,7 +35,7 @@ class LedgerReadController {
 
     @GetMapping("/v1/entities/{entityId}/balances")
     Balances balances(@PathVariable String entityId) {
-        String id = validEntityId(entityId);
+        String id = EntityIds.validated(entityId);
         BalancesSnapshot snapshot = store.readBalancesSnapshot(id).orElseThrow(() -> LedgerApiException.entityNotFound(id));
         List<AccountBalance> accounts = snapshot.accounts().stream()
                 .map(a -> new AccountBalance(a.accountCode(), a.currency(),
@@ -50,7 +49,7 @@ class LedgerReadController {
     ChangelogPage changelog(@PathVariable String entityId,
             @RequestParam(name = "after_seq", required = false) Long afterSeq,
             @RequestParam(name = "limit", required = false) Integer limit) {
-        String id = validEntityId(entityId);
+        String id = EntityIds.validated(entityId);
         long cursor = afterSeq == null ? 0 : afterSeq;
         if (cursor < 0) {
             throw LedgerApiException.invalidCursor(afterSeq);
@@ -74,12 +73,4 @@ class LedgerReadController {
         return new ChangelogPage(id, body, next);
     }
 
-    /** Rule 3 of D01-5, checked at the trust boundary (TB1) before any query runs. */
-    private static String validEntityId(String entityId) {
-        if (entityId == null || entityId.length() > ValidationLimits.ENTITY_ID_MAX_LENGTH
-                || !ValidationLimits.ENTITY_ID_PATTERN.matcher(entityId).matches()) {
-            throw LedgerApiException.invalidEntityId(entityId);
-        }
-        return entityId;
-    }
 }

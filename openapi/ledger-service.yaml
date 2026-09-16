@@ -87,6 +87,63 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  /v1/invariants:
+    get:
+      operationId: getInvariants
+      summary: Global ledger invariants from one snapshot
+      description: |
+        Reports I2 (global per-currency sum is zero), I3 (balances equal the sum of changelog deltas and every running
+        balance is correct) and I4 (gapless sequence per entity), plus the unresolved quarantine count and any clearing
+        account that has not returned to zero.
+
+        Every figure comes from a single read-only repeatable-read transaction, so they all describe the same state even
+        while applies commit. The transaction raises its own statement timeout above the apply limit because these reads
+        scan.
+
+        **I5 is not evaluated here.** Verifying every entity's hash chain would rehash the whole changelog and cannot
+        meet the audit-read budget on a large ledger, so the response says so explicitly rather than implying I5 passed;
+        use the per-entity verify operation, and the S06 verifier for a whole-ledger sweep.
+
+        **This endpoint is operational, not interactive.** A long snapshot on a busy database delays vacuum, so it is
+        meant for operators and the verifier rather than for a UI polling loop.
+      tags: [ledger]
+      responses:
+        '200':
+          description: The invariant report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invariants' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/entities/{entity_id}/verify:
+    post:
+      operationId: verifyEntity
+      summary: Rebuild an entity's balances from its changelog and verify its hash chain
+      description: |
+        Streams the entity's changelog in sequence order, recomputes each account's running balance, compares every
+        row's stored running balance and the rebuilt totals against the stored account balances, and verifies the hash
+        chain (I5). Reports the lowest failing sequence number when several checks fail.
+
+        It writes nothing; POST follows the master's REST table. The changelog is streamed at a bounded fetch size, so a
+        very large entity is never materialized in full. If the read exceeds its statement timeout the response is a
+        problem with code `operational_read_timeout`, never a `consistent` result.
+      tags: [ledger]
+      parameters:
+        - $ref: '#/components/parameters/EntityId'
+      responses:
+        '200':
+          description: The verification result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Verification' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -237,6 +294,88 @@ components:
           type: string
           description: The source idempotency key of the money order.
 
+    Invariants:
+      type: object
+      additionalProperties: false
+      required: [consistent, i2_non_zero_currencies, i3_violations, i4_violations, i5, unresolved_quarantined_count, non_zero_clearing_balances]
+      properties:
+        consistent:
+          type: boolean
+          description: True when I2, I3 and I4 all hold. I5 is reported separately and is not part of this flag.
+        i2_non_zero_currencies:
+          type: array
+          description: Currencies whose global balance sum is not zero. Empty means I2 holds.
+          items: { $ref: '#/components/schemas/CurrencyCode' }
+        i3_violations:
+          type: array
+          description: Accounts whose balance disagrees with the sum of their deltas, and rows whose running balance is wrong. Empty means I3 holds.
+          items: { type: string }
+        i4_violations:
+          type: array
+          description: Entities whose sequence numbers have a gap or do not start at 1. Empty means I4 holds.
+          items: { $ref: '#/components/schemas/EntityId' }
+        i5:
+          $ref: '#/components/schemas/I5Status'
+        unresolved_quarantined_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Quarantine rows an operator has not resolved. Resolved rows are not counted.
+        non_zero_clearing_balances:
+          type: array
+          description: Clearing accounts that have not returned to zero. No age or settlement-cycle filter is applied here; the S06 verifier judges age and break matching (I9).
+          items: { $ref: '#/components/schemas/ClearingBalance' }
+
+    I5Status:
+      type: object
+      additionalProperties: false
+      required: [evaluated, reason]
+      properties:
+        evaluated:
+          type: boolean
+          description: False on this endpoint. It never claims I5 passed.
+        reason:
+          type: string
+          description: Where I5 is evaluated instead.
+
+    ClearingBalance:
+      type: object
+      additionalProperties: false
+      required: [entity_id, account, currency, signed_minor]
+      properties:
+        entity_id: { $ref: '#/components/schemas/EntityId' }
+        account: { $ref: '#/components/schemas/AccountCode' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        signed_minor:
+          type: integer
+          format: int64
+          description: The stored signed balance, debit positive and credit negative.
+
+    Verification:
+      type: object
+      additionalProperties: false
+      required: [entity_id, consistent, rows_checked]
+      properties:
+        entity_id: { $ref: '#/components/schemas/EntityId' }
+        consistent:
+          type: boolean
+        rows_checked:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Changelog rows streamed and checked.
+        first_bad_seq:
+          type: [integer, 'null']
+          format: int64
+          description: The lowest sequence number that failed a check, or null when consistent.
+        failure:
+          type: [string, 'null']
+          enum: [SEQUENCE_BREAK, UNSUPPORTED_FORM_VERSION, BROKEN_LINK, HASH_MISMATCH, RUNNING_BALANCE_MISMATCH, BALANCE_MISMATCH, null]
+          description: Which check failed, or null when consistent.
+        detail:
+          type: [string, 'null']
+          description: Human-readable explanation of the failure, or null when consistent.
+
     Problem:
       # RFC 9457, plus the stable `code` the master's conventions require.
       type: object
@@ -249,5 +388,5 @@ components:
         instance: { type: string }
         code:
           type: string
-          enum: [invalid_entity_id, invalid_cursor, invalid_limit, entity_not_found, unauthorized, forbidden, database_unavailable]
+          enum: [invalid_entity_id, invalid_cursor, invalid_limit, entity_not_found, unauthorized, forbidden, database_unavailable, operational_read_timeout]
           description: Stable machine-readable error code; callers branch on this, never on `title`.

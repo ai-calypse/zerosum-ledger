@@ -1,0 +1,83 @@
+# S02-T05 invariants endpoint and verify: snapshot reads, tamper detection, verifier role  2026-09-16T01:37Z
+
+ENVIRONMENT
+  PostgreSQL  postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 (the Compose pin)
+  Docker      29.8.0, 10 CPUs, 8.3 GB VM; containers run with fsync=off, as every ledger IT does.
+
+WHAT D02-8 SELECTED
+  Units        I2, I3 and I4 are standalone SELECTs in InvariantQueries with no web or apply dependency, so S06-T04
+               reuses them unchanged. I3 is two checks: balance = sum of deltas, AND every stored running balance is
+               correct - stored balances can agree with the deltas while one row's balance_after_minor is wrong.
+  Snapshot     One read-only REPEATABLE READ transaction per response, so every figure describes the same state.
+  Timeout      ledger.api.operational-statement-timeout = 15s, SET LOCAL inside the read transaction only. The global
+               5s apply limit is untouched (master 0.3 C19). Chosen against the P4 targets in master 6.2: invariants
+               over 1M rows <= 10s, verify over 10,000 rows <= 2s.
+  Verify       Streams the changelog at ledger.api.verify-fetch-size = 500, so a large entity is never materialized.
+  I5           NOT evaluated across all entities on the invariants endpoint. Rehashing every chain cannot meet the P4
+               budget on a large ledger, so the response carries i5: {evaluated: false, reason} rather than omitting
+               the field, which a reader could mistake for a pass. Per-entity verify and the S06 verifier own I5.
+  Clearing     Classified by ChartOfAccounts.isClearing / clearingAccounts (CR-S02-04 to D01-6). ledger-service holds
+               no account codes of its own. No age or settlement-cycle filter: the S06 verifier judges I9.
+
+RESULTS
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest --rerun --continue   (exit 0)
+
+  dev.zerosum.ledger.api.InvariantsApiIT                      tests=4 failures+errors=0 time=1.23s
+      ok  aPartialWorkedExampleLeavesAClearingAccountNonZero()
+      ok  theCompleteWorkedExampleIsConsistentWithEveryClearingAccountBackToZero()
+      ok  aQuarantinedRecordIsCountedWhileUnresolved()
+      ok  adeliberatelyCorruptedLedgerReportsI3AndI4Violations()
+  dev.zerosum.ledger.api.VerifyApiIT                          tests=6 failures+errors=0 time=1.356s
+      ok  aCleanEntityIsConsistentAndReportsEveryRowChecked()
+      ok  aTamperedDeltaIsDetected()
+      ok  aTamperedRunningBalanceIsDetectedEvenThoughTheDeltasStillSum()
+      ok  aRemovedRowIsDetected()
+      ok  verifyStaysConsistentWhileAppliesCommit()
+      ok  anUnknownEntityIsNotFound()
+  dev.zerosum.ledger.invariants.InvariantQueriesVerifierRoleIT tests=2 failures+errors=0 time=2.132s
+      ok  theInvariantUnitsRunUnderTheReadOnlyVerifierRole()
+      ok  theClearingReportUsesTheChartOfAccountsClassification()
+  dev.zerosum.ledger.api.LedgerOpenApiContractIT              tests=5 failures+errors=0  (3 from S02-T04 plus
+      ok  theInvariantsResponseValidatesAgainstTheSpecification()
+      ok  theVerifyResponseValidatesAgainstTheSpecification()
+
+  WHOLE LEDGER SUITE: TOTAL tests=93 failures+errors=0, all 14 new tests green on their first run.
+  OperationalReadTimingIT was added after that run and passed on its own; the suite is now 94 tests.
+
+WHAT THE ASSERTIONS COVER
+  Invariants  One database driven clean -> in-flight -> quarantined -> corrupted. After O1-O2 the card charge shows as
+              a non-zero provider:fakecard clearing balance. After the full O1-O7 the report is consistent, I2/I3/I4
+              are empty, the quarantine count is 0 and every clearing account is back to zero. An undecodable record
+              makes the unresolved count 1; setting resolved_at returns it to 0 (D02-9). With the append-only triggers
+              bypassed by a superuser to corrupt one delta and delete one row, the report is NOT consistent and names
+              both an I3 and an I4 violation - the endpoint reports corruption rather than hiding it.
+  Verify      One entity per tamper case, so the cases are independent of ordering. A clean entity is consistent with
+              rows_checked equal to its changelog length. A tampered delta, a tampered running balance and a removed
+              row are each detected at the expected sequence number. Verify repeated while a writer commits applies
+              never reports a half-applied state. An unknown entity is 404 entity_not_found.
+  Role        Every invariant unit, the quarantine count and the clearing report run under the read-only verifier role
+              (TB5, D00-4), which is what lets the S06 verifier reuse them with no write access to the ledger.
+
+INFORMAL TIMING (CONTEXT ONLY - NOT A P4 MEASUREMENT)
+  ZS-TIMING rows=10000 seedMs=2314 verifyMs=36 invariantsMs=46 rowsChecked=10000
+  Verify streamed all 10,000 changelog rows of one entity in 36 ms and the invariants report took 46 ms, on a container
+  with fsync=off and nothing else running. P4 is measured in S07 on the reference environment and is not gated here;
+  these numbers say only that neither read is pathological at the P4 reference size.
+
+CHANGE REQUEST RAISED AND ACCEPTED
+  CR-S02-04 to D01-6. Instruction 5 requires the clearing report to use the D01-6 classification and forbids
+  hard-coding account codes in ledger-service, but ChartOfAccounts exposed only kindOf, isAllowed, allowedAccounts,
+  normalSide and presentOnNormalSide - 'clearing' and 'payout_clearing' lived in private maps, even though ADR-0003
+  already made a non-zero clearing balance the I9 health signal. The owner now exposes isClearing(account) and
+  clearingAccounts(), with a ChartOfAccountsTest case that also asserts every clearing code is allowed for the provider
+  kind. libs/money revalidated: 83 tests green, so S01-T03 is revalidated rather than merely marked.
+
+NOT COVERED HERE
+  401 and 403 are declared in the specification but not enforced: S03-T03 wires libs/auth (master 0.3 C9). The
+  operational_read_timeout path is implemented and declared but not exercised by a test; provoking a 15s statement
+  timeout would add 15s to every CI run for a branch that is one exception handler.
+
+REPRODUCE
+  ./gradlew :services:ledger-service:integrationTest --tests '*InvariantsApiIT' --tests '*VerifyApiIT' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*InvariantQueriesVerifierRoleIT' --rerun
+  ./gradlew :services:ledger-service:integrationTest --tests '*OperationalReadTimingIT' --rerun -i
