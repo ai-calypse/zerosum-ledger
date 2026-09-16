@@ -165,7 +165,7 @@ class LedgerConcurrencyStressIT {
             long entities = 0;
             long verifiedRows = 0;
             for (String entityId : store.allEntityIds()) {
-                ChainVerifier.Result result = chainVerifier.verify(store.readChangelog(entityId));
+                ChainVerifier.Result result = chainVerifier.verify(store.streamChangelog(entityId));
                 if (!result.consistent()) {
                     throw new AssertionError("entity " + entityId + " fails I5 at seq " + result.firstBadSeq()
                             + " (" + result.failure() + "): " + result.detail());

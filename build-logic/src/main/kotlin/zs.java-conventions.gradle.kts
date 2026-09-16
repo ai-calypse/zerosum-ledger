@@ -36,13 +36,15 @@ dependencies {
 //   test            untagged fast layer, no containers (build depends on it)
 //   integrationTest @Tag("integration"), Testcontainers
 //   e2eTest         @Tag("e2e"), requires the running Compose stack
+//   studyTest       @Tag("study"), timeboxed measurement runs (CR-S02-05 to D00-10). Never part of CI: a study window
+//                   is minutes long by design, so it is run deliberately and its output is committed as evidence.
 tasks.named<Test>("test") {
     useJUnitPlatform {
-        excludeTags("integration", "e2e")
+        excludeTags("integration", "e2e", "study")
     }
 }
 
-mapOf("integrationTest" to "integration", "e2eTest" to "e2e").forEach { (taskName, tag) ->
+mapOf("integrationTest" to "integration", "e2eTest" to "e2e", "studyTest" to "study").forEach { (taskName, tag) ->
     tasks.register<Test>(taskName) {
         description = "Runs tests tagged '$tag'."
         group = LifecycleBasePlugin.VERIFICATION_GROUP

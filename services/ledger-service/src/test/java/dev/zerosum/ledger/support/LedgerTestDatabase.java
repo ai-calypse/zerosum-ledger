@@ -37,14 +37,37 @@ public final class LedgerTestDatabase implements AutoCloseable {
     private final Map<String, String> passwords = new HashMap<>();
 
     private LedgerTestDatabase() {
+        this(true);
+    }
+
+    /**
+     * @param fastAndUnsafe true for ordinary tests, which trade durability for speed with {@code fsync=off}; false for
+     *                      the SP1 study (S02-T07), which must measure the D00-3 configuration with durability intact.
+     *                      A measurement taken against a relaxed database is a smoke check, not study data.
+     */
+    private LedgerTestDatabase(boolean fastAndUnsafe) {
         var image = DockerImageName.parse(composeImage("postgres")).asCompatibleSubstituteFor("postgres");
+        // The D00-3 settings from docker-compose.yml; fsync is never disabled there.
+        List<String> command = new java.util.ArrayList<>(List.of("postgres",
+                "-c", "shared_preload_libraries=pg_stat_statements",
+                "-c", "pg_stat_statements.track=all"));
+        if (fastAndUnsafe) {
+            command.addAll(List.of("-c", "fsync=off"));
+        }
         container = new PostgreSQLContainer(image)
                 .withUsername("postgres")
                 .withPassword(throwawayPassword())
                 .withDatabaseName("postgres")
-                .withCommand("postgres", "-c", "fsync=off",
-                        "-c", "shared_preload_libraries=pg_stat_statements",
-                        "-c", "pg_stat_statements.track=all")
+                .withCommand(command.toArray(String[]::new))
+                .withCreateContainerCmdModifier(cmd -> {
+                    if (!fastAndUnsafe) {
+                        // Match the compose memory limit, so the study measures the configuration D00-3 describes.
+                        var hostConfig = cmd.getHostConfig();
+                        if (hostConfig != null) {
+                            hostConfig.withMemory(COMPOSE_MEMORY_LIMIT_BYTES);
+                        }
+                    }
+                })
                 .withCopyFileToContainer(MountableFile.forHostPath(ROOT.resolve("infra/postgres")), "/zs/postgres")
                 .withCopyFileToContainer(MountableFile.forHostPath(ROOT.resolve("infra/postgres/init.sh"), 0755),
                         "/docker-entrypoint-initdb.d/init.sh");
@@ -56,9 +79,23 @@ public final class LedgerTestDatabase implements AutoCloseable {
         password("stats_reader", "ZS_STATS_DB_PASSWORD");
     }
 
-    /** Starts the container and migrates the ledger database to the latest version. */
+    /** decision: D00-3 — the compose memory limit for PostgreSQL, so the SP1 study measures that allocation. */
+    private static final long COMPOSE_MEMORY_LIMIT_BYTES = 1536L * 1024 * 1024;
+
+    /** Starts the container and migrates the ledger database to the latest version. Fast, with {@code fsync=off}. */
     public static LedgerTestDatabase start() {
-        LedgerTestDatabase db = new LedgerTestDatabase();
+        return start(new LedgerTestDatabase());
+    }
+
+    /**
+     * A container configured as D00-3 describes, with durability intact and the compose memory limit, for the SP1
+     * lock study (S02-T07). Slower than {@link #start()} by design: the commit fsync is part of what SP1 measures.
+     */
+    public static LedgerTestDatabase startDurable() {
+        return start(new LedgerTestDatabase(false));
+    }
+
+    private static LedgerTestDatabase start(LedgerTestDatabase db) {
         db.container.start();
         db.flyway().migrate();
         return db;

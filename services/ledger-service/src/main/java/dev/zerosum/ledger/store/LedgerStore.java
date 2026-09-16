@@ -240,6 +240,64 @@ public class LedgerStore {
                 .list();
     }
 
+    /**
+     * The entity's changelog in sequence order as a lazy {@link Iterable}, fetched in bounded pages rather than
+     * materialized. Whole-ledger I5 sweeps read every entity in turn, so holding a full changelog per entity is what
+     * exhausts the heap on a large ledger; {@link ChainVerifier} only ever walks forwards, so a stream is enough.
+     */
+    public Iterable<ChangelogRow> streamChangelog(String entityId) {
+        return () -> new java.util.Iterator<>() {
+            private long afterSeq = 0;
+            private java.util.Iterator<ChangelogRow> page = java.util.Collections.emptyIterator();
+            private boolean exhausted;
+
+            @Override
+            public boolean hasNext() {
+                if (page.hasNext()) {
+                    return true;
+                }
+                if (exhausted) {
+                    return false;
+                }
+                List<ChangelogRow> rows = readChangelogRange(entityId, afterSeq, STREAM_PAGE_SIZE);
+                if (rows.isEmpty()) {
+                    exhausted = true;
+                    return false;
+                }
+                afterSeq = rows.get(rows.size() - 1).seq();
+                exhausted = rows.size() < STREAM_PAGE_SIZE;
+                page = rows.iterator();
+                return true;
+            }
+
+            @Override
+            public ChangelogRow next() {
+                if (!hasNext()) {
+                    throw new java.util.NoSuchElementException();
+                }
+                return page.next();
+            }
+        };
+    }
+
+    /** Page size for {@link #streamChangelog}; bounded so one entity's chain never has to fit in memory at once. */
+    private static final int STREAM_PAGE_SIZE = 5_000;
+
+    private List<ChangelogRow> readChangelogRange(String entityId, long afterSeq, int limit) {
+        return jdbc.sql("""
+                SELECT entity_id, seq, order_id, account_code, currency, delta_minor, balance_after_minor,
+                       hash_version, prev_hash, row_hash
+                FROM entity_changelog WHERE entity_id = :entityId AND seq > :afterSeq ORDER BY seq LIMIT :limit""")
+                .param("entityId", entityId)
+                .param("afterSeq", afterSeq)
+                .param("limit", limit)
+                .query((rs, rowNumber) -> new ChangelogRow(rs.getString("entity_id"), rs.getLong("seq"),
+                        rs.getObject("order_id", UUID.class), rs.getString("account_code"),
+                        rs.getString("currency").strip(), rs.getLong("delta_minor"), rs.getLong("balance_after_minor"),
+                        rs.getShort("hash_version"), rs.getBytes("prev_hash"), rs.getBytes("row_hash")))
+                .list();
+    }
+
     /** Every entity ID that has changelog rows, in lock order; used to verify I5 across the whole ledger. */
     public List<String> allEntityIds() {
         return jdbc.sql("SELECT entity_id FROM entities ORDER BY entity_id").query(String.class).list();
