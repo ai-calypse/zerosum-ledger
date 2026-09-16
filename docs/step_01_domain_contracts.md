@@ -787,7 +787,7 @@ Evaluate each item against evidence recorded in H.4. Thresholds and counts are t
 - [x] `libs/money` main classes depend only on the JDK (Rule D; [docs/zerosum_ledger_mvp_plan.md#repo-structure](zerosum_ledger_mvp_plan.md#repo-structure)).
 - [x] No jqwik or other property-based testing library appears in any dependency report ([docs/zerosum_ledger_mvp_plan.md#platform-limits](zerosum_ledger_mvp_plan.md#platform-limits)).
 - [x] ADR-0003 and ADR-0009 exist with status Accepted under the D00-9 process.
-- [ ] All new tests run green in CI in the jobs defined by D00-5, within the pull-request budget in [docs/zerosum_ledger_mvp_plan.md#cicd](zerosum_ledger_mvp_plan.md#cicd). **Blocked: no GitHub remote (S00 H.5). Every S01 test is untagged and green locally in the `build` layer.**
+- [x] All new tests run green in CI in the jobs defined by D00-5, within the pull-request budget in [docs/zerosum_ledger_mvp_plan.md#cicd](zerosum_ledger_mvp_plan.md#cicd). *(Green in the `build + unit` job on the dispatched and push-triggered runs; H.4.)*
 - [x] Every authoritative value in D.4 carries its trace comment, and H.2 lists its actual path.
 - [x] Section H is complete (D01-1…D01-11 no longer Pending), I.1 shows every task Done with evidence, and I.2 reflects a change-detection run made immediately before handoff. *(CI evidence is Blocked with its dependency named in H.5.)*
 
@@ -858,7 +858,7 @@ Evaluate each item against evidence recorded in H.4. Thresholds and counts are t
 | Mutation sanity check of the generative oracle | Manual local rule disablement | **Passed (failed as intended)**: with the zero-sum rule disabled, order #15 labeled `ZERO_SUM_VIOLATED got []` fails with the seed line; reverted, `git diff` clean, full run green | [s01-t06-generative.txt](results/s01/s01-t06-generative.txt) | 2026-09-15 |
 | ArchUnit rules A–E and canaries (M1(c)) | `MoneyArchitectureTest` + manual `double` field check | **Passed**: real classes satisfy A–E; each canary reports its rule; a temporary `double` field in `Money` fails with Rule A naming the field; reverted clean; main has 0 non-JDK imports | [s01-t07-archunit.txt](results/s01/s01-t07-archunit.txt) | 2026-09-15 |
 | No property-based testing library | Dependency report | **Passed**: `dependencies` for every project, 7,097 lines, 0 matches for jqwik/quickcheck | [s01-t06-generative.txt](results/s01/s01-t06-generative.txt) | 2026-09-15 |
-| CI placement and duration | CI run on the handoff commit | **Blocked**: no GitHub remote (S00 H.5). Partial local evidence: every S01 test is untagged, so the `build` job (`./gradlew build`) runs it; `./gradlew build` green before merge; local `:libs:money:test` 2 s and `:libs:contracts:test` 2 s | step H.4 rows above | 2026-09-15 |
+| CI placement and duration | CI run on the handoff commit | **Passed**: every S01 test is untagged, so the `build + unit` job (`./gradlew build`) runs it, including the 10,000-order generative test. Green on the dispatched run [35037237318](https://github.com/ai-calypse/zerosum-ledger/actions/runs/35037237318) (2 m 05 s) and on the clean push-triggered run [35038096697](https://github.com/ai-calypse/zerosum-ledger/actions/runs/35038096697) (1 m 10 s), both inside the ≤ 10 min pull-request budget | [docs/results/s00/s00-t05-ci-runs.txt](results/s00/s00-t05-ci-runs.txt) | 2026-09-15 |
 
 ### H.5 Known limitations and blockers
 
@@ -873,13 +873,13 @@ Evaluate each item against evidence recorded in H.4. Thresholds and counts are t
 | JSON Schema 2020-12 accepts zero-fraction numbers (`2500.0`) as integers | limitation | The schema alone can't reject decimal notation for amounts | Consumers' JSON parsers reject non-integer lexical amounts (S02 apply decoder, S03 API); documented by `MoneyOrderSchemaTest` |
 | Golden O1/O3 writer `source.system = trip-simulator` is the master example value, not yet a D03-4 decision | limitation | A different writer principal name in S03 changes two goldens | S03 adopts it or raises a change request to D01-9 (J) |
 | Payout events carry no `source_order_id` (forbidden by the schema), because payout attempts come from payout runs | limitation | The attempt uniqueness key (C22) for payouts can't use an order ID | S05 confirms against D05-4/D05-5 or raises a change request to D01-8 (J) |
-| CI evidence for S01 tests | blocker (inherited) | No CI run URL or duration for the handoff commit | Same as S00 H.5: create the public GitHub repository once authorized, then record the run |
+| CI evidence for S01 tests | resolved 2026-09-15 | Run URLs and durations recorded in H.4 once the public repository was authorized | None |
 
 ### H.6 Completion status
 
 | Field | Value |
 |---|---|
-| Step status | **Done**, except CI run evidence, which is Blocked on the GitHub remote inherited from S00 (H.5) |
+| Step status | **Done**. CI evidence completed on 2026-09-15 after the repository was authorized. |
 | Gate result | No gate; the M1 completion checkpoint is met (G) |
 | Completed on | 2026-09-15 |
 | Completed by | Implementation agent (Claude Code), branch `step/01-domain-contracts` |
