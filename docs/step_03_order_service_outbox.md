@@ -979,13 +979,15 @@ If the minimum cut is invoked ([docs/zerosum_ledger_mvp_plan.md#minimum-cut](zer
 
 | Source/artifact path | Revision or hash | Recorded at | Affected tasks | Review outcome |
 |---|---|---|---|---|
-| `docs/zerosum_ledger_mvp_plan.md` (v1.2) | — | 2026-09-15 (doc 1.1) | All | Revalidated: document updated to master v1.2 |
-| `docs/README.md` | — | — | All | — |
-| `docs/step_00_foundations.md` (register) | — | — | All | — |
-| `docs/step_01_domain_contracts.md` (register) | — | — | S03-T01, S03-T02, S03-T03, S03-T05, S03-T07 | — |
-| `docs/step_02_ledger_core.md` (register) | — | — | S03-T02, S03-T07 | — |
-| `gradle/libs.versions.toml` | — | — | All | — |
-| `settings.gradle.kts` (module layout) | — | — | S03-T03, S03-T05 | — |
+| `docs/zerosum_ledger_mvp_plan.md` (v1.2) | `d65384c 2026-09-15` | 2026-09-15 (doc 1.1); recomputed 2026-09-16 at S03 start | All | Revalidated: unchanged since S02 consumed it, so every inherited master value still resolves to the same text |
+| `docs/README.md` | `d65384c 2026-09-15` | 2026-09-16 (S03 start) | All | No impact: the shared procedures (source of truth, conflict resolution, change detection, status legend) are unchanged |
+| `docs/step_00_foundations.md` (register) | `9234ff4 2026-09-15` | 2026-09-16 (S03 start) | All | Current. Last changed by **CR-S02-05**, which added the `study` test layer to D00-10; S03 inherits the three CI-run layers plus `studyTest`, which no CI job invokes |
+| `docs/step_01_domain_contracts.md` (register) | `0d5b34e 2026-09-15` | 2026-09-16 (S03 start) | S03-T01, S03-T02, S03-T03, S03-T05, S03-T07 | Current. Last changed by **CR-S02-04**, which added the clearing classification to D01-6; the validator, chart of accounts and currency allow-list S03 consumes are otherwise as S01 accepted them |
+| `docs/step_02_ledger_core.md` (register) | `a00eec1 2026-09-15` | 2026-09-16 (S03 start) | S03-T02, S03-T07 | Complete and merged to `main` in `74b8e85`, G1 proceed. S03-T02 copies the D02-2 append-only pattern; S03-T07 consumes D02-3's apply entrypoint contract. All twelve D02 decisions are recorded, none Pending |
+| `gradle/libs.versions.toml` | `sha256 6c95b50f2dd4996a` | 2026-09-16 (S03 start) | All | Unchanged since S02 started: no pinned version moved under S02, so D00-1 still governs every version S03 may use |
+| `settings.gradle.kts` (module layout) | `d65384c 2026-09-15` | 2026-09-16 (S03 start) | S03-T03, S03-T05 | Unchanged. `libs:outbox`, `libs:auth` and `services:order-service` are already declared by D00-2, so S03 adds code to existing module slots rather than changing the layout |
+| `libs/money`, `libs/contracts` (artifacts) | `sha256 d50a89254b266541`, `sha256 6f80eabfd4959492` (directory digests) | 2026-09-16 (S03 start) | S03-T01, S03-T03, S03-T07 | `libs/money` changed only through CR-S02-04 (clearing classification), which does not affect the validator rules, fee maths or currency rules S03 consumes. `libs/contracts` is untouched since S01, so the money-order and payment-event schemas and the golden payloads are exactly what S01 accepted |
+| `docker-compose.yml`, ledger `V2__ledger_schema.sql`, `openapi/ledger-service.yaml` | `sha256 55d1cc64293788ae`, `sha256 eeec98e34cfa785d`, `sha256 22404306d8056bdc` | 2026-09-16 (S03 start) | S03-T02, S03-T05, S03-T07 | Recorded as the baseline S03 starts from. The Compose file is unchanged since S02 started; the ledger migration is the source of the D02-2 append-only pattern S03-T02 copies; the ledger OpenAPI file is the sibling contract S03-T04 mirrors in style |
 | `docker-compose.yml` | — | — | S03-T05 | — |
 | `infra/postgres/init.sql` and order-service Flyway baseline | — | — | S03-T01, S03-T02, S03-T05 | — |
 | `.env.example` | — | — | S03-T03 | — |

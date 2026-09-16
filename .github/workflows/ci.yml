@@ -54,7 +54,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       # decision: D02-11 — the nightly schedule runs the full-size concurrency stress (master §8.2); pushes and
       # pull requests run the reduced size so the job stays inside the ≤ 10 min target (master §10.3).
-      - run: ./gradlew integrationTest ${{ github.event_name == 'schedule' && '-Pzs.stress.size=full' || '' }}
+      # The nightly run adds -i so the harness's own ZS-STRESS line (size, threads, orders, retry counts) reaches the
+      # log: without it System.out is suppressed and the run proves only that the flag was passed, not that it was read.
+      - run: ./gradlew integrationTest ${{ github.event_name == 'schedule' && '-Pzs.stress.size=full -i' || '' }}
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
