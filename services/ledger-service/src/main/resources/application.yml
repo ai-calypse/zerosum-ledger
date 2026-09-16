@@ -1,6 +1,10 @@
 spring:
   application:
     name: ledger-service
+  jackson:
+    # decision: D02-7 — the read API is snake_case throughout, matching openapi/ledger-service.yaml. Setting it once
+    # beats annotating every response record; LedgerOpenApiContractIT fails on any mismatch (additionalProperties: false).
+    property-naming-strategy: SNAKE_CASE
   lifecycle:
     # decision: D00-3 — graceful shutdown timeout per master §5.11; Compose stop_grace_period is longer
     timeout-per-shutdown-phase: 30s
@@ -27,6 +31,12 @@ ledger:
     backoff-max: 5s
     # decision: D02-3 — per-order mode by default; S04 chooses the batch size, revisited by SP1 (D02-10)
     default-batch-size: 1
+  api:
+    # decision: D02-7 — docs/step_02_ledger_core.md#decisions-and-outputs
+    # Changelog paging. The ceiling is the master §5.6 proposal of 500 rows per page; the default keeps an
+    # unparameterised call small. Assertions read these values rather than hard-coding them.
+    default-page-size: 100
+    max-page-size: 500
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

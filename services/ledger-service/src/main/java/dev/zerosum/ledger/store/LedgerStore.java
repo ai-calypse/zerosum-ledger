@@ -28,6 +28,19 @@ public class LedgerStore {
     public record AccountKey(String entityId, String accountCode, String currency) {
     }
 
+    /** One account's stored balance (D02-7); presentation on the normal side belongs to the API layer. */
+    public record AccountBalance(String accountCode, String currency, long signedMinor) {
+    }
+
+    /** An entity's balances and the sequence they are as of, read from one snapshot (D02-7). */
+    public record BalancesSnapshot(String entityId, String kind, long asOfSeq, List<AccountBalance> accounts) {
+    }
+
+    /** One changelog row as the read API returns it, joined to its applied-order source (M6 (a), C17). */
+    public record ChangelogPageRow(long seq, UUID orderId, String accountCode, String currency, long deltaMinor,
+            long balanceAfterMinor, java.time.Instant recordedAt, String sourceSystem, String idempotencyKey) {
+    }
+
     /** One changelog row to append. */
     public record ChangelogRow(String entityId, long seq, UUID orderId, String accountCode, String currency,
             long deltaMinor, long balanceAfterMinor, short hashVersion, byte[] prevHash, byte[] rowHash) {
@@ -158,6 +171,59 @@ public class LedgerStore {
     public void updateEntityHeads(List<EntityRow> rows) {
         template.batchUpdate("UPDATE entities SET last_seq = ?, last_hash = ? WHERE entity_id = ?",
                 rows.stream().map(r -> new Object[] {r.lastSeq(), r.lastHash(), r.entityId()}).toList());
+    }
+
+    /**
+     * The entity's balances with the sequence they are as of, or empty when the entity does not exist. One statement, so
+     * {@code as_of_seq} and the balances describe the same snapshot (D02-7) without holding a transaction open.
+     */
+    public java.util.Optional<BalancesSnapshot> readBalancesSnapshot(String entityId) {
+        List<Object[]> rows = jdbc.sql("""
+                SELECT e.kind, e.last_seq, a.account_code, a.currency, a.balance_minor
+                FROM entities e LEFT JOIN accounts a ON a.entity_id = e.entity_id
+                WHERE e.entity_id = :entityId
+                ORDER BY a.account_code, a.currency""")
+                .param("entityId", entityId)
+                .query((rs, rowNumber) -> new Object[] {rs.getString("kind"), rs.getLong("last_seq"),
+                        rs.getString("account_code"), rs.getString("currency"), rs.getLong("balance_minor")})
+                .list();
+        if (rows.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        List<AccountBalance> accounts = rows.stream()
+                .filter(r -> r[2] != null)   // LEFT JOIN: a provisioned entity may hold no accounts yet
+                .map(r -> new AccountBalance((String) r[2], ((String) r[3]).strip(), (Long) r[4]))
+                .toList();
+        return java.util.Optional.of(new BalancesSnapshot(entityId, (String) rows.get(0)[0], (Long) rows.get(0)[1], accounts));
+    }
+
+    /**
+     * A keyset page of the entity's changelog after {@code afterSeq}, joined to the applied-order record for the source
+     * system and idempotency key (M6 (a)). The (entity_id, seq) primary key serves the range directly.
+     */
+    /**
+     * The keyset page query. Shared with the execution-plan test (S02-T04), so the recorded plan evidence cannot drift
+     * away from the statement the service actually runs.
+     */
+    static final String CHANGELOG_PAGE_SQL = """
+            SELECT c.seq, c.order_id, c.account_code, c.currency, c.delta_minor, c.balance_after_minor,
+                   c.recorded_at, o.source_system, o.idempotency_key
+            FROM entity_changelog c JOIN applied_orders o ON o.order_id = c.order_id
+            WHERE c.entity_id = :entityId AND c.seq > :afterSeq
+            ORDER BY c.seq
+            LIMIT :limit""";
+
+    public List<ChangelogPageRow> readChangelogPage(String entityId, long afterSeq, int limit) {
+        return jdbc.sql(CHANGELOG_PAGE_SQL)
+                .param("entityId", entityId)
+                .param("afterSeq", afterSeq)
+                .param("limit", limit)
+                .query((rs, rowNumber) -> new ChangelogPageRow(rs.getLong("seq"),
+                        rs.getObject("order_id", UUID.class), rs.getString("account_code"),
+                        rs.getString("currency").strip(), rs.getLong("delta_minor"), rs.getLong("balance_after_minor"),
+                        rs.getTimestamp("recorded_at").toInstant(), rs.getString("source_system"),
+                        rs.getString("idempotency_key")))
+                .list();
     }
 
     /** The entity's changelog in sequence order, for the chain verifier (D02-6) and verify (D02-7). */

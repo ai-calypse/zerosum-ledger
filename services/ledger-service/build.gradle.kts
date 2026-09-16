@@ -7,6 +7,9 @@ dependencies {
     implementation(project(":libs:contracts"))
     testImplementation(testFixtures(project(":libs:money")))
     testImplementation(libs.testcontainers.postgresql)
+    // decision: D00-1, D01-8 — the same pinned JSON Schema validator libs/contracts uses. LedgerOpenApiContractIT
+    // validates real responses against openapi/ledger-service.yaml with it, rather than adding a second validator.
+    testImplementation(libs.json.schema.validator)
 }
 
 tasks.withType<Test>().configureEach {
