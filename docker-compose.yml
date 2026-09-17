@@ -171,6 +171,12 @@ services:
     environment:
       <<: *service-env
       OTEL_SERVICE_NAME: order-service
+      # decision: D03-4 — static per-role tokens. Without these the container authenticates nobody:
+      # the variables existed in .env.example from S03-T03 but were never passed to the services,
+      # so every /v1 call to the deployed stack failed while the container reported healthy.
+      ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
+      ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
+      ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
       ZS_ORDERS_OWNER_DB_PASSWORD: ${ZS_ORDERS_OWNER_DB_PASSWORD:?set ZS_ORDERS_OWNER_DB_PASSWORD in .env}
       ZS_ORDERS_APP_DB_PASSWORD: ${ZS_ORDERS_APP_DB_PASSWORD:?set ZS_ORDERS_APP_DB_PASSWORD in .env}
     ports:
@@ -191,6 +197,12 @@ services:
     environment:
       <<: *service-env
       OTEL_SERVICE_NAME: ledger-service
+      # decision: D03-4 — static per-role tokens. Without these the container authenticates nobody:
+      # the variables existed in .env.example from S03-T03 but were never passed to the services,
+      # so every /v1 call to the deployed stack failed while the container reported healthy.
+      ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
+      ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
+      ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
       ZS_LEDGER_OWNER_DB_PASSWORD: ${ZS_LEDGER_OWNER_DB_PASSWORD:?set ZS_LEDGER_OWNER_DB_PASSWORD in .env}
       ZS_LEDGER_APP_DB_PASSWORD: ${ZS_LEDGER_APP_DB_PASSWORD:?set ZS_LEDGER_APP_DB_PASSWORD in .env}
     ports:
