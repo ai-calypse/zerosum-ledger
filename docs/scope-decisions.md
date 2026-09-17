@@ -200,3 +200,39 @@ returns, and the ledger reflects it.
 **Consequence, stated plainly.** S05 will deliver **M7 and M8(a)** and leave **M8(b), M8(c), M9 and M10 unmet**. Four
 of S07's blocked signals stay blocked, because the components that emit them are deferred. The register will say so
 rather than reporting a green step.
+
+## CR-S05-01 — the test-database fixture is now duplicated three times
+
+**Raised:** 2026-09-16, during S05-T01/T02.
+**Against:** D00-2 (module layout).
+
+`LedgerTestDatabase` and `OrderTestDatabase` are near-identical Testcontainers fixtures that differ only in database
+name, role names and migration path. S02 recorded the rule explicitly: *a third service needing it triggers a change
+request to D00-2 to extract a shared fixture.* fake-providers is that third service, so the rule has fired and this is
+the request.
+
+**What was done instead:** a third copy, `FakeProvidersTestDatabase`, was written.
+
+**Why the extraction is deferred:** extracting it means changing the test infrastructure of two services whose suites
+are currently green, for no behavioural gain, in a step whose remaining budget is going to the provider abstraction
+itself. The duplication is cheap to carry and expensive to get wrong right now.
+
+**Consequence, stated plainly:** there are now three copies of the container-and-init-script wiring. A change to
+`infra/postgres/init.sh` handling, the pinned image lookup, or the role list must be applied in three places, and
+nothing enforces that. If a fourth service needs it, extract first and add the service second.
+
+## ADR-0010 was taken by the provider abstraction, not the quiet period
+
+**Noted:** 2026-09-16, during S05-T04.
+
+`docs/step_05_instruments_fake_providers.md` S05-T09 instructs that ADR-0010 record the resubmission quiet period,
+the two-condition resubmission rule and its residual risk. **S05-T09 is deferred** in this cut, so that ADR is not
+being written, and the number was used for the decision that S05 actually made: the `PaymentInstrument` abstraction
+(`docs/adr/0010-payment-instrument-abstraction.md`).
+
+The quiet-period rule itself is not lost — it is stated in ADR-0010's decision list and consequences, because the
+abstraction is what forces it (a provider without idempotency keys cannot be constructed without a quiet period).
+What is missing is the *implementation*: nothing resubmits anything yet, so the residual risk that S05-T09 was meant
+to document has no code to attach to.
+
+**If S05-T09 is ever built**, it takes the next free ADR number and links back to ADR-0010, rather than renumbering.
