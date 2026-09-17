@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import dev.zerosum.testsupport.ZsTestDatabase;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -28,7 +29,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("integration")
 public abstract class FakeProvidersIT {
 
-    protected static final FakeProvidersTestDatabase DB = FakeProvidersTestDatabase.start();
+    protected static final ZsTestDatabase DB = ZsTestDatabase.start(
+            "fakeproviders", "services/fake-providers/src/main/resources/db/migration");
     protected static final JsonMapper JSON = JsonMapper.builder().build();
 
     @LocalServerPort
@@ -40,8 +42,8 @@ public abstract class FakeProvidersIT {
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", DB::jdbcUrl);
-        registry.add("spring.datasource.username", () -> FakeProvidersTestDatabase.APP);
-        registry.add("spring.datasource.password", () -> DB.password(FakeProvidersTestDatabase.APP));
+        registry.add("spring.datasource.username", DB::app);
+        registry.add("spring.datasource.password", () -> DB.password(DB.app()));
         // The fixture already migrated as the owner; the application role has no DDL rights, by design.
         registry.add("spring.flyway.enabled", () -> "false");
     }

@@ -28,6 +28,18 @@ zs:
     # ADR-0010 — a provider without idempotency keys is left alone this long before any resubmission. Must stay
     # above FakeBank's maximum processing delay, or a resubmission could still duplicate a payout.
     quiet-period: ${ZS_PROVIDER_QUIET_PERIOD:60s}
+  # decision: D03-5 — the outbox library ships no defaults, so a deployment cannot silently inherit one; every value
+  # is stated here. Only the writer is wired today (S05-T07): the relay and the cleanup job start with their first
+  # producer in S05-T09, and these are the values they will run with.
+  outbox:
+    batch-size: 500
+    poll-interval: 50ms
+    send-timeout: 10s
+    backoff-min: 100ms
+    backoff-max: 5s
+    retention: 1h
+    cleanup-interval: 10m
+    cleanup-batch-size: 1000
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

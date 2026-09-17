@@ -19,6 +19,7 @@ rootProject.name = "zerosum-ledger"
 
 include(
     "libs:money",
+    "libs:testsupport",
     "libs:contracts",
     "libs:outbox",
     "libs:auth",
