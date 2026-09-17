@@ -71,16 +71,24 @@ class MoneyPathE2ETest {
         // The rider's receivable is the last thing to appear, so waiting on it means the whole order was applied.
         JsonNode riderBalances = awaitBalance(rider, "receivable", FARE_MINOR);
 
-        long riderSigned = signedMinor(riderBalances, "receivable");
-        long driverSigned = signedMinor(awaitBalance(driver, "payable", -(FARE_MINOR - PLATFORM_FEE_MINOR)), "payable");
+        assertEquals(FARE_MINOR, signedMinor(riderBalances, "receivable"), "the rider owes the fare");
+        assertEquals(-(FARE_MINOR - PLATFORM_FEE_MINOR),
+                signedMinor(awaitBalance(driver, "payable", -(FARE_MINOR - PLATFORM_FEE_MINOR)), "payable"),
+                "the driver is owed the fare less the fee");
 
-        assertEquals(FARE_MINOR, riderSigned, "the rider owes the fare");
-        assertEquals(-(FARE_MINOR - PLATFORM_FEE_MINOR), driverSigned, "the driver is owed the fare less the fee");
+        // Zero-sum is asserted from what the LEDGER recorded, not from the constants posted a moment ago. Summing
+        // values already asserted equal to this test's own fields would be a tautology that cannot fail, and it would
+        // never touch the platform entry at all — the one entry no balance assertion above covers, because
+        // platform:main is shared across runs and has no fixed balance.
+        long riderDelta = deltaRecordedFor(rider, orderId);
+        long driverDelta = deltaRecordedFor(driver, orderId);
+        long platformDelta = deltaRecordedFor(platform, orderId);
 
-        // The platform account is shared across runs, so its absolute balance is not assertable; what must hold is
-        // that this order's own three entries sum to zero.
-        assertEquals(0, riderSigned + driverSigned + (-PLATFORM_FEE_MINOR),
-                "the order's entries sum to zero across currencies");
+        assertEquals(FARE_MINOR, riderDelta, "the ledger recorded the rider's entry");
+        assertEquals(-(FARE_MINOR - PLATFORM_FEE_MINOR), driverDelta, "the ledger recorded the driver's entry");
+        assertEquals(-PLATFORM_FEE_MINOR, platformDelta, "the ledger recorded the platform's entry");
+        assertEquals(0, riderDelta + driverDelta + platformDelta,
+                "the three USD entries the ledger stored for this order sum to zero");
 
         assertChangelogLinksToOrder(rider, orderId, idempotencyKey);
         assertLedgerInvariantsHold();
@@ -131,6 +139,32 @@ class MoneyPathE2ETest {
                 + "; last response: " + lastSeen);
     }
 
+    /**
+     * The delta the ledger recorded for one entity under this order, read back from the changelog.
+     *
+     * <p>Pages forward because a shared entity such as {@code platform:main} accumulates rows across runs, so the row
+     * for this order is not necessarily on the first page.
+     */
+    private long deltaRecordedFor(String entityId, String orderId) {
+        Long after = 0L;
+        for (int page = 0; page < 50 && after != null; page++) {
+            HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
+                            LEDGER + "/v1/entities/" + entityId + "/changelog?after_seq=" + after))
+                    .header("Authorization", "Bearer " + readerToken())
+                    .GET());
+            assertEquals(200, response.statusCode(), response.body());
+            JsonNode body = JSON.readTree(response.body());
+            for (JsonNode row : body.get("rows")) {
+                if (orderId.equals(row.get("order_id").asString())) {
+                    return row.get("delta_minor").asLong();
+                }
+            }
+            JsonNode next = body.get("next_after_seq");
+            after = next == null || next.isNull() ? null : next.asLong();
+        }
+        return fail("no changelog row for order " + orderId + " under " + entityId);
+    }
+
     private void assertChangelogLinksToOrder(String entityId, String orderId, String idempotencyKey) {
         HttpResponse<String> response = send(HttpRequest.newBuilder(
                         URI.create(LEDGER + "/v1/entities/" + entityId + "/changelog"))
@@ -138,9 +172,13 @@ class MoneyPathE2ETest {
                 .GET());
         assertEquals(200, response.statusCode(), response.body());
 
-        JsonNode rows = JSON.readTree(response.body()).get("rows");
-        assertTrue(rows.size() >= 1, "the entity has changelog rows");
-        JsonNode row = rows.get(0);
+        JsonNode row = null;
+        for (JsonNode candidate : JSON.readTree(response.body()).get("rows")) {
+            if (orderId.equals(candidate.get("order_id").asString())) {
+                row = candidate;   // the row for THIS order, not whichever happens to be first
+            }
+        }
+        assertNotNull(row, "the entity's changelog contains a row for order " + orderId);
 
         // M6 (a): a row names the money order that caused it and the idempotency key it arrived under, so an audit
         // question can walk from a balance back to its source without a join through application logs.
