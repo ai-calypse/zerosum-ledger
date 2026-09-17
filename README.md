@@ -57,6 +57,18 @@ Kept explicit on purpose — see [docs/scope-decisions.md](docs/scope-decisions.
 
 ## Quickstart
 
+Everything below has a `make` target; run `make` on its own to list them.
+
+```sh
+make env      # generate .env with local throwaway secrets (once)
+make up       # build and start the stack, with the fake providers reachable
+make demo     # move real money through it, then show the books
+make explorer # open the Ledger Explorer
+make down     # stop everything and delete all data
+```
+
+The long form follows, for when you want to see what those do.
+
 ### 1. Prerequisites
 
 - Docker Engine with Compose v2, with the VM memory noted in
