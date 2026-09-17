@@ -1,5 +1,9 @@
 package dev.zerosum.outbox;
 
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.context.propagation.TextMapGetter;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -124,7 +128,14 @@ public class OutboxRelay {
                 var message = new ProducerRecord<>(record.topic(), null, record.messageKey(), record.payload());
                 record.headers().forEach((name, value) ->
                         message.headers().add(name, value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-                pending.add(kafka.send(message));
+                // CR-S04-01. Copying the stored traceparent onto the record is not enough: tracing instrumentation
+                // builds the publish span from the *current* context, which on this relay thread is empty, and then
+                // overwrites the copied header with its own orphan context. S04-T06 caught exactly that on the live
+                // stack — the request trace stopped at the outbox and the publish began a trace of its own. Restoring
+                // the stored context here makes the publish span a child of the originating request.
+                try (Scope ignored = restoredContext(record).makeCurrent()) {
+                    pending.add(kafka.send(message));
+                }
             }
             java.util.concurrent.CompletableFuture.allOf(pending.toArray(java.util.concurrent.CompletableFuture[]::new))
                     .get(properties.sendTimeout().toMillis(), TimeUnit.MILLISECONDS);
@@ -137,6 +148,30 @@ public class OutboxRelay {
             throw new IllegalStateException("outbox batch of " + batch.size() + " was not acknowledged", failure);
         }
     }
+
+    /**
+     * The trace context captured when the row was appended (§0.3 C11), rebuilt from the row's own headers.
+     *
+     * <p>Falls back to a root context when the row carries no {@code traceparent} — rows written before this existed,
+     * or written with no active span. A send without a parent is still a correct send; it is simply untraced.
+     */
+    private static Context restoredContext(OutboxRecord record) {
+        return W3CTraceContextPropagator.getInstance().extract(Context.root(), record.headers(), HEADER_GETTER);
+    }
+
+    /** Reads the W3C fields straight out of the stored header map. */
+    private static final TextMapGetter<Map<String, String>> HEADER_GETTER = new TextMapGetter<>() {
+
+        @Override
+        public Iterable<String> keys(Map<String, String> carrier) {
+            return carrier == null ? List.of() : carrier.keySet();
+        }
+
+        @Override
+        public String get(Map<String, String> carrier, String key) {
+            return carrier == null ? null : carrier.get(key);
+        }
+    };
 
     private void markPublished(List<OutboxRecord> batch) {
         // clock_timestamp(), not now(): now() is the transaction start time, which would understate publish lag by the

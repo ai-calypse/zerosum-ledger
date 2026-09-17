@@ -1,0 +1,60 @@
+# S04-T02 ledger batch listener with manual ack after the database commit  2026-09-16
+
+RESULT
+  AckOrderingTest       3 tests, 0 failures (unit)
+  LedgerListenerIT      2 tests, 0 failures (integration: Postgres + Kafka containers, the real listener)
+  DuplicateDeliveryIT   1 test,  0 failures (integration)
+  PartitionKeyIT        2 tests, 0 failures (integration; carried over from T01, where nothing published yet)
+  Whole ledger module  113 tests, 0 failures
+
+THE ORDERING THIS TASK EXISTS FOR
+  The offset moves only after the apply transaction commits. AckOrderingTest pins it as a unit test rather than an
+  integration one, because the claim is about call order and a container would let a passing run depend on timing:
+  with an engine double that throws, acknowledge() is never called; with one that returns, it is called exactly once
+  and the ack itself asserts the engine had already returned. An empty poll opens no transaction and acknowledges
+  nothing.
+  The inverse ordering loses money silently - a crash after the offset moved skips orders that never applied. This
+  ordering can only duplicate, and the engine's applied_orders dedupe absorbs that.
+
+END TO END, THROUGH A REAL BROKER
+  LedgerListenerIT publishes goldens O1-O7 keyed by order group and asserts the resulting balances equal the D01-9
+  golden scenario after_O1_O7 - the same figures transcribed from the master's worked example that S02 proved the
+  engine against, so a disagreement means the listener changed what reaches the engine, not that arithmetic drifted.
+  I2, I3 and I4 are checked on state that arrived through Kafka rather than through a test driver.
+  Every applied order carries the topic, partition and offset it arrived from, which is what lets a quarantined record
+  be traced back to its origin.
+
+M5(a) THROUGH THE PIPELINE
+  DuplicateDeliveryIT publishes every order three times in interleaved rounds, so copies land in different polls and
+  therefore different batches and transactions - three consecutive copies could be deduped inside one engine call,
+  which would prove something much weaker. Result: 7 applied_orders rows, balances identical to a single delivery, and
+  the changelog holding exactly the entry count of ONE delivery (derived from the goldens, not hard-coded). Balances
+  alone could look right while the changelog had grown, so the changelog count is the stronger check.
+
+ADR-0007 AT THE BROKER
+  PartitionKeyIT: 20 records for one order group land on exactly one partition, and 60 distinct groups spread across
+  more than one without exceeding the contracted count. Both halves matter - confining a group is the ordering
+  guarantee, spreading groups is what stops the topic collapsing to one hot partition.
+
+THREE DEFECTS, ALL IN MY OWN TESTS
+  1. Both pipeline classes called KAFKA.stop() and DB.close() in their own @AfterAll, but those statics live on the
+     shared base, so whichever class finished first closed the containers under the second ("Mapped port can only be
+     obtained after the container is started"). The containers now die with the JVM.
+  2. The golden-balance comparison keyed rows entity|account|currency and filtered zero balances. LedgerQueries keys
+     them entity/account/currency and returns every accounts row, zero included - an account that nets to zero is a
+     real row, not an absent one. The balances were correct all along; the comparison was not.
+  3. An assertion queried ledger_entries, which does not exist: entries live only in entity_changelog. It never ran
+     because the balances assertion failed first, so it would have been the next failure rather than a caught one.
+
+ALSO FIXED HERE, PRE-EMPTIVELY
+  LedgerApiExceptionHandler was @RestControllerAdvice(assignableTypes = {...}) - the same trap that made order-service
+  return 500 where it documented 401, with every problem code collapsing to internal_error. S04-T04 adds a freshness
+  controller to this service, so the trap was already loaded. Now scoped by package.
+
+DEFERRED, NOT DONE (see docs/scope-decisions.md)
+  GracefulShutdownIT and the D04-8 crash-point seam.
+  Listener concurrency is the container default of 1, not tuned against the Hikari pool.
+  An offset-commit failure following a successful database commit is not counted (instruction 5).
+
+REPRODUCE
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest

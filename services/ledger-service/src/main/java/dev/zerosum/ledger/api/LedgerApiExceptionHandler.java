@@ -12,7 +12,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * Turns read-API failures into RFC 9457 problem details with a stable {@code code}, per the master's REST conventions.
  * Callers branch on {@code code}, never on the human-readable title.
  */
-@RestControllerAdvice(assignableTypes = {LedgerReadController.class, LedgerVerificationController.class})
+// Scoped to this package rather than to a list of controllers. The order-service copy of this advice was bound with
+// assignableTypes and the first controller added outside that list returned 500 where it documented 401, with every
+// problem code collapsing into internal_error. S04-T04 adds a freshness controller to this service, so the same trap
+// was already loaded here; a new controller is now covered by default instead of by remembering to edit this line.
+@RestControllerAdvice(basePackageClasses = LedgerApiExceptionHandler.class)
 class LedgerApiExceptionHandler {
 
     @ExceptionHandler(LedgerApiException.class)

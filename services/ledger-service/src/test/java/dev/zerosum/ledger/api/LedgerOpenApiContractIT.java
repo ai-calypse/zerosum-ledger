@@ -78,6 +78,24 @@ class LedgerOpenApiContractIT extends LedgerApiTestBase {
     }
 
     /** The 200 response schema reference of an operation, as written in the specification. */
+    @Test
+    void theFreshnessResponseValidatesEvenWhenItCannotBeComputed() {
+        // This context has no broker (ledger.consumer.enabled=false, nothing at localhost:9092), so the endpoint takes
+        // its fail-closed path. That is the case worth asserting through HTTP: an error response must still be a
+        // well-formed Freshness document, with the numbers OMITTED rather than reported as a comfortable zero.
+        String body = http().get().uri("/v1/freshness").retrieve().body(String.class);
+
+        assertEquals(List.of(), errors(responseSchemaRef("/v1/freshness"), body));
+
+        JsonNode freshness = JSON.readTree(body);
+        assertEquals("error", freshness.get("status").asString(),
+                "with no broker reachable the status must be error, never ok");
+        assertTrue(freshness.get("total_lag_records").isNull(),
+                "an unmeasurable lag is absent; a zero here would authorise a payout against unchecked balances");
+        assertTrue(freshness.get("oldest_unapplied_age_seconds").isNull());
+        assertTrue(freshness.get("error").asString().length() > 0, "an error status must say why");
+    }
+
     private static String responseSchemaRef(String path) {
         return schemaRef(path, "get");
     }

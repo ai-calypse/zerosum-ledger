@@ -171,6 +171,16 @@ services:
     environment:
       <<: *service-env
       OTEL_SERVICE_NAME: order-service
+      # decision: D04-2 — the broker inside the Compose network. application.yml defaults to localhost:9092
+      # for running outside Docker; inside a container localhost is the container itself, so without this the
+      # producer and consumer dial themselves, no topics are created and the outbox never drains.
+      ZS_KAFKA_BOOTSTRAP: kafka:29092
+      # decision: D03-4 — static per-role tokens. Without these the container authenticates nobody:
+      # the variables existed in .env.example from S03-T03 but were never passed to the services,
+      # so every /v1 call to the deployed stack failed while the container reported healthy.
+      ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
+      ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
+      ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
       ZS_ORDERS_OWNER_DB_PASSWORD: ${ZS_ORDERS_OWNER_DB_PASSWORD:?set ZS_ORDERS_OWNER_DB_PASSWORD in .env}
       ZS_ORDERS_APP_DB_PASSWORD: ${ZS_ORDERS_APP_DB_PASSWORD:?set ZS_ORDERS_APP_DB_PASSWORD in .env}
     ports:
@@ -191,6 +201,16 @@ services:
     environment:
       <<: *service-env
       OTEL_SERVICE_NAME: ledger-service
+      # decision: D04-2 — the broker inside the Compose network. application.yml defaults to localhost:9092
+      # for running outside Docker; inside a container localhost is the container itself, so without this the
+      # producer and consumer dial themselves, no topics are created and the outbox never drains.
+      ZS_KAFKA_BOOTSTRAP: kafka:29092
+      # decision: D03-4 — static per-role tokens. Without these the container authenticates nobody:
+      # the variables existed in .env.example from S03-T03 but were never passed to the services,
+      # so every /v1 call to the deployed stack failed while the container reported healthy.
+      ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
+      ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
+      ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
       ZS_LEDGER_OWNER_DB_PASSWORD: ${ZS_LEDGER_OWNER_DB_PASSWORD:?set ZS_LEDGER_OWNER_DB_PASSWORD in .env}
       ZS_LEDGER_APP_DB_PASSWORD: ${ZS_LEDGER_APP_DB_PASSWORD:?set ZS_LEDGER_APP_DB_PASSWORD in .env}
     ports:

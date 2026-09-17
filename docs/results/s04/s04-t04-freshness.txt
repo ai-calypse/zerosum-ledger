@@ -1,0 +1,53 @@
+# S04-T04 ledger freshness endpoint  2026-09-16
+
+RESULT
+  FreshnessCalculatorTest   7 tests, 0 failures (unit, no broker)
+  FreshnessIT               3 tests, 0 failures (integration, real broker and consumer group)
+  LedgerOpenApiContractIT   6 tests, 0 failures (one new: the fail-closed response validates against the schema)
+  Whole ledger module     132 tests, 0 failures
+
+WHAT IT REPORTS
+  GET /v1/freshness, reader role: status, total_lag_records, partition_lag (per partition),
+  oldest_unapplied_age_seconds, listener_paused, computed_at, error.
+  Lag comes from the admin client - listConsumerGroupOffsets against ledger-apply, listOffsets for latest and
+  earliest. A partition with no committed offset counts from its EARLIEST available record, not from zero: counting
+  from zero would report a backlog including records retention has already removed, which can never be drained.
+  Age comes from the Kafka record timestamp of the oldest unapplied record (0.3 C12), read by a GROUP-LESS consumer
+  assigned directly to the lagging partitions, so measuring freshness never moves the apply group's offsets.
+
+FAIL CLOSED, PROVEN THROUGH HTTP
+  Any admin failure, timeout, partition-count mismatch, or committed offset below the log start returns
+  status=error with the numbers OMITTED - never zero. S05's payout run refuses above 5s of pipeline freshness, so a
+  fabricated zero would authorise paying out against balances nobody had checked.
+  LedgerOpenApiContractIT proves this end to end: that context has no broker, so hitting the endpoint there takes the
+  fail-closed path, and the test asserts the response still validates against the Freshness schema with
+  total_lag_records and oldest_unapplied_age_seconds null and a non-empty error string. The most valuable assertion
+  in this task, because it exercises the path that matters when things are actually wrong.
+
+A REFACTOR THAT MADE THE TASK'S OWN TESTS POSSIBLE
+  The task asks for unit cases covering no committed offset, zero lag, a clamped negative age, an offset below the log
+  start, and a partition mismatch. As first written, every one of those branches sat inside compute() behind live
+  admin calls - unreachable without a running cluster. Recording them as "covered" would have been false.
+  The lag arithmetic is now a pure function, lagOf(List<PartitionPosition>), plus ageSecondsFrom(ts, now). Seven unit
+  tests cover: counting from earliest when uncommitted; zero lag not listed as lagging; per-partition reporting (one
+  stuck partition behind eleven healthy ones is invisible in a total); offset below log start as an ERROR rather than
+  a small lag; one bad partition failing the whole measurement rather than silently reporting the healthy ones; a
+  future timestamp clamped to zero; and the empty case.
+
+A REGRESSION I CAUSED AND FIXED
+  My admin-client bean method was named kafkaAdmin, which is exactly the bean name Boot's KafkaAutoConfiguration
+  registers for its own KafkaAdmin. A same-name different-type definition is rejected outright, and it took down every
+  Spring context in ledger-service: 36 failures across 10 classes, including four suites with nothing to do with
+  freshness. Renamed to freshnessAdminClient. I had predicted a different cause (eager connection) before the run and
+  deliberately did not guess-fix; the actual BeanDefinitionOverrideException was nothing like it.
+
+NOT COVERED (stated, not implied)
+  "Records produced while the listener is stopped report lag equal to the record count." FreshnessIT shares the cached
+  pipeline context with the other S04 tests, so stopping the listener would break them. Not written rather than
+  simulated into something weaker that reads like the real thing.
+  The partition-count mismatch branch is reachable only against a live topic created with the wrong partition count;
+  the unit tests cover the lag arithmetic, not that check.
+  No cache, so there is no cache-age question to answer yet.
+
+REPRODUCE
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest

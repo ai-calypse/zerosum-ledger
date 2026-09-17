@@ -144,6 +144,33 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  # decision: D04-5 — docs/step_04_kafka_pipeline.md#decisions-and-outputs
+  /v1/freshness:
+    get:
+      operationId: getFreshness
+      summary: How far behind the ledger is
+      description: |
+        Requires the **reader** role. Reports consumer lag in records and the age of the oldest record the ledger has
+        not applied yet.
+
+        **Fails closed.** When lag or age cannot be computed the status is `error` and the numbers are *omitted*, never
+        reported as zero. A caller that cannot see a figure refuses; a caller shown a fabricated zero would proceed
+        against balances nobody checked.
+
+        The age uses the Kafka record timestamp of the oldest unapplied record, while outbox ages come from their own
+        `created_at`, so a caller summing pipeline freshness across stages counts no stage twice.
+      tags: [freshness]
+      responses:
+        '200':
+          description: |
+            The current lag and age. Also returned with `status: error` when the values could not be computed — the
+            request succeeded, the measurement did not.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Freshness' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -188,6 +215,39 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+    Freshness:
+      type: object
+      additionalProperties: false
+      required: [status, listener_paused, computed_at]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          description: '`ok` only when every figure below was measured.'
+        total_lag_records:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: Records behind across all partitions. Absent when the status is `error`.
+        partition_lag:
+          type: object
+          additionalProperties: { type: integer, format: int64, minimum: 0 }
+          description: Lag per partition, so one stuck partition is visible rather than averaged away.
+        oldest_unapplied_age_seconds:
+          type: [number, "null"]
+          minimum: 0
+          description: |
+            Age of the oldest record not yet applied, from its Kafka record timestamp. Zero when there is no lag.
+            Absent when the status is `error`.
+        listener_paused:
+          type: boolean
+          description: Whether the apply listener is paused after an exhausted or unclassified failure.
+        computed_at:
+          type: string
+          format: date-time
+        error:
+          type: [string, "null"]
+          description: Why the measurement failed, when the status is `error`.
     EntityId:
       # decision: D01-5 — rule 3 entity ID pattern and length bound, mirrored from libs/money ValidationLimits
       type: string

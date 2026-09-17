@@ -21,6 +21,7 @@ spring:
   # a producer retry cannot duplicate within its own session. The relay marks rows published on acknowledgement, so a
   # weaker acks setting would mark money delivered that a broker failover could still lose.
   kafka:
+    bootstrap-servers: ${ZS_KAFKA_BOOTSTRAP:localhost:9092}
     producer:
       acks: all
       properties:
@@ -31,6 +32,10 @@ spring:
     consumer:
       auto-offset-reset: earliest
       enable-auto-commit: false
+      # decision: D04-2 — set explicitly even where it matches a default, so a framework default cannot change
+      # pipeline behaviour silently. read_committed is harmless without producer transactions.
+      isolation-level: read_committed
+      max-poll-records: 500
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     listener:

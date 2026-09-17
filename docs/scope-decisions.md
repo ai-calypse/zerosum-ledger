@@ -48,3 +48,75 @@ This is recorded rather than applied silently, because the pack forbids weakenin
 5. **S06** verifier only.
 6. **S09** README, architecture doc, demo.
 7. **S08** a few faults and the ablations, only if the budget allows.
+
+## S04 Kafka pipeline — scope cut (2026-09-16)
+
+The user's direction stands: "do not follow the steps verbatim, just make it workable and resume presentable", and
+defer anything complex that does not serve an end-to-end system with observability, monitoring and CI/CD. S04 as
+written is the largest step in the pack (T03 alone carries 14 instructions and 7 integration tests), so it is cut to
+its spine.
+
+**Kept**
+
+- **T01 topic provisioning and explicit client configuration.** One topic-definition source, `NewTopic` beans per
+  service, and producer/consumer properties set explicitly rather than inherited. This is what makes the pipeline
+  reproducible, and it closes the "misspelled topic auto-created with broker defaults" hole.
+- **T02 ledger batch listener with manual ack after the database commit.** The M5 end-to-end spine: without it the
+  ledger has an apply engine that nothing feeds.
+- **T03 error handling, trimmed.** Transient-versus-poison classification, DLQ publishing with error headers, the
+  quarantine row, and a pause on exhausted or unclassified failure. This also discharges the DLQ deferral recorded in
+  S03-T07.
+- **T04 freshness endpoint.** Small, and S05's payout eligibility depends on it.
+- **T05 pipeline e2e.** Kept deliberately: it proves the API → outbox → relay → broker → ledger path end to end, and
+  it establishes the first e2e harness, which is also what the deferred M4(a) SIGKILL test needs.
+- **T06 trace propagation.** Directly serves the observability story that S07 builds on.
+
+**Deferred**
+
+- **T07 relay-lag measurement and the SP2 trigger decision**, and **S04-C01 (SP2 tuning and the Debezium Outbox Event
+  Router spike).** Both are tuning exercises for a latency problem that has not been observed. Recorded as the upgrade
+  path in ADR-0008 already.
+- **D04-8 crash-point seam** (an interface for tests to halt the JVM between engine return and acknowledgement).
+  Needed by S08's fault injection, not by a working pipeline; S08 is itself deferred.
+- **The long tail of T03's edge-case integration tests** (`DlqPartitioningIT`, `QuarantineIdempotencyIT`,
+  `UnclassifiedErrorIT` as separate suites) and **T01's `TopicMismatchIT`**. The behaviours they cover are implemented;
+  what is dropped is a dedicated container test per edge case.
+- **The quarantine re-publish runbook dry run.** The runbook step is written; executing it as a test is not.
+
+Anything deferred here is recorded as deferred in the step register, never reported as passing.
+
+### Amendment after reading the T05 and T06 specs (2026-09-16)
+
+The S04 cut above kept T05 and T06 whole. Reading their instructions in full changes that, and the reasons are worth
+stating rather than quietly narrowing the work.
+
+**T05 pipeline e2e — reduced, with two cases Blocked rather than deferred.**
+
+- **Case C (crash before ack)** requires the **D04-8 crash-point seam** to halt the ledger JVM mid-batch. That seam is
+  deferred by the cut above, so Case C cannot be written without reversing that decision. It is **Blocked on D04-8**.
+- **Case D (relay crash after send)** requires an injection point inside `libs/outbox` to halt order-service between
+  broker confirmation and the outbox rows being marked published. **No such injection point exists in D03-5.** The
+  task anticipates exactly this and instructs: raise a change request to S03, mark Case D **Blocked in I.1 naming that
+  dependency, and do not fork `libs/outbox`.** That is what happens here — no seam is added to the library from S04.
+- **The preferred harness** runs order-service and ledger-service as containers built from project images on a shared
+  network with Testcontainers PostgreSQL and Kafka. That harness does not exist, and building it is the same lift that
+  the deferred M4(a) SIGKILL test needs. It stays deferred under the résumé-scope direction.
+- **What remains achievable and is kept:** Case E, the M6(c) audit walk, which uses only the public read APIs and
+  needs no crash machinery. Cases A and B are already covered in substance by `LedgerListenerIT` and
+  `DuplicateDeliveryIT` at listener level, and by S03's outbox evidence for the API-to-relay half; that coverage is
+  cited rather than re-run through a harness that does not exist. **This is narrower than the task's definition of
+  done, and is recorded as such — Cases A–E are not claimed to pass.**
+
+**T06 trace propagation — attempt only with the stack up, otherwise `Not run`.**
+
+The check requires the Compose stack running with the OTel agent attached, a real order posted, and its spans located
+in the tracing backend, classified as parent-child, links, or broken at a named hop, with trace IDs and a screenshot.
+None of that can be inferred from code. The task is explicit: "Never record an assumed result", and an agent that
+cannot attach is recorded as `Not run` against the D00-7 reference.
+
+So T06 is attempted only if the stack comes up on this machine; otherwise it is recorded `Not run` with the reason.
+**Under no circumstances is a classification written from reading the code** — the entire value of that task is that
+someone actually looked at a trace.
+
+**Consequence for the step's exit criteria.** S04 will close with T05 partial (Case E only, C and D Blocked) and T06
+either executed or `Not run`. The step register records both honestly instead of reporting a green step.

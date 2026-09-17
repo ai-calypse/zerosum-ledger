@@ -19,8 +19,38 @@ spring:
     password: ${ZS_LEDGER_OWNER_DB_PASSWORD}
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
+  # decision: D04-2 — docs/step_04_kafka_pipeline.md#decisions-and-outputs (master §5.4 common settings)
+  # Every value is set explicitly even where it matches a default, so a framework default cannot change the pipeline's
+  # behaviour silently. isolation.level is read_committed (harmless without producer transactions) and auto-commit is
+  # off because offsets are committed by the listener only after the apply transaction commits.
+  kafka:
+    bootstrap-servers: ${ZS_KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: ledger-apply
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      isolation-level: read_committed
+      max-poll-records: 500
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # Only used to publish dead-letter records (S04-T03); set explicitly for the same reason as the consumer.
+      acks: all
+      properties:
+        enable.idempotence: true
+    listener:
+      # Offsets are acknowledged by the listener after the database commit, never by the container on a timer.
+      ack-mode: manual
+      type: batch
 
 ledger:
+  # decision: D04-3 — the money-order listener. Off in tests that have no broker, exactly as order-service's consumer
+  # flag works; production leaves it true.
+  consumer:
+    enabled: true
+    # decision: D04-4 — how often a paused listener probes its own database pool before resuming. Short enough that a
+    # brief restart costs seconds, long enough not to hammer a database that is still down.
+    resume-probe-interval: 5s
   apply:
     # decision: D02-4 — docs/step_02_ledger_core.md#decisions-and-outputs (master §5.11 timeouts)
     lock-timeout: 2s

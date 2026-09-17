@@ -1,0 +1,69 @@
+# S04-T03 transient retry to pause, poison to quarantine and DLQ  2026-09-16
+
+RESULT
+  PausePolicyTest    5 tests, 0 failures (unit)
+  PoisonRecordIT     2 tests, 0 failures (integration: Postgres + Kafka containers, real listener)
+  AckOrderingTest    4 tests, 0 failures (unit; one new case covering DLQ-before-ack ordering)
+
+THE FINDING THAT CHANGED THE DESIGN
+  The task says to dead-letter poison from the container's error handler, using Spring's
+  DeadLetterPublishingRecoverer. Against this engine that would have published NOTHING, ever.
+  The apply engine isolates a bad record, writes its quarantine row inside the batch transaction, and RETURNS a
+  QUARANTINED outcome - it does not throw. A recoverer only fires on an exception, so it would have sat there
+  permanently idle while quarantine rows accumulated and the DLQ stayed empty. The DLQ step therefore reads the
+  engine's outcomes in the listener instead. Following the instruction literally would have shipped a dead-letter
+  path that silently did nothing, and no test of the recoverer's own wiring would have caught it.
+
+ORDER OF OPERATIONS
+  Quarantine row (engine, inside the batch transaction) -> DLQ publish and broker confirmation -> acknowledge.
+  A crash between the publish and the ack duplicates a DLQ record, which is tolerable. The reverse order would
+  acknowledge a record that exists only as a row in this service's own database, which is not.
+  AckOrderingTest pins this: a quarantining engine double drives the listener, and the recording publisher asserts it
+  ran before acknowledge().
+
+ONE RETRY LAYER
+  The engine already retries transient SQLSTATEs (40P01, 40001, 55P03, 57P01, 57P03, class 08) with jittered backoff
+  and throws RetriesExhaustedException when it gives up. The container error handler adds NO backoff - a second loop
+  would multiply the budget and could outlive the poll interval, losing the assignment. It reacts to exhaustion by
+  pausing.
+  Transient retry itself is already proven at engine level by S02's ApplyLockTimeoutRetryIT; it is not re-tested here.
+
+NOTHING REACHING THE ERROR HANDLER IS DEAD-LETTERED
+  Poison never gets there (see above). What does arrive is an exhausted transient failure or an unclassified one, and
+  dead-lettering either would mean discarding a valid order because the database was briefly unavailable.
+  PausePolicyTest covers: exhausted transient pauses, seeks back to the batch's first offset and raises the gauge;
+  an unclassified failure pauses too; an already-paused container is not paused twice; the probe resumes only once
+  SELECT 1 answers; a running container is left alone and is not probed at all.
+
+A REAL DEFECT IN THE ALERT SIGNAL
+  paused.set(1) was inside the `if (!container.isPauseRequested())` guard, so a container already paused for any other
+  reason would have failed with NO alert signal - the exact situation the gauge exists to make visible. The gauge now
+  means "stopped because of a failure" rather than "we were the ones who called pause()". Found because a test of mine
+  failed for the wrong reason and reading it properly exposed a second, real problem behind the first.
+
+POISON END TO END
+  PoisonRecordIT publishes a valid order, undecodable bytes, then another valid order on one partition. Both valid
+  orders are present, the undecodable record is quarantined with its Kafka coordinates, and the DLQ record carries the
+  original key plus zs-dlq-original-topic / -original-offset / -classification / -error-code headers. A further order
+  published afterwards still applies, which is the part that matters operationally: a poison record must not block
+  everything behind it.
+  No explicit DLQ partition is set. The DLQ has 3 partitions against the source's 12, and the stock recoverer's
+  default of reusing the source partition number would address a partition that does not exist.
+
+A FLAKY TEST OF MY OWN, FIXED
+  TopicProvisioningIT (from T01) failed in the full run with UnknownTopicOrPartitionException while passing in
+  isolation. createTopics().get() returns when the controller accepts the creation, not when metadata has propagated
+  to the broker answering describeConfigs, and a loaded machine widens that window. It now waits on topic visibility
+  with a deadline rather than describing immediately. A test that passes only when the machine is idle is a defect.
+
+DEFERRED, NOT DONE (see docs/scope-decisions.md)
+  A container-level PauseResumeIT under a real database fault. A second Spring context with different properties joins
+  the same ledger-apply group on the same topic, so partitions split between two consumers and the assertion races for
+  whichever holds the record. The policy is proven as a unit test instead; the real-fault version is NOT claimed.
+  DlqPartitioningIT, QuarantineIdempotencyIT, and MapperPoisonIT (the order-service side of D04-4).
+  Lengthening the resume-probe interval up to a cap after repeated failures; it is a fixed 5s.
+  The runbook re-publish dry run. The procedure is written (docs/runbook.md, created by this task - it did not exist,
+  though the step assumed it did) but has never been executed.
+
+REPRODUCE
+  ./gradlew :services:ledger-service:test :services:ledger-service:integrationTest
