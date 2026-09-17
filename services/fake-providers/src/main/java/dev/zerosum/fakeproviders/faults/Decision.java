@@ -20,7 +20,11 @@ public enum Decision {
     WEBHOOK_REORDER(FaultKnobs::webhookReorderRate),
     RETURN(FaultKnobs::returnRate),
     /** Not a rate: draws the fraction of the maximum processing delay a payout waits. */
-    PROCESSING_DELAY(null);
+    PROCESSING_DELAY(null),
+    /** decision: D06-1 (§0.3 C23) — settlement-report discrepancies, drawn once per line at report generation. */
+    REPORT_MISSING_LINE(FaultKnobs::reportMissingLineRate),
+    REPORT_OFF_BY_ONE(FaultKnobs::reportOffByOneRate),
+    REPORT_DUPLICATE_LINE(FaultKnobs::reportDuplicateLineRate);
 
     private final ToDoubleFunction<FaultKnobs> rate;
 

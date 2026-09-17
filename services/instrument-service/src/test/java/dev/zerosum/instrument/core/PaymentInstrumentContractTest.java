@@ -209,7 +209,9 @@ class PaymentInstrumentContractTest {
 
         @Override
         public SettlementReport settlementReport(LocalDate reportDate) {
-            return new SettlementReport(provider(), reportDate);
+            // S06-T01 gave the report content (D06-1); an empty day is still a valid report, which is what this stub
+            // needs to return.
+            return new SettlementReport(provider(), reportDate, "rpt_stub", List.of(), List.of());
         }
     }
 }

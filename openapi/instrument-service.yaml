@@ -111,6 +111,105 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  /v1/reconciliation-runs:
+    post:
+      operationId: createReconciliationRun
+      summary: Reconcile one provider's closed settlement day
+      description: |
+        Requires the **admin** role: a run books the day's settlement, which moves money.
+
+        Idempotent twice over. The `Idempotency-Key` replays a repeated request (D03-3), and the run identity
+        `(provider, report_date)` means a day is reconciled **once** however many callers ask — a second caller
+        arriving with a different key receives the existing run rather than booking the settlement again.
+
+        A matching report produces one `SETTLEMENT_RECEIVED` event per currency, carrying the report's totals **as
+        reported**. Where the report disagrees with our attempts the difference is recorded as a typed break and left
+        as a residual on the provider's clearing account, never adjusted away.
+      tags: [reconciliation]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReconciliationRequest' }
+      responses:
+        '201':
+          description: Reconciled.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationRun' }
+        '200':
+          # Quoted: an unquoted `key: value` inside a plain scalar reads as a nested mapping and fails to parse.
+          description: 'A replay of a run that already exists, carrying the `Idempotent-Replayed` header.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationRun' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: The day has not closed yet. Nothing is persisted; retry on the next cycle.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: The key was reused with a different request, the provider publishes no reports, or the
+            report settles a currency outside the allow-list.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503':
+          description: The provider could not be reached, or the database is unreachable. Nothing is persisted.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /v1/reconciliation-runs/{run_id}/breaks:
+    get:
+      operationId: listReconciliationBreaks
+      summary: The typed breaks a run found
+      description: |
+        Requires the **reader** role.
+
+        Each break carries its **type**, which is the point: a missing line is chased with the provider, an amount
+        mismatch is a fee or rounding question, and a duplicate line is money claimed twice. `OPEN` means a break a
+        later settlement cycle may still resolve; `UNEXPLAINED` means one it will not.
+      tags: [reconciliation]
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - name: type
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/BreakType' }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [OPEN, UNEXPLAINED] }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500 }
+      responses:
+        '200':
+          description: The run's breaks, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReconciliationBreak' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -301,6 +400,73 @@ components:
         entity_id: { type: string }
         provider: { type: string }
 
+    BreakType:
+      type: string
+      description: |
+        The kind of disagreement. Each discrepancy the simulator can inject maps to exactly one value (D06-2):
+        a missing line to `MISSING_IN_REPORT`, an off-by-one to `AMOUNT_MISMATCH`, a duplicated line to
+        `DUPLICATE_LINE`. A single generic "mismatch" would satisfy a test that counts breaks while telling an
+        operator nothing about what to do.
+      enum: [MISSING_IN_LEDGER, MISSING_IN_REPORT, AMOUNT_MISMATCH, DUPLICATE_LINE, KIND_MISMATCH,
+             CURRENCY_MISMATCH, TIMING, LINE_WITHOUT_SUCCESS, REPORT_ARITHMETIC]
+
+    ReconciliationRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, report_date]
+      properties:
+        provider:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]{0,31}$'
+          description: Must declare the settlement-report capability. In the MVP that is `fakecard` only.
+        report_date:
+          type: string
+          description: The closed simulated day to reconcile, as an ISO date.
+
+    ReconciliationRun:
+      type: object
+      additionalProperties: false
+      required: [run_id, provider, report_date, report_id, status, lines_matched, breaks_found, settled, replayed]
+      properties:
+        run_id: { $ref: '#/components/schemas/Uuid' }
+        provider: { type: string }
+        report_date: { type: string }
+        report_id: { type: string }
+        status:
+          type: string
+          enum: [COMPLETED, FAILED_VALIDATION]
+          description: '`FAILED_VALIDATION` means the report disagreed with its own arithmetic; nothing was booked.'
+        lines_matched: { type: integer, minimum: 0 }
+        breaks_found: { type: integer, minimum: 0 }
+        settled:
+          type: boolean
+          description: Whether a settlement event was emitted. False for an empty day and for a failed validation.
+        replayed:
+          type: boolean
+          description: True when this run already existed and was returned rather than performed again.
+
+    ReconciliationBreak:
+      type: object
+      additionalProperties: false
+      required: [break_id, break_type, status]
+      properties:
+        break_id: { type: integer, format: int64 }
+        break_type: { $ref: '#/components/schemas/BreakType' }
+        status: { type: string, enum: [OPEN, UNEXPLAINED] }
+        provider_ref: { type: [string, 'null'] }
+        client_reference: { type: [string, 'null'] }
+        currency: { type: [string, 'null'] }
+        report_gross_minor:
+          type: [integer, 'null']
+          format: int64
+          description: What the report said. Null when the report had no line at all.
+        ledger_gross_minor:
+          type: [integer, 'null']
+          format: int64
+          description: What our attempt said. Null when we hold no matching attempt.
+        attempt_id: { $ref: '#/components/schemas/NullableUuid' }
+        detail: { type: [string, 'null'] }
+
     Problem:
       # RFC 9457, plus the stable `code` the master's conventions require.
       type: object
@@ -314,5 +480,9 @@ components:
         code:
           type: string
           enum: [invalid_attempt_id, attempt_not_found, not_cancellable, invalid_registration, unknown_provider,
-                 unauthorized, forbidden, database_unavailable]
+                 unauthorized, forbidden, database_unavailable,
+                 # decision: D06-4 — reconciliation (S06-T03)
+                 idempotency_key_missing, idempotency_key_reused, invalid_report_date,
+                 settlement_reports_unsupported, report_not_ready, provider_unavailable, unsupported_currency,
+                 reconciliation_run_not_found]
           description: Stable machine-readable error code; callers branch on this, never on `title`.

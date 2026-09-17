@@ -33,6 +33,21 @@ public final class ProviderStub implements AutoCloseable {
     /** Routed GET responses, so a lookup can be made to return nothing or several rows. */
     public volatile String lookupBody = "[]";
 
+    /**
+     * The settlement report a GET under {@code /settlement-reports/} answers with (S06-T01).
+     *
+     * <p>Routed separately from {@link #lookupBody} because the two are different documents: a lookup returns an
+     * array of charges, a report returns one object. Before FakeCard declared the settlement capability the contract
+     * suite skipped its report case, so this path was never exercised.
+     */
+    public volatile String settlementBody = """
+            {"report_id":"rpt_2026_01_01","provider":"fakecard","report_date":"2026-01-01",
+             "lines":[{"provider_ref":"ch_1","client_reference":"ref","kind":"CHARGE","currency":"USD",
+                       "gross_minor":1000,"fee_minor":59}],
+             "totals":[{"currency":"USD","gross_minor":1000,"fee_minor":59,"net_minor":941}],
+             "content_hash":"stub"}
+            """;
+
     private ProviderStub(HttpServer server) {
         this.server = server;
     }
@@ -71,7 +86,7 @@ public final class ProviderStub implements AutoCloseable {
         }
         String path = exchange.getRequestURI().getPath();
         boolean get = "GET".equals(exchange.getRequestMethod());
-        String body = get ? lookupBody : submitBody(path);
+        String body = get ? (path.contains("/settlement-reports/") ? settlementBody : lookupBody) : submitBody(path);
         int status = forcedStatus != 0 ? forcedStatus : (get ? 200 : submitStatus(path));
 
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

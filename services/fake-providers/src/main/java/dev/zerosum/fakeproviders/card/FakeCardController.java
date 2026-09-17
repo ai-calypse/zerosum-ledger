@@ -5,7 +5,9 @@ import dev.zerosum.fakeproviders.card.FakeCardApi.ChargeResponse;
 import dev.zerosum.fakeproviders.card.FakeCardApi.RefundRequest;
 import dev.zerosum.fakeproviders.card.FakeCardApi.RefundResponse;
 import dev.zerosum.fakeproviders.shared.Idempotency;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,9 +29,11 @@ import org.springframework.web.server.ResponseStatusException;
 class FakeCardController {
 
     private final FakeCardService service;
+    private final SettlementReports settlements;
 
-    FakeCardController(FakeCardService service) {
+    FakeCardController(FakeCardService service, SettlementReports settlements) {
         this.service = service;
+        this.settlements = settlements;
     }
 
     @PostMapping("/charges")
@@ -53,6 +57,18 @@ class FakeCardController {
     @GetMapping("/charges")
     List<ChargeResponse> charges(@RequestParam("client_reference") String clientReference) {
         return service.chargesByClientReference(clientReference);
+    }
+
+    /**
+     * The settlement report for one closed simulated day (D06-1, master §5.6).
+     *
+     * <p>A day that has not closed is a 409, never an empty report: an empty report is indistinguishable from a day on
+     * which nothing happened, and a reconciler would book a settlement of zero against real captures.
+     */
+    @GetMapping("/settlement-reports/{date}")
+    FakeCardApi.SettlementReportResponse settlementReport(
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return settlements.forDate(date);
     }
 
     /** A replay is flagged in a header rather than a different status, so the body stays byte-identical. */

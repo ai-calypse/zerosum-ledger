@@ -96,7 +96,8 @@ does not promote a criterion on a stub.
 | M9(a) Bad signature / stale timestamp → 400 | **NOT MET** | No webhook receiver exists |
 | M9(b) 30% duplicates + 30% reordering | **NOT MET** | Deferred |
 | M10(a)(b)(c) Payouts and returns | **NOT MET** | T10 deferred. The freshness endpoint exists and is tested, but nothing consumes it, so no 409 |
-| M11(a)(b)(c) Reconciliation | **NOT MET** | S06 not started; settlement reports declared only |
+| M11(a)(b) Reconciliation | **MET** | FakeCard settles a closed day, and a matching report emits `SETTLEMENT_RECEIVED` equal field-by-field to golden O6 (`ReconciliationRunIT`, 6 tests). Each injected discrepancy produces its **own** break type — missing→`MISSING_IN_REPORT`, off-by-one→`AMOUNT_MISMATCH`, duplicate→`DUPLICATE_LINE` (`SettlementMatcherTest` 13, `DiscrepancyKnobIT` 5). Evidence stops at the outbox row: the booking itself is order-service's mapper, covered by its own golden test. [docs/results/s06/reconciliation.md](results/s06/reconciliation.md) |
+| M11(c) Reconciliation under chaos | **NOT RUN** | No A0 chaos orchestration, and no scheduler advances settlement cycles, so "0 unexplained breaks after 2 cycles" cannot be evaluated. Neither met nor failed. |
 | M12(a) One trace across the pipeline | PARTIAL | `s04-trace-propagation.md`: connected **by links**, deliberately not claimed as one parent-child trace |
 | M12(b) Dashboards for flow, invariants, providers | PARTIAL | Flow and invariants load from the repository; the providers dashboard is blocked on S05 |
 | M12(c) Alert rules fire in a test | PARTIAL | 6 rules provisioned; **1 of 5 conditions observed firing** (outbox backlog, t+212 s under a real Kafka outage) |

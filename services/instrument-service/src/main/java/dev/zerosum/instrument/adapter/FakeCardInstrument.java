@@ -5,6 +5,8 @@ import dev.zerosum.instrument.core.Commands.ChargeCommand;
 import dev.zerosum.instrument.core.Commands.DisburseCommand;
 import dev.zerosum.instrument.core.Commands.LookupQuery;
 import dev.zerosum.instrument.core.Commands.RefundCommand;
+import dev.zerosum.instrument.core.InstrumentExceptions.ProviderUnavailableException;
+import dev.zerosum.instrument.core.InstrumentExceptions.ReportNotReadyException;
 import dev.zerosum.instrument.core.InstrumentExceptions.UnsupportedCapabilityException;
 import dev.zerosum.instrument.core.LookupResult;
 import dev.zerosum.instrument.core.PaymentInstrument;
@@ -42,9 +44,10 @@ public class FakeCardInstrument implements PaymentInstrument {
 
     @Override
     public Capabilities capabilities() {
-        // settlementReports is false: the report generator is S06's (D06-1). Declaring a capability we would then
-        // throw on is worse than declaring none, because the contract suite would certify the claim.
-        return new Capabilities(true, false, true, true, false, null);
+        // settlementReports became true in S06-T01, when the generator behind it actually started existing (D06-1).
+        // The shared contract suite skips that case for any adapter declaring false, so flipping this is what makes
+        // the suite run it rather than report it as not applicable.
+        return new Capabilities(true, false, true, true, true, null);
     }
 
     @Override
@@ -124,8 +127,39 @@ public class FakeCardInstrument implements PaymentInstrument {
                         + "an unauthenticated payload here would be a security hole standing in for a feature");
     }
 
+    /**
+     * Fetches and maps one day's settlement report (D06-1).
+     *
+     * <p>The three outcomes are kept apart deliberately. A closed day is a report; an open day is
+     * {@link ReportNotReadyException}, which the caller retries on the next cycle; anything else is
+     * {@link ProviderUnavailableException}, which must never be mistaken for a day on which nothing settled.
+     * Collapsing the last two into an empty report is how a reconciler ends up booking a settlement of zero against
+     * real captures.
+     */
     @Override
     public SettlementReport settlementReport(LocalDate reportDate) {
-        throw new UnsupportedCapabilityException(PROVIDER, "settlementReport");
+        ProviderHttp.Response response;
+        try {
+            response = http.get("/fakecard/v1/settlement-reports/" + reportDate);
+        } catch (ProviderHttp.ProviderUnreachable unreachable) {
+            throw new ProviderUnavailableException(PROVIDER, unreachable.reason());
+        }
+        if (response.status() == 409) {
+            throw new ReportNotReadyException(PROVIDER, reportDate);
+        }
+        if (response.status() != 200) {
+            throw new ProviderUnavailableException(PROVIDER, "provider returned " + response.status());
+        }
+
+        var report = response.as(ProviderWire.SettlementReportResponse.class);
+        return new SettlementReport(PROVIDER, reportDate, report.report_id(),
+                report.lines().stream()
+                        .map(line -> new SettlementReport.Line(line.provider_ref(), line.client_reference(),
+                                line.kind(), line.currency(), line.gross_minor(), line.fee_minor()))
+                        .toList(),
+                report.totals().stream()
+                        .map(totals -> new SettlementReport.Totals(totals.currency(), totals.gross_minor(),
+                                totals.fee_minor(), totals.net_minor()))
+                        .toList());
     }
 }

@@ -25,14 +25,16 @@ import org.springframework.web.server.ResponseStatusException;
  */
 public record FaultKnobs(double latencyP50Ms, double latencyP95Ms, double http500Rate, double resetBeforeCommitRate,
         double timeoutAfterCommitRate, double webhookDuplicateRate, double webhookReorderRate, double webhookDropRate,
-        double returnRate, Long simulatedBankingDaySeconds, long maxProcessingDelayMs, long seed) {
+        double returnRate, double reportMissingLineRate, double reportOffByOneRate, double reportDuplicateLineRate,
+        Long simulatedBankingDaySeconds, long maxProcessingDelayMs, long seed) {
 
     /** The profile a provider runs with until an operator sets one: every rate zero, so behaviour is unchanged. */
-    public static final FaultKnobs NONE = new FaultKnobs(0, 0, 0, 0, 0, 0, 0, 0, 0, null, 0, 0);
+    public static final FaultKnobs NONE = new FaultKnobs(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, 0, 0);
 
     private static final List<String> FIELDS = List.of("latency_p50_ms", "latency_p95_ms", "http_500_rate",
             "reset_before_commit_rate", "timeout_after_commit_rate", "webhook_duplicate_rate", "webhook_reorder_rate",
-            "webhook_drop_rate", "return_rate", "simulated_banking_day_seconds", "max_processing_delay_ms", "seed");
+            "webhook_drop_rate", "return_rate", "report_missing_line_rate", "report_off_by_one_rate",
+            "report_duplicate_line_rate", "simulated_banking_day_seconds", "max_processing_delay_ms", "seed");
 
     public FaultKnobs {
         // Validated in the record itself rather than only at the endpoint: a profile read back from the database
@@ -44,6 +46,9 @@ public record FaultKnobs(double latencyP50Ms, double latencyP95Ms, double http50
         rate("webhook_reorder_rate", webhookReorderRate);
         rate("webhook_drop_rate", webhookDropRate);
         rate("return_rate", returnRate);
+        rate("report_missing_line_rate", reportMissingLineRate);
+        rate("report_off_by_one_rate", reportOffByOneRate);
+        rate("report_duplicate_line_rate", reportDuplicateLineRate);
         nonNegative("latency_p50_ms", latencyP50Ms);
         nonNegative("latency_p95_ms", latencyP95Ms);
         nonNegative("max_processing_delay_ms", maxProcessingDelayMs);
@@ -83,6 +88,9 @@ public record FaultKnobs(double latencyP50Ms, double latencyP95Ms, double http50
                 number(body, "webhook_reorder_rate", 0),
                 number(body, "webhook_drop_rate", 0),
                 number(body, "return_rate", 0),
+                number(body, "report_missing_line_rate", 0),
+                number(body, "report_off_by_one_rate", 0),
+                number(body, "report_duplicate_line_rate", 0),
                 body.containsKey("simulated_banking_day_seconds")
                         ? (long) number(body, "simulated_banking_day_seconds", 0) : null,
                 (long) number(body, "max_processing_delay_ms", 0),
@@ -106,6 +114,9 @@ public record FaultKnobs(double latencyP50Ms, double latencyP95Ms, double http50
         map.put("webhook_reorder_rate", webhookReorderRate);
         map.put("webhook_drop_rate", webhookDropRate);
         map.put("return_rate", returnRate);
+        map.put("report_missing_line_rate", reportMissingLineRate);
+        map.put("report_off_by_one_rate", reportOffByOneRate);
+        map.put("report_duplicate_line_rate", reportDuplicateLineRate);
         map.put("simulated_banking_day_seconds", simulatedBankingDaySeconds);
         map.put("max_processing_delay_ms", maxProcessingDelayMs);
         map.put("seed", seed);
