@@ -23,6 +23,28 @@ orders:
     # lock_timeout is 2s; exceeding it returns 409 idempotency_key_in_progress rather than holding the request open.
     lock-timeout: 2s
 
+# decision: D03-4 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+# Static bearer tokens per role (master §5.11). No defaults: a service started without them authenticates nobody.
+  # decision: D03-2 — TB1 request parsing. Unknown fields are rejected rather than ignored, so a body carrying a
+  # server-assigned field (order_id, source, created_at) fails instead of appearing to have set it. Duplicate keys are
+  # rejected so the hashed request cannot be ambiguous, and a float or string is never coerced into an integer amount.
+  jackson:
+    deserialization:
+      # Unknown fields are rejected rather than ignored, so a body carrying a server-assigned order_id, source or
+      # created_at fails instead of appearing to have set it.
+      fail-on-unknown-properties: true
+    read:
+      # Boot 4.1 binds StreamReadFeature under spring.jackson.read, not spring.jackson.parser: the old key name bound
+      # to nothing at all, and duplicate keys were silently accepted. A duplicate key would make the hashed request
+      # ambiguous (D03-3).
+      strict-duplicate-detection: true
+
+zs:
+  auth:
+    writer-tokens: ${ZS_WRITER_TOKENS:}
+    reader-token: ${ZS_READER_TOKEN:}
+    admin-token: ${ZS_ADMIN_TOKEN:}
+
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8081

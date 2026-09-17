@@ -31,6 +31,7 @@ abstract class LedgerApiTestBase {
         // Flyway already migrated this database as the owner when the container started; running it again would need
         // owner credentials in the context for no benefit.
         registry.add("spring.flyway.enabled", () -> "false");
+        registry.add("zs.auth.reader-token", () -> "test-reader-token");
     }
 
     /** The running server's base URL, for tests that must send a pre-encoded path themselves. */
@@ -43,7 +44,10 @@ abstract class LedgerApiTestBase {
      * no RestClient client module, so there is no {@code RestClient.Builder} bean to inject; the tests do not need one.
      */
     protected RestClient http() {
-        return RestClient.create(baseUrl());
+        // Every /v1 endpoint requires a reader role since S03-T03 wired libs/auth into ledger-service (§0.3 C9).
+        return RestClient.builder().baseUrl(baseUrl())
+                .defaultHeader("Authorization", "Bearer test-reader-token")
+                .build();
     }
 
     /** Applies payloads through the engine directly, so API tests exercise reads against real applied state. */

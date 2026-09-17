@@ -5,6 +5,9 @@ plugins {
 dependencies {
     implementation(project(":libs:money"))
     implementation(project(":libs:contracts"))
+    // decision: D03-4 — shared token auth. ledger-service enforces the 401/403 its OpenAPI already
+    // declares (master 0.3 C9); order-service authenticates every money endpoint (TB1).
+    implementation(project(":libs:auth"))
     testImplementation(testFixtures(project(":libs:money")))
     testImplementation(libs.testcontainers.postgresql)
     // decision: D00-1, D01-8 — the same pinned JSON Schema validator libs/contracts uses. LedgerOpenApiContractIT

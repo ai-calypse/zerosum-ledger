@@ -8,6 +8,9 @@ dependencies {
     implementation(project(":libs:money"))
     // decision: D01-8, D01-9 — the money-order JSON Schema and the golden payloads the API and mapper validate against.
     implementation(project(":libs:contracts"))
+    // decision: D03-4 — shared token auth. ledger-service enforces the 401/403 its OpenAPI already
+    // declares (master 0.3 C9); order-service authenticates every money endpoint (TB1).
+    implementation(project(":libs:auth"))
     testImplementation(testFixtures(project(":libs:money")))
     testImplementation(libs.testcontainers.postgresql)
 }

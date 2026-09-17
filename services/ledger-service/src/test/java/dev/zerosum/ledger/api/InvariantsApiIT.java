@@ -47,6 +47,7 @@ class InvariantsApiIT {
         registry.add("spring.datasource.username", () -> LedgerTestDatabase.APP);
         registry.add("spring.datasource.password", () -> DB.password(LedgerTestDatabase.APP));
         registry.add("spring.flyway.enabled", () -> "false");
+        registry.add("zs.auth.reader-token", () -> "test-reader-token");
     }
 
     @Test
@@ -123,7 +124,8 @@ class InvariantsApiIT {
     }
 
     private JsonNode invariants() {
-        return JSON.readTree(RestClient.create("http://localhost:" + port)
+        return JSON.readTree(RestClient.builder().baseUrl("http://localhost:" + port)
+                .defaultHeader("Authorization", "Bearer test-reader-token").build()
                 .get().uri("/v1/invariants").retrieve().body(String.class));
     }
 }

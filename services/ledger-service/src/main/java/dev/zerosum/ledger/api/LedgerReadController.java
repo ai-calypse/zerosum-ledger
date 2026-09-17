@@ -5,10 +5,13 @@ import dev.zerosum.ledger.api.LedgerReadResponses.Balances;
 import dev.zerosum.ledger.api.LedgerReadResponses.ChangelogPage;
 import dev.zerosum.ledger.api.LedgerReadResponses.ChangelogRow;
 import dev.zerosum.ledger.api.LedgerReadResponses.ChangelogSource;
+import dev.zerosum.auth.Role;
+import dev.zerosum.auth.TokenAuthFilter;
 import dev.zerosum.ledger.store.LedgerStore;
 import dev.zerosum.ledger.store.LedgerStore.BalancesSnapshot;
 import dev.zerosum.ledger.store.LedgerStore.ChangelogPageRow;
 import dev.zerosum.money.ChartOfAccounts;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,7 +37,8 @@ class LedgerReadController {
     }
 
     @GetMapping("/v1/entities/{entityId}/balances")
-    Balances balances(@PathVariable String entityId) {
+    Balances balances(HttpServletRequest request, @PathVariable String entityId) {
+        LedgerAuthorization.requireReader(request);
         String id = EntityIds.validated(entityId);
         BalancesSnapshot snapshot = store.readBalancesSnapshot(id).orElseThrow(() -> LedgerApiException.entityNotFound(id));
         List<AccountBalance> accounts = snapshot.accounts().stream()
@@ -46,9 +50,10 @@ class LedgerReadController {
     }
 
     @GetMapping("/v1/entities/{entityId}/changelog")
-    ChangelogPage changelog(@PathVariable String entityId,
+    ChangelogPage changelog(HttpServletRequest request, @PathVariable String entityId,
             @RequestParam(name = "after_seq", required = false) Long afterSeq,
             @RequestParam(name = "limit", required = false) Integer limit) {
+        LedgerAuthorization.requireReader(request);
         String id = EntityIds.validated(entityId);
         long cursor = afterSeq == null ? 0 : afterSeq;
         if (cursor < 0) {

@@ -26,6 +26,8 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 flyway-core = { module = "org.flywaydb:flyway-core" }
 flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
 postgresql = { module = "org.postgresql:postgresql" }
+# Added by S03 (D03-4) under D00-1's pin-update policy: Boot-managed, so it carries no version of its own.
+jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
