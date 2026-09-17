@@ -84,3 +84,39 @@ its spine.
 - **The quarantine re-publish runbook dry run.** The runbook step is written; executing it as a test is not.
 
 Anything deferred here is recorded as deferred in the step register, never reported as passing.
+
+### Amendment after reading the T05 and T06 specs (2026-09-16)
+
+The S04 cut above kept T05 and T06 whole. Reading their instructions in full changes that, and the reasons are worth
+stating rather than quietly narrowing the work.
+
+**T05 pipeline e2e — reduced, with two cases Blocked rather than deferred.**
+
+- **Case C (crash before ack)** requires the **D04-8 crash-point seam** to halt the ledger JVM mid-batch. That seam is
+  deferred by the cut above, so Case C cannot be written without reversing that decision. It is **Blocked on D04-8**.
+- **Case D (relay crash after send)** requires an injection point inside `libs/outbox` to halt order-service between
+  broker confirmation and the outbox rows being marked published. **No such injection point exists in D03-5.** The
+  task anticipates exactly this and instructs: raise a change request to S03, mark Case D **Blocked in I.1 naming that
+  dependency, and do not fork `libs/outbox`.** That is what happens here — no seam is added to the library from S04.
+- **The preferred harness** runs order-service and ledger-service as containers built from project images on a shared
+  network with Testcontainers PostgreSQL and Kafka. That harness does not exist, and building it is the same lift that
+  the deferred M4(a) SIGKILL test needs. It stays deferred under the résumé-scope direction.
+- **What remains achievable and is kept:** Case E, the M6(c) audit walk, which uses only the public read APIs and
+  needs no crash machinery. Cases A and B are already covered in substance by `LedgerListenerIT` and
+  `DuplicateDeliveryIT` at listener level, and by S03's outbox evidence for the API-to-relay half; that coverage is
+  cited rather than re-run through a harness that does not exist. **This is narrower than the task's definition of
+  done, and is recorded as such — Cases A–E are not claimed to pass.**
+
+**T06 trace propagation — attempt only with the stack up, otherwise `Not run`.**
+
+The check requires the Compose stack running with the OTel agent attached, a real order posted, and its spans located
+in the tracing backend, classified as parent-child, links, or broken at a named hop, with trace IDs and a screenshot.
+None of that can be inferred from code. The task is explicit: "Never record an assumed result", and an agent that
+cannot attach is recorded as `Not run` against the D00-7 reference.
+
+So T06 is attempted only if the stack comes up on this machine; otherwise it is recorded `Not run` with the reason.
+**Under no circumstances is a classification written from reading the code** — the entire value of that task is that
+someone actually looked at a trace.
+
+**Consequence for the step's exit criteria.** S04 will close with T05 partial (Case E only, C and D Blocked) and T06
+either executed or `Not run`. The step register records both honestly instead of reporting a green step.

@@ -19,6 +19,22 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 class LedgerKafkaConfig {
 
+    /**
+     * The admin client the freshness calculator reads offsets with (D04-5). Built from the same bootstrap settings as
+     * every other client, so freshness cannot be measured against a different cluster from the one being consumed.
+     *
+     * <p>Named explicitly: calling this method {@code kafkaAdmin} collided with the bean name Boot's
+     * {@code KafkaAutoConfiguration} registers for its own {@code KafkaAdmin}, and a same-name different-type
+     * definition is rejected outright — which took down every Spring context in this service, including four suites
+     * that had nothing to do with freshness.
+     */
+    @Bean(name = "freshnessAdminClient", destroyMethod = "close")
+    org.apache.kafka.clients.admin.Admin freshnessAdminClient(
+            org.springframework.boot.kafka.autoconfigure.KafkaProperties properties) {
+        // buildAdminProperties() takes no argument on Boot 4.1; passing an SslBundles-shaped null did not compile.
+        return org.apache.kafka.clients.admin.Admin.create(properties.buildAdminProperties());
+    }
+
     @Bean
     PauseOnFailureErrorHandler pauseOnFailureErrorHandler(MeterRegistry meters) {
         return new PauseOnFailureErrorHandler(meters);
