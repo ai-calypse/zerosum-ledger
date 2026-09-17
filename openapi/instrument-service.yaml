@@ -586,13 +586,13 @@ components:
         instance: { type: string }
         code:
           type: string
+          # The union of both S05-T11 and S06: every code InstrumentApiException can produce. A code the service
+          # can emit but the spec omits is a response its own contract denies, and the conformance test checks it.
           enum: [invalid_attempt_id, attempt_not_found, not_cancellable, invalid_registration, unknown_provider,
                  invalid_signature, invalid_webhook, payload_too_large,
-                 unauthorized, forbidden, database_unavailable]
-
-                 unauthorized, forbidden, database_unavailable,
                  # decision: D06-4 — reconciliation (S06-T03)
                  idempotency_key_missing, idempotency_key_reused, invalid_report_date,
                  settlement_reports_unsupported, report_not_ready, provider_unavailable, unsupported_currency,
-                 reconciliation_run_not_found]
+                 reconciliation_run_not_found,
+                 unauthorized, forbidden, database_unavailable]
           description: Stable machine-readable error code; callers branch on this, never on `title`.
