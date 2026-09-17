@@ -13,6 +13,7 @@ import dev.zerosum.instrument.core.InstrumentExceptions.UnsupportedCapabilityExc
 import dev.zerosum.instrument.core.LookupResult;
 import dev.zerosum.instrument.core.PaymentInstrument;
 import dev.zerosum.instrument.core.SubmitResult;
+import dev.zerosum.instrument.core.WebhookRequest;
 import dev.zerosum.money.Money;
 import java.time.Duration;
 import java.time.Instant;
@@ -144,6 +145,18 @@ abstract class PaymentInstrumentContractSuite {
 
         assertThat(instrument.lookup(new LookupQuery(attempt(), deadline())))
                 .isInstanceOf(LookupResult.Unavailable.class);
+    }
+
+    @Test
+    @DisplayName("webhook parsing")
+    void parsesWebhooks() {
+        PaymentInstrument instrument = adapter();
+        // M7(a) names webhook parsing as part of this suite. Omitting the case would let the gap go unreported;
+        // an assumption puts it in the report as skipped, with the reason attached.
+        assumeTrue(false, "webhook receipt is deferred with S05-T03: no sender exists and no HMAC secret is wired, "
+                + "so there is no signed payload to parse");
+
+        instrument.parseWebhook(new WebhookRequest(new byte[0], java.util.Map.of()));
     }
 
     @Test

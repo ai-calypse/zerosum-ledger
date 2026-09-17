@@ -262,3 +262,27 @@ that behave nothing alike, reached through one interface, with the boundary enfo
 - **M8(b), M8(c), M9 and M10 remain unmet**, as already recorded. This revision does not change that; it removes the
   impression that the schema half of the work was going to arrive separately.
 - **Resuming S05 means starting at T07 and going through T09 together**, not picking T07 up alone.
+
+## The CI e2e job currently proves nothing
+
+**Found:** 2026-09-16, while reviewing CI before S09.
+
+`.github/workflows/ci.yml` has three jobs: build + unit, integration (Testcontainers), and e2e (Compose). The e2e job
+generates a throwaway `.env`, builds every service jar and the OpenTelemetry agent, starts the full Compose stack,
+runs `./gradlew e2eTest`, dumps logs and stops the stack.
+
+**There is not a single `@Tag("e2e")` test in the repository.** `grep -rn '@Tag("e2e")'` returns nothing. The build
+conventions set `failOnNoDiscoveredTests = false` deliberately, so a tag that selects nothing is reported rather than
+failed — the task logs `0 tests selected by the tag filter` and the job goes green.
+
+So the most expensive job in CI starts a seven-container stack and asserts nothing about it. It is not broken, and it
+does verify that every image builds and every container reaches healthy — which is not nothing — but a reader
+glancing at a green e2e badge would reasonably conclude that end-to-end behaviour is covered, and it is not.
+
+**Why it is in this state:** S04's pipeline e2e suite (D04-6) was recorded as not delivered, and no later step picked
+it up.
+
+**Consequence:** the money path — order API to outbox to Kafka to ledger apply to balances — is covered by
+integration tests against Testcontainers, but never once against the actual Compose stack the demo runs on. S04
+already showed what that gap hides: three defects that 132 green tests could not see, all of them only reachable in a
+real deployment.

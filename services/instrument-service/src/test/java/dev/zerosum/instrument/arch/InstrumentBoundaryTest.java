@@ -21,10 +21,15 @@ import org.junit.jupiter.api.Test;
  */
 class InstrumentBoundaryTest {
 
+    /**
+     * M7(b) as the master words it: no class <em>outside</em> the provider package names one. Restricting this to the
+     * core package would leave every future API and scheduler class free to reach for a provider directly, which is
+     * the exact drift the rule exists to stop.
+     */
     private static final ArchRule CORE_DOES_NOT_KNOW_ADAPTERS = noClasses()
-            .that().resideInAPackage("..instrument.core..")
+            .that().resideOutsideOfPackage("..instrument.adapter..")
             .should().dependOnClassesThat().resideInAPackage("..instrument.adapter..")
-            .because("core code must reach providers only through PaymentInstrument (ADR-0010)");
+            .because("code outside the adapters must reach providers only through PaymentInstrument (ADR-0010)");
 
     private static final JavaClasses MAIN_CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

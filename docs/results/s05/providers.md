@@ -16,14 +16,16 @@ All counts below are from the Gradle XML test results of the runs described, not
 | S05-T01 | `FakeCardIdempotencyIT` (integration) | 3 | 0 | 0 |
 | S05-T02 | `FakeBankIT` (integration) | 3 | 0 | 0 |
 | S05-T02 | `FakeBankLifecycleIT` (integration) | 3 | 0 | 0 |
-| S05-T05/T06 | `FakeCardContractTest` (unit, shared suite) | 8 | 0 | 1 |
-| S05-T05/T06 | `FakeBankContractTest` (unit, shared suite) | 8 | 0 | 1 |
+| S05-T05/T06 | `FakeCardContractTest` (unit, shared suite) | 9 | 0 | 2 |
+| S05-T05/T06 | `FakeBankContractTest` (unit, shared suite) | 9 | 0 | 2 |
 | S05-T06 | `InstrumentBoundaryTest` (ArchUnit) | 2 | 0 | 0 |
 
-instrument-service unit total: **31 tests, 0 failures, 2 skipped**. The two skips are the shared suite's
-settlement-report case aborting on a JUnit assumption — `capability 'settlementReports' is not implemented: the report
-generator is S06-T01 (D06-1)` — on each adapter. They are reported as skipped, never as passed, which is the point of
-using an assumption rather than omitting the case.
+instrument-service unit total: **33 tests, 0 failures, 4 skipped**. The four skips are the shared suite's
+settlement-report and webhook-parsing cases aborting on JUnit assumptions, once per adapter: `capability
+'settlementReports' is not implemented: the report generator is S06-T01 (D06-1)` and `webhook receipt is deferred with
+S05-T03: no sender exists and no HMAC secret is wired`. They are reported as skipped, never as passed, which is the
+point of using an assumption rather than omitting the case — M7(a) names webhook parsing, so an absent case would have
+hidden the gap instead of reporting it.
 
 Integration total: **16 tests, 0 failures, 0 skipped**, against a real PostgreSQL 18.6 container initialized with the
 Compose `infra/postgres` scripts, with the service connecting as `fakeproviders_app` — the same role it uses in the
@@ -45,10 +47,10 @@ pass proves only that nothing changed:
 
 | Layer | Tests | Failures | Skipped |
 |---|---|---|---|
-| Unit (`test`, 7 modules) | 221 | 0 | 2 |
+| Unit (`test`, 7 modules) | 223 | 0 | 4 |
 | Integration (`integrationTest`, 6 modules, 7m54s) | 180 | 0 | 0 |
 
-The 2 skips are the settlement-report assumption described above. Integration covers order-service (55),
+The 4 skips are the settlement-report and webhook-parsing assumptions described above. Integration covers order-service (55),
 ledger-service (88), libs/outbox (14), fake-providers (16), infra/tests (6) and the SP3 stack spike (1).
 
 ## A defect the contract suite caught
@@ -74,8 +76,9 @@ to remember which exception type to catch.
   JDK `HttpServer` stub, never against the running fake-providers service. Nothing here proves that
   `FakeCardInstrument` and the real FakeCard agree on a single field name: the stub's payloads were written by the
   same hand as the adapter, so they agree by construction rather than by evidence. S04 already demonstrated what this
-  gap costs — three live-stack defects that 132 green tests could not see. **M7(b) is met**: the ArchUnit boundary
-  rule passes on the real classes and is shown to fire on a deliberate canary.
+  gap costs — three live-stack defects that 132 green tests could not see. **M7(b) is met**: the ArchUnit rule uses the
+  master's own wording — no class *outside* the adapter package may depend on one — and it passes on the real classes
+  while firing on a deliberate canary placed in the core package.
 - **No cross-service integration test exists.** Closing the M7 gap needs instrument-service talking to a running
   fake-providers over HTTP, which is Compose-level work this cut does not include.
 - **Settlement reports — declared only.** `PaymentInstrument.settlementReport` and the `SettlementReport` type exist

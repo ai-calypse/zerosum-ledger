@@ -246,6 +246,11 @@ services:
     environment:
       <<: *service-env
       OTEL_SERVICE_NAME: instrument-service
+      # decision: D05-1 — the providers are other containers, not this one. The application.yml defaults are
+      # localhost:8090 for local runs; inside the network that would make instrument-service call itself, which is
+      # the same class of defect as a localhost broker bootstrap: invisible to every test, fatal in the stack.
+      ZS_FAKECARD_BASE_URL: http://fake-providers:8090
+      ZS_FAKEBANK_BASE_URL: http://fake-providers:8090
       ZS_INSTRUMENTS_OWNER_DB_PASSWORD: ${ZS_INSTRUMENTS_OWNER_DB_PASSWORD:?set ZS_INSTRUMENTS_OWNER_DB_PASSWORD in .env}
       ZS_INSTRUMENTS_APP_DB_PASSWORD: ${ZS_INSTRUMENTS_APP_DB_PASSWORD:?set ZS_INSTRUMENTS_APP_DB_PASSWORD in .env}
     ports:
