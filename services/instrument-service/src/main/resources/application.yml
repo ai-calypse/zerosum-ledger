@@ -16,6 +16,19 @@ spring:
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
 
+# decision: D05-1 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
+# Provider endpoints and the timeouts that decide when an outcome becomes UNKNOWN rather than merely slow.
+zs:
+  instruments:
+    fakecard-base-url: ${ZS_FAKECARD_BASE_URL:http://localhost:8090}
+    fakebank-base-url: ${ZS_FAKEBANK_BASE_URL:http://localhost:8090}
+    connect-timeout: ${ZS_PROVIDER_CONNECT_TIMEOUT:2s}
+    # The read timeout is what turns a slow provider into a resolvable UNKNOWN instead of a parked thread.
+    read-timeout: ${ZS_PROVIDER_READ_TIMEOUT:5s}
+    # ADR-0010 — a provider without idempotency keys is left alone this long before any resubmission. Must stay
+    # above FakeBank's maximum processing delay, or a resubmission could still duplicate a payout.
+    quiet-period: ${ZS_PROVIDER_QUIET_PERIOD:60s}
+
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8083

@@ -16,6 +16,14 @@ spring:
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
 
+# decision: D05-2 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
+# The simulated banking day. Short by default so tests and the demo see a full payout lifecycle in seconds rather
+# than days; the production-shaped value would be a day, which nothing here would ever wait for.
+zs:
+  fakebank:
+    banking-day: ${ZS_FAKEBANK_BANKING_DAY:30s}
+    lifecycle-interval: ${ZS_FAKEBANK_LIFECYCLE_INTERVAL:1s}
+
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8090
