@@ -187,8 +187,8 @@ class FaultKnobDeterminismIT extends FakeProvidersIT {
         assertThat(put("/admin/faults/" + provider, knobs, ADMIN_TOKEN).status()).isEqualTo(200);
     }
 
-    private Truth truth(String entityId) {
-        return get("/admin/truth?entity_id=" + entityId, ADMIN_TOKEN).as(Truth.class);
+    private Truth truth(String clientReference) {
+        return get("/admin/truth?client_reference=" + clientReference, ADMIN_TOKEN).as(Truth.class);
     }
 
     private long faultCount() {

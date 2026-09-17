@@ -56,6 +56,34 @@ class InstrumentApiException extends RuntimeException {
     }
 
     /**
+     * decision: D05-3 (TB2) — the signature or its timestamp did not verify.
+     *
+     * <p>The detail deliberately does not say which: telling a caller "stale" rather than "wrong secret" tells a
+     * forger which half to fix. Nothing is recorded, so a refused delivery leaves no trace an attacker can create.
+     */
+    static InstrumentApiException invalidSignature() {
+        return new InstrumentApiException(HttpStatus.BAD_REQUEST, "invalid_signature",
+                "the webhook signature did not verify within the 300 s tolerance");
+    }
+
+    /** Correctly signed, but not a payload this provider sends. Recorded nowhere: it could not be applied. */
+    static InstrumentApiException invalidWebhook(String detail) {
+        return new InstrumentApiException(HttpStatus.BAD_REQUEST, "invalid_webhook", detail);
+    }
+
+    /** A webhook path no adapter serves. 404 rather than 400: the path itself is what does not exist. */
+    static InstrumentApiException unknownWebhookProvider(String provider) {
+        return new InstrumentApiException(HttpStatus.NOT_FOUND, "unknown_provider",
+                "no payment instrument is registered for provider " + provider);
+    }
+
+    /** Master §5.11 caps bodies at 64 KB; a larger one is refused before any HMAC is computed over it. */
+    static InstrumentApiException webhookTooLarge(int capBytes) {
+        return new InstrumentApiException(HttpStatus.PAYLOAD_TOO_LARGE, "payload_too_large",
+                "webhook bodies are capped at " + capBytes + " bytes");
+    }
+
+    /**
      * Cancellation is allowed only from {@code CREATED} (master §5.11). The current status is in the detail, because
      * the caller's next decision depends on which way the race went: an attempt already {@code SUBMITTING} may still
      * decline, while one already {@code SUCCEEDED} has moved money and needs a refund rather than a cancellation.

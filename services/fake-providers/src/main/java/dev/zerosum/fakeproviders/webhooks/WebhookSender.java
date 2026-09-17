@@ -27,9 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
  * or never answered at all, leaves the event exactly where it was and the redelivery schedule picks it up again.
  * Marking on send would lose outcomes silently, which is the one failure this design must not have.
  *
- * <p>With no receiver URL configured the sender is inert and events simply accumulate: instrument-service has no
- * webhook endpoint until S05-T11, and a sender that hammered a nonexistent URL would fill the fault log with
- * failures that say nothing about the simulator.
+ * <p>With no receiver URL configured the sender is inert and events simply accumulate. The URL is the receiver's
+ * base path: the provider is appended to it, because the receiver has a path per provider (S05-T11).
  */
 @Component
 class WebhookSender {
@@ -99,11 +98,11 @@ class WebhookSender {
             return;
         }
 
-        Integer status = post(body);
+        Integer status = post(body, event.provider());
         if (profiles.fires(event.provider(), Decision.WEBHOOK_DUPLICATE, event.eventId())) {
             // The same event id twice. Deduplication is the receiver's job (master §5.11, TB2), and this is what
             // proves it does it.
-            post(body);
+            post(body, event.provider());
         }
 
         if (status != null && status >= 200 && status < 300) {
@@ -117,12 +116,14 @@ class WebhookSender {
         }
     }
 
-    private Integer post(byte[] body) {
+    private Integer post(byte[] body, String provider) {
         if (secrets.isEmpty()) {
             throw new IllegalStateException("zs.webhooks.secrets must be configured to deliver signed webhooks");
         }
         try {
-            return http.post().uri(receiverUrl)
+            // The receiver has a path per provider (S05-T11), and the provider is the one thing the sender is
+            // certain of. Configuring one URL per provider would be two variables that must agree with each other.
+            return http.post().uri(receiverUrl + "/" + provider)
                     .contentType(MediaType.APPLICATION_JSON)
                     // A fresh timestamp per attempt, so a redelivery is not rejected as stale by the 300 s tolerance.
                     .header(WebhookSigner.HEADER, WebhookSigner.header(clock.instant(), body, secrets.getFirst()))

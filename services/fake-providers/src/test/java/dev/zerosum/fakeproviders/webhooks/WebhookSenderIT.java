@@ -204,7 +204,7 @@ class WebhookSenderIT extends FakeProvidersIT {
 
     /** The redelivery-queue entry for this reference, read through the admin API (§0.3 E3). */
     private java.util.Optional<Delivery> queued(String clientReference) {
-        Truth truth = get("/admin/truth?entity_id=" + clientReference, ADMIN_TOKEN).as(Truth.class);
+        Truth truth = get("/admin/truth?client_reference=" + clientReference, ADMIN_TOKEN).as(Truth.class);
         List<String> refs = java.util.stream.Stream.concat(
                         truth.charges().stream().map(charge -> charge.charge_id()),
                         truth.payouts().stream().map(payout -> payout.payout_id()))

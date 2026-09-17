@@ -29,36 +29,41 @@ class TruthService {
         this.faults = faults;
     }
 
-    /** @param entityId a client reference or a provider id; null returns everything, which is what tests use. */
-    Truth truth(String entityId) {
-        return new Truth(entityId, charges(entityId), refunds(entityId), payouts(entityId), faults.counts(),
-                faults.entries(), queue());
+    /**
+     * decision: CR-S05-02 — ground truth is queried by the reference the caller actually gave this provider.
+     *
+     * @param clientReference the client reference (the attempt id) or a provider-side id; null returns everything,
+     *                        which is what the verifier and the fault tests use
+     */
+    Truth truth(String clientReference) {
+        return new Truth(clientReference, charges(clientReference), refunds(clientReference), payouts(clientReference),
+                faults.counts(), faults.entries(), queue());
     }
 
-    private List<ChargeResponse> charges(String entityId) {
+    private List<ChargeResponse> charges(String reference) {
         return db.sql("SELECT charge_id, client_reference, status, decline_code, amount_minor, currency, fee_minor, "
                         + "refunded_minor FROM card_charges"
-                        + filter(entityId, "charge_id") + " ORDER BY created_at, charge_id")
-                .params(params(entityId))
+                        + filter(reference, "charge_id") + " ORDER BY created_at, charge_id")
+                .params(params(reference))
                 .query((rs, rowNum) -> new ChargeResponse(rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getLong(5), rs.getString(6), rs.getLong(7), rs.getLong(8)))
                 .list();
     }
 
-    private List<RefundResponse> refunds(String entityId) {
+    private List<RefundResponse> refunds(String reference) {
         return db.sql("SELECT refund_id, charge_id, client_reference, status, failure_code, amount_minor "
-                        + "FROM card_refunds" + filter(entityId, "refund_id") + " ORDER BY created_at, refund_id")
-                .params(params(entityId))
+                        + "FROM card_refunds" + filter(reference, "refund_id") + " ORDER BY created_at, refund_id")
+                .params(params(reference))
                 .query((rs, rowNum) -> new RefundResponse(rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getString(5), rs.getLong(6)))
                 .list();
     }
 
-    private List<PayoutResponse> payouts(String entityId) {
+    private List<PayoutResponse> payouts(String reference) {
         return db.sql("SELECT payout_id, client_reference, status, return_code, amount_minor, currency, accepted_at, "
                         + "settled_at, returned_at FROM bank_payouts"
-                        + filter(entityId, "payout_id") + " ORDER BY accepted_at, payout_id")
-                .params(params(entityId))
+                        + filter(reference, "payout_id") + " ORDER BY accepted_at, payout_id")
+                .params(params(reference))
                 .query((rs, rowNum) -> new PayoutResponse(rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getLong(5), rs.getString(6), rs.getTimestamp(7).toInstant(),
                         instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9))))
@@ -81,13 +86,13 @@ class TruthService {
         return new WebhookQueue(deliveries.size(), deliveries);
     }
 
-    /** The entity filter matches either side of the relationship: our reference, or the provider's own id. */
-    private static String filter(String entityId, String idColumn) {
-        return entityId == null ? "" : " WHERE client_reference = ? OR " + idColumn + " = ?";
+    /** The filter matches either side of the relationship: the caller's reference, or the provider's own id. */
+    private static String filter(String reference, String idColumn) {
+        return reference == null ? "" : " WHERE client_reference = ? OR " + idColumn + " = ?";
     }
 
-    private static Object[] params(String entityId) {
-        return entityId == null ? new Object[0] : new Object[] {entityId, entityId};
+    private static Object[] params(String reference) {
+        return reference == null ? new Object[0] : new Object[] {reference, reference};
     }
 
     private static java.time.Instant instant(Timestamp timestamp) {

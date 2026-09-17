@@ -422,3 +422,28 @@ than the thing it simulates. Three ways out, in preference order:
 
 **Not fixed here.** The endpoint belongs to S05-T03; fixing it inside a verification pass would put the change in a
 commit whose subject is something else. Recorded, with I7 unusable through this endpoint until it is done.
+
+### Resolved 2026-09-17 with S05-T11 — option 1, and a change request against master §5.6
+
+**Change request.** Master [§5.6](zerosum_ledger_mvp_plan.md#rest-apis) specifies `GET /admin/truth?entity_id=`. The
+parameter is now **`client_reference`**, and `entity_id` is **refused with 400** rather than accepted and ignored.
+
+- **Why the master's parameter could not be kept honestly.** fake-providers is never told a ledger entity id: the
+  adapter sends the attempt id as the client reference and instrument token, and nothing else. Any filter keyed on an
+  entity id can only ever match nothing, so keeping the name working would have meant either teaching the simulator
+  our domain (option 2 — faithful to §5.6, unfaithful to reality, and it would make the simulator a worse instrument
+  than the thing it simulates) or leaving a lookup that answers "nothing wrong" by construction (option 3, already
+  rejected).
+- **Why refused rather than ignored.** An unknown parameter that is silently dropped is exactly how this defect
+  produced a clean bill of health. A 400 naming `client_reference` cannot be misread as an answer.
+- **What the caller does instead.** Resolve entity → attempt ids in the instruments database, then ask ground truth
+  by reference. That keeps the provider ignorant of our domain, which is the property that makes it useful evidence
+  for I7.
+- **Cost.** `Truth.entity_id` in the response is now `Truth.client_reference`. Three tests moved with it. The verifier
+  does not use this endpoint yet, so nothing outside fake-providers' own tests had to change.
+- **Not changed.** The master document still reads `entity_id` at §5.6; this entry is the change request against it,
+  and I7 is queryable through the endpoint again.
+
+**Regression guard.** `AdminSecurityIT.groundTruthIsQueryableByClientReference` charges against an attempt-id-shaped
+reference, finds it by `client_reference`, and asserts the `entity_id` form is a 400 — the exact query the deployment
+check ran, now failing loudly instead of returning `[]`.

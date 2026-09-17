@@ -265,6 +265,10 @@ services:
       ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
       ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
       ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
+      # decision: D05-3 — the webhook receiver's HMAC secrets (S05-T11). The same variable, with the same value,
+      # that fake-providers signs with: the two sides hold one secret, and a receiver started without it verifies
+      # nothing and refuses every delivery. Rotation lists `current,previous`; the sender signs with the first.
+      ZS_WEBHOOK_SECRETS: ${ZS_WEBHOOK_SECRETS:?set ZS_WEBHOOK_SECRETS in .env}
       ZS_INSTRUMENTS_OWNER_DB_PASSWORD: ${ZS_INSTRUMENTS_OWNER_DB_PASSWORD:?set ZS_INSTRUMENTS_OWNER_DB_PASSWORD in .env}
       ZS_INSTRUMENTS_APP_DB_PASSWORD: ${ZS_INSTRUMENTS_APP_DB_PASSWORD:?set ZS_INSTRUMENTS_APP_DB_PASSWORD in .env}
     ports:
@@ -294,9 +298,12 @@ services:
       ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
       ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
       ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
-      # decision: D05-3 — the webhook signing secret. No receiver URL is set: instrument-service has no webhook
-      # endpoint until S05-T11, so the sender stays idle and provider_events simply accumulate.
+      # decision: D05-3 — the webhook signing secret, and where the signed webhooks go (S05-T11). Until the receiver
+      # existed this URL was deliberately unset and the sender was inert; with the endpoint in place, leaving it
+      # unset would mean provider outcomes accumulate undelivered and the ledger never hears that a payout settled.
+      # The URL is the base path — the provider is appended to it, so one variable cannot disagree with another.
       ZS_WEBHOOK_SECRETS: ${ZS_WEBHOOK_SECRETS:?set ZS_WEBHOOK_SECRETS in .env}
+      ZS_WEBHOOK_RECEIVER_URL: ${ZS_WEBHOOK_RECEIVER_URL:-http://instrument-service:8083/v1/webhooks}
       ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD: ${ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD:?set ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD in .env}
       ZS_FAKEPROVIDERS_APP_DB_PASSWORD: ${ZS_FAKEPROVIDERS_APP_DB_PASSWORD:?set ZS_FAKEPROVIDERS_APP_DB_PASSWORD in .env}
     # Internal only (master §4.6): reachable on the Compose network, no published port.

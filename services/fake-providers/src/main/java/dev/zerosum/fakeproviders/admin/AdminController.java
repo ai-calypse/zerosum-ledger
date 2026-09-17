@@ -56,10 +56,32 @@ class AdminController {
         return profiles.activate(provider, knobs).toMap();
     }
 
+    /**
+     * Provider-side ground truth, filtered by <strong>client reference</strong> (CR-S05-02, change request against
+     * master §5.6).
+     *
+     * <p>The parameter used to be {@code entity_id}, and it could never match: a payment provider is not told our
+     * ledger entity ids, so it stores charges against the client reference the caller sent — which is the attempt
+     * id. Filtering by entity returned an empty list for every entity, and an auditor reading it would have
+     * concluded that no charge had occurred anywhere. Teaching this simulator about ledger entities would have
+     * fixed the symptom by making it less faithful than the thing it simulates, so the caller resolves
+     * entity → attempt ids from the instruments database first and asks here by reference.
+     *
+     * <p>{@code entity_id} is refused rather than ignored, because being quietly ignored is precisely how the
+     * original defect produced a clean bill of health.
+     */
     @GetMapping("/truth")
-    Truth truth(HttpServletRequest request, @RequestParam(name = "entity_id", required = false) String entityId) {
+    Truth truth(HttpServletRequest request,
+            @RequestParam(name = "client_reference", required = false) String clientReference,
+            @RequestParam(name = "entity_id", required = false) String entityId) {
         requireAdmin(request);
-        return truth.truth(entityId);
+        if (entityId != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "ground truth is queryable by client_reference, not entity_id: this provider is never told a "
+                            + "ledger entity id, so filtering by one could only ever match nothing (CR-S05-02). "
+                            + "Resolve the entity's attempt ids first, then query by client_reference.");
+        }
+        return truth.truth(clientReference);
     }
 
     private static Principal requireAdmin(HttpServletRequest request) {
