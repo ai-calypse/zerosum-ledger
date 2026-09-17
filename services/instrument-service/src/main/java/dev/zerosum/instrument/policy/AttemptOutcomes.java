@@ -57,7 +57,7 @@ public class AttemptOutcomes {
         PaymentEvents.Attempt attempt = transitions.read(attemptId);
         String from = attempt.status();
         String to = statusFor(attempt.kind(), result);
-        String providerRef = result instanceof SubmitResult.Succeeded succeeded ? succeeded.providerRef() : null;
+        String providerRef = providerRefOf(result);
         String failureCode = result instanceof SubmitResult.Declined declined ? code(declined) : null;
 
         var applied = transitions.apply(new AttemptTransitions.Transition(attemptId, attempt.version(), from, to,
@@ -134,11 +134,36 @@ public class AttemptOutcomes {
             // A refund uses FAILED in place of DECLINED (master §5.10); the machines encode the same alias.
             case SubmitResult.Declined ignored -> "CHARGE".equals(kind) ? "DECLINED" : "FAILED";
             case SubmitResult.Unknown ignored -> "UNKNOWN";
-            // Neither machine has a PENDING state, so an adapter reporting one for a charge or refund has broken its
-            // contract. Throwing rolls the transaction back and leaves the attempt in SUBMITTING for the sweeper,
-            // which is better than inventing a status for money whose fate we would then be guessing at.
-            case SubmitResult.Pending pending -> throw new IllegalStateException(
-                    "a " + kind + " cannot be pending; the adapter returned " + pending);
+            // A payout is accepted long before it settles, so PENDING is the honest state, and D05-5 emits
+            // PAYOUT_ACCEPTED on the move into it: the ledger has to learn about money already committed to a driver
+            // rather than wait for a terminal status a banking day away.
+            //
+            // Neither the charge nor the refund machine has a PENDING state, so an adapter reporting one for those
+            // has broken its contract. Throwing rolls the transaction back and leaves the attempt in SUBMITTING for
+            // the sweeper, which beats inventing a status for money whose fate we would then be guessing at.
+            case SubmitResult.Pending pending -> {
+                if (!"PAYOUT".equals(kind)) {
+                    throw new IllegalStateException(
+                            "a " + kind + " cannot be pending; the adapter returned " + pending);
+                }
+                yield "PENDING";
+            }
+        };
+    }
+
+    /**
+     * The provider's own reference, from whichever result carries one.
+     *
+     * <p>{@code Pending} carries one too, and it matters: D01-8 requires {@code provider_ref} on
+     * {@code PAYOUT_ACCEPTED}, which is emitted on exactly the transition a {@code Pending} produces. Dropping the
+     * reference here would make that event unbuildable and roll back a payout the bank has already accepted.
+     */
+    private static String providerRefOf(SubmitResult result) {
+        return switch (result) {
+            case SubmitResult.Succeeded succeeded -> succeeded.providerRef();
+            case SubmitResult.Pending pending -> pending.providerRef();
+            case SubmitResult.Declined ignored -> null;
+            case SubmitResult.Unknown ignored -> null;
         };
     }
 

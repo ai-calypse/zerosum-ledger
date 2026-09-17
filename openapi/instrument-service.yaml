@@ -1,7 +1,6 @@
 # decision: D05-13 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
 # The instrument-service API. S05-T08 starts this file with the attempt read and cancel operations; S05-T09 adds
-# instrument registration and S05-T11 the webhook receiver, each owned by its own decision. Payout runs (S05-T10)
-# are not here: that task is not built.
+# instrument registration, S05-T10 the payout run and S05-T11 the webhook receiver, each owned by its own decision.
 # Conventions follow docs/zerosum_ledger_mvp_plan.md#rest-apis: every path is under /v1, every error is
 # application/problem+json (RFC 9457) with a stable `code`, and authenticated operations return 401 without a valid
 # token and 403 for the wrong role (§0.3 C9).
@@ -228,6 +227,81 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+
+  /v1/payout-runs:
+    post:
+      operationId: createPayoutRun
+      summary: Pay every eligible driver what the ledger says they are owed
+      description: |
+        Requires the **writer** role, and an `Idempotency-Key`: this is the operation that sends money out, and a
+        retried POST without a key would pay every driver twice. The stored run **is** the idempotency record
+        (D03-3) — the same key with the same body replays it, the same key with a different body is
+        `idempotency_key_reused`.
+
+        **One run, one currency.** A driver owed money in two currencies is paid by two runs, which is what makes
+        the amount unambiguous and matches the one-in-flight-payout rule below being per (driver, currency).
+
+        **Order of checks** (D05-7): payouts kill switch → pipeline freshness → per-driver eligibility. A driver is
+        eligible when they have a registered instrument at a provider that can disburse, their `payable` balance on
+        its normal side is at least the configured minimum, and they have no payout already in flight. The **amount
+        is that balance, read from the ledger at that moment** (ADR-0004), and the `as_of_seq` it was read at is
+        recorded against the driver's result for audit.
+
+        **At most one in-flight payout per (driver, currency)** — M10(a) — is enforced by the `one_inflight_payout`
+        partial unique index, not by a check in this service. Two runs racing for one driver therefore both proceed;
+        one inserts and the other is told by the database that it lost, and reports that driver as
+        `SKIPPED_IN_FLIGHT`. A losing run is a normal `201`, never an error.
+
+        **Refusals are `409` and are recorded.** `ledger_stale` (M10(c)) means the pipeline staleness — order-service
+        outbox age **plus** ledger unapplied age **plus** this service's outbox age — exceeded the 5 s threshold, *or*
+        that one of those stages could not be measured at all. Those are one code on purpose: a stage we could not
+        read is not a stage we may assume is healthy, and the alternative is paying against balances nobody checked.
+        `payouts_disabled` means the kill switch is off. **A refused run creates no payout attempts**, and because
+        the refusal is stored under the key, retrying with the *same* key replays the refusal — retry with a fresh
+        key once the pipeline has caught up.
+
+        **Accepted is not settled.** A created attempt is submitted to the bank after this response is prepared and
+        reaches `PENDING`, emitting `PAYOUT_ACCEPTED`. Settlement and any return arrive later by webhook.
+      tags: [payouts]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayoutRunRequest' }
+      responses:
+        '201':
+          description: The run completed. Every driver it considered is in `results` with the outcome and why.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutRun' }
+        '200':
+          # Quoted: an unquoted `key: value` inside a plain scalar reads as a nested mapping and fails to parse.
+          description: 'A replay of a run that already exists, carrying the `Idempotent-Replayed` header.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutRun' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: >
+            Refused, and no payout attempt was created: `ledger_stale` when the pipeline is behind the 5 s threshold
+            or could not be measured, `payouts_disabled` when the kill switch is off. The refusal is recorded as a
+            run, whose id is in the detail.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: The key was reused with a different request, or the currency is outside the allow-list.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/Unavailable' }
 
   /v1/reconciliation-runs/{run_id}/breaks:
     get:
@@ -574,6 +648,83 @@ components:
         attempt_id: { $ref: '#/components/schemas/NullableUuid' }
         detail: { type: [string, 'null'] }
 
+    PayoutRunRequest:
+      type: object
+      additionalProperties: false
+      required: [currency]
+      properties:
+        currency:
+          allOf:
+            - $ref: '#/components/schemas/CurrencyCode'
+          description: >
+            The currency to pay out, from the D01-7 allow-list. Refused rather than normalized: a run keyed on `usd`
+            would hash differently from the same run keyed on `USD`, so a caller alternating between them would get
+            two runs instead of one replay.
+
+    PayoutRun:
+      type: object
+      additionalProperties: false
+      required: [run_id, currency, status, attempts_created, results, replayed]
+      properties:
+        run_id: { $ref: '#/components/schemas/Uuid' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        status:
+          type: string
+          enum: [RUNNING, COMPLETED, REFUSED]
+          description: >
+            `REFUSED` is only ever seen through the 409 problem, never in a 200 or 201 body. `RUNNING` means a run
+            that was interrupted between opening and completing; it is returned only by a replay of that key.
+        refusal_code:
+          type: [string, 'null']
+          description: Why a refused run refused — `ledger_stale` or `payouts_disabled`. Null for a completed run.
+        attempts_created:
+          type: integer
+          minimum: 0
+          description: How many payout attempts this run actually inserted. Always 0 for a refused run.
+        results:
+          type: array
+          description: Every driver the run considered, ordered by entity id.
+          items: { $ref: '#/components/schemas/PayoutRunResult' }
+        replayed:
+          type: boolean
+          description: True when this run already existed and was returned rather than performed again.
+
+    PayoutRunResult:
+      type: object
+      additionalProperties: false
+      required: [entity_id, outcome]
+      properties:
+        entity_id:
+          type: string
+          description: The driver, for example `driver:D1`.
+        outcome:
+          type: string
+          enum: [PAID, SKIPPED_IN_FLIGHT, SKIPPED_BELOW_MINIMUM, SKIPPED_NO_BALANCE, SKIPPED_NO_TOKEN]
+          description: |
+            What happened to this driver, and each value implies a different fix:
+
+            | `outcome` | Meaning |
+            |---|---|
+            | `PAID` | A payout attempt was created and submitted to the bank. |
+            | `SKIPPED_IN_FLIGHT` | The `one_inflight_payout` index refused a second payout; one is already on its way. |
+            | `SKIPPED_BELOW_MINIMUM` | The `payable` balance is under the configured minimum, which also covers zero and driver debt. |
+            | `SKIPPED_NO_BALANCE` | The ledger holds no entries for this driver at all. |
+            | `SKIPPED_NO_TOKEN` | Registered, but at no provider that can disburse. The fix is a registration, not a bigger balance. |
+        amount_minor:
+          type: [integer, 'null']
+          format: int64
+          description: >
+            What the driver was owed on the account's normal side when the run read it. Null when no balance was
+            read, and present but under the minimum for `SKIPPED_BELOW_MINIMUM`.
+        as_of_seq:
+          type: [integer, 'null']
+          format: int64
+          description: The ledger sequence the balance was read at, kept so a payout amount can be traced afterwards.
+        attempt_id:
+          allOf:
+            - $ref: '#/components/schemas/NullableUuid'
+          description: The payout attempt this run created. Null for every skipped outcome.
+
     Problem:
       # RFC 9457, plus the stable `code` the master's conventions require.
       type: object
@@ -594,5 +745,7 @@ components:
                  idempotency_key_missing, idempotency_key_reused, invalid_report_date,
                  settlement_reports_unsupported, report_not_ready, provider_unavailable, unsupported_currency,
                  reconciliation_run_not_found,
+                 # decision: D05-7, D05-11 — payout runs (S05-T10)
+                 ledger_stale, payouts_disabled,
                  unauthorized, forbidden, database_unavailable]
           description: Stable machine-readable error code; callers branch on this, never on `title`.
