@@ -63,8 +63,10 @@ class AuthWiringTest {
                     .containsAll(TOKEN_VARIABLES);
         }
 
-        assertThat(authenticated).as("the three services that enforce roles today")
-                .containsExactlyInAnyOrder("order-service", "ledger-service", "instrument-service");
+        // A literal list, so a service that silently loses its auth block fails here rather than shipping open.
+        // fake-providers joined in S05-T03: its admin endpoints are role-checked even though it holds no real money.
+        assertThat(authenticated).as("the services that enforce roles today")
+                .containsExactlyInAnyOrder("order-service", "ledger-service", "instrument-service", "fake-providers");
     }
 
     private static Map<String, Object> composeServices() {

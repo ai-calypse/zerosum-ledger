@@ -279,6 +279,12 @@ services:
       OTEL_SERVICE_NAME: fake-providers
       # decision: D05-2, D03-4 — the fault and truth endpoints are admin-only (TB4). Without this the container
       # authenticates nobody and every admin call fails while the container reports healthy.
+      #
+      # Writer and reader tokens are passed as well, because application.yml reads all three. Without them a caller
+      # presenting a writer token is unrecognised and answered 401 ("no token") instead of the 403 ("wrong role")
+      # that the auth block exists to produce — the config said one thing and the deployment did another.
+      ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
+      ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
       ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
       # decision: D05-3 — the webhook signing secret. No receiver URL is set: instrument-service has no webhook
       # endpoint until S05-T11, so the sender stays idle and provider_events simply accumulate.
