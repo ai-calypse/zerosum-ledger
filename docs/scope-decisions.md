@@ -120,3 +120,83 @@ someone actually looked at a trace.
 
 **Consequence for the step's exit criteria.** S04 will close with T05 partial (Case E only, C and D Blocked) and T06
 either executed or `Not run`. The step register records both honestly instead of reporting a green step.
+
+## S07 Observability and performance — scope cut (2026-09-16)
+
+S07 is the user's stated centrepiece ("observability, monitoring"), so it is cut *less* aggressively than S04. But it
+has a hard ordering conflict that has to be stated rather than worked around.
+
+**The ordering conflict.** S07's inherited decisions include **D05-2/5/8/11/12/13** (instrument-service fault knobs,
+attempt state machines, sweeper schedule, kill switches, scenario runner) and **D06-4/D06-5** (reconciliation metrics,
+verifier). The agreed priority order runs S07 *before* S05 and S06, so none of those exist. Consequently:
+
+- **Unbuildable now, blocked on S05:** `provider_call_seconds`, `attempts_state_total`, `unknown_attempts_oldest_seconds`,
+  `pending_payouts_oldest_seconds`, `NEEDS_REVIEW` count — and therefore the whole **Providers dashboard** and the
+  **Unknown attempts** and **Pending payouts** alert rows.
+- **Unbuildable now, blocked on S06:** reconciliation-break signals — the **Reconciliation breaks** alert row and the
+  reconciliation panel of the Money-invariants dashboard.
+- **T01 instruction 1** also requires the D05-12 scenario runner to generate smoke traffic. It does not exist, so
+  traffic is driven with the real HTTP API instead, and the substitution is recorded.
+
+**Kept, because it exists and carries the step's value**
+
+- **T01 registry and missing instrumentation**, scoped to order-service, ledger-service and `libs/outbox`: the
+  order-to-apply and apply-duration histograms, lock wait, retry counters by class, the invariant gauge from the D02-8
+  queries, and the scheduled consumer-lag gauges S04 left computed on-request only.
+- **T02 dashboards**, reduced to the two that can be populated: **Flow** and **Money invariants** (minus its
+  reconciliation panel). Provisioned from the repository, not hand-imported.
+- **T03 alert rules** for the signals that exist — invariant violation, quarantine, outbox backlog, consumer lag or
+  paused, DLQ messages — with offline rule tests and runbook stubs. The blocked rows are listed as absent, not quietly
+  dropped.
+
+**Deferred**
+
+- **T04 k6 scripts, perf runner and lock-wait sampler**, and **T05 perf runs and analysis.** k6 is not installed, the
+  runs need a quiet reference machine, and the honest-evidence rule makes a hurried single-repetition run worse than
+  none. This leaves the **G3 gate and the performance hard gates unevaluated**, which is recorded as such.
+- **T06 SP4 hot-entity mitigation**, which depends on T05 evidence, and **S07-C01**.
+
+**Consequence.** S07 will close with M12(a) and M12(b) addressed for the services that exist, M12(c) partial, and **no
+performance evidence at all**. The register says so plainly instead of reporting a green step.
+
+**One discrepancy to carry into D07-1.** D00-7 records that the "Kafka consumer span is a child of the producer span,
+not a link". S04-T06 measured the opposite on the live stack: the consumer span is a **root with a link** to the
+producer. The registry records what the backend actually holds, and the discrepancy is raised against D00-7 rather
+than silently followed.
+
+## S05 Instruments and fake providers — scope cut (2026-09-17)
+
+Thirteen tasks at roughly 26 hours, covering two simulated providers, an attempt state machine, a collection policy
+consumer, a payout run, an HMAC webhook receiver, sweepers and a scenario catalog. It is the largest step in the pack,
+and under the résumé-scope direction it gets cut to the spine that makes the system demonstrably end-to-end.
+
+**Why this step is worth doing at all rather than skipping.** It is the only source of the signals S07 had to record
+as absent — provider latency, attempt states, `UNKNOWN` age, pending payouts — so it converts four "blocked" register
+rows into real telemetry, and it is what makes the money loop close: an order becomes a real charge, a webhook
+returns, and the ledger reflects it.
+
+**Kept**
+
+- **T04 `PaymentInstrument` interface, capabilities and result types.** The abstraction the whole step exists to show.
+- **T01 FakeCard** (charges, refunds, idempotency keys, lookup) and **T02 FakeBank** (asynchronous payouts, lookup by
+  client reference, settle/fail/return). Both are needed for M7's shared contract suite to mean anything.
+- **T05 adapters** and **T06 the shared contract test suite plus the ArchUnit provider-boundary rule.** M7 in full:
+  one suite both providers pass, and a rule that stops provider packages leaking.
+- **T07 instruments schema, transition persistence with the optimistic guard, and the outbox** — reusing
+  `libs/outbox`, which already carries the trace-context fix from CR-S04-01.
+- **T08 the state × event transition table test.** M8(a). A state machine without an exhaustive table test is a
+  state machine nobody can trust.
+
+**Deferred**
+
+- **T03 fault knobs, seeded randomness, signed webhook sender with redelivery, ground-truth endpoint**, and
+  **T11 the webhook receiver**. This is the painful one: deferring them means **M8(b), M8(c) and M9 cannot be
+  claimed**, because uncertain-outcome and webhook behaviour is exactly what those knobs produce. Recorded as
+  unmet rather than approximated.
+- **T09 collection policy consumer**, **T10 payout run** (so **M10 is unmet**, including the freshness check that
+  S04-T04's endpoint was built to serve), **T12 sweepers and the `UNKNOWN` resolver**, **T13 scenario catalog and
+  runner**, and **S05-C01** (the G2 alternative, which also leaves **gate G2 unevaluated**).
+
+**Consequence, stated plainly.** S05 will deliver **M7 and M8(a)** and leave **M8(b), M8(c), M9 and M10 unmet**. Four
+of S07's blocked signals stay blocked, because the components that emit them are deferred. The register will say so
+rather than reporting a green step.

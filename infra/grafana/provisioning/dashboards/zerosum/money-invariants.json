@@ -1,0 +1,79 @@
+{
+  "uid": "zs-money-invariants",
+  "title": "ZeroSum — Money invariants",
+  "tags": ["zerosum", "d07-2"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "description": "The checks that say whether the books are trustworthy. NOTE: the reconciliation-breaks panel the master specifies is absent because S06 does not exist yet — see infra/otel/registry.yaml 'blocked'. Its absence is recorded work, not an oversight.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Invariant violations",
+      "description": "I2 per-currency sums, I3 balance-versus-changelog, I4 running balances, and clearing accounts that have not returned to zero. Any non-zero value is a critical alert. One series per invariant, so the alert can name which one broke.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [ { "refId": "A", "expr": "max by (invariant) (invariant_violations)", "legendFormat": "{{invariant}}" } ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Invariant check healthy",
+      "description": "1 means the invariant queries themselves failed, so the counts beside this panel are STALE. Without this, a gauge frozen at zero would read as perfect health.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "0": { "text": "evaluating", "color": "green" }, "1": { "text": "STALE — query failing", "color": "red" } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [ { "refId": "A", "expr": "max(ledger_invariant_evaluation_failed)", "legendFormat": "evaluation failed" } ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Quarantined records",
+      "description": "Records the apply engine could not turn into ledger entries. Each one has a row in quarantined_orders with its Kafka coordinates and a copy on the dead-letter topic. Any increase is a critical alert.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ledger_quarantined_total[5m]))", "legendFormat": "quarantined (5m)" },
+        { "refId": "B", "expr": "sum(ledger_quarantined_total)", "legendFormat": "quarantined (total)" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Pipeline integrity signals",
+      "description": "Records received versus applied versus skipped as duplicates. A healthy redelivery shows duplicates rising while applied stays flat — that is effectively-once working, not a fault.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(ledger_records_received_total[1m]))", "legendFormat": "received/s" },
+        { "refId": "B", "expr": "sum(rate(ledger_orders_applied_total[1m]))", "legendFormat": "applied/s" },
+        { "refId": "C", "expr": "sum(rate(ledger_duplicates_skipped_total[1m]))", "legendFormat": "duplicates/s" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "text",
+      "title": "Not shown here",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 16 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Reconciliation breaks** and **non-zero clearing balances by provider** are specified by the master for this dashboard but are **not rendered**: reconciliation metrics are owned by S06 (D06-4), which is not built. The `clearing_non_zero` invariant is counted in the panel above, but the per-provider breakdown needs S05/S06 data.\n\nSee `infra/otel/registry.yaml` → `blocked`. These panels are missing because the signals do not exist, not because the dashboard is incomplete."
+      }
+    }
+  ]
+}

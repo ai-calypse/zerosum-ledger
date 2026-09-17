@@ -46,6 +46,16 @@ class AckOrderingTest {
         }
     }
 
+    /**
+     * The listener under test. A null {@code JdbcTemplate} is deliberate: these tests assert call order, and the
+     * order-to-apply lookup is required to swallow its own failures, so a null here also proves a metrics fault
+     * cannot break an apply that has already committed.
+     */
+    private static MoneyOrderListener listener(LedgerApplyEngine engine, DlqPublisher dlq) {
+        var meters = new SimpleMeterRegistry();
+        return new MoneyOrderListener(engine, dlq, new ApplyMetrics(meters), null, meters);
+    }
+
     private static ConsumerRecord<String, String> record(long offset) {
         return new ConsumerRecord<>("payments.money-orders.v1", 0, offset, "trip_1", "{}");
     }
@@ -54,7 +64,7 @@ class AckOrderingTest {
     void aFailedBatchIsNeverAcknowledged() {
         var engineReturned = new AtomicBoolean();
         var ack = new RecordingAck(engineReturned);
-        var listener = new MoneyOrderListener(new ThrowingEngine(), new RecordingDlq(), new SimpleMeterRegistry());
+        var listener = listener(new ThrowingEngine(), new RecordingDlq());
 
         assertThrows(IllegalStateException.class, () -> listener.onBatch(List.of(record(0), record(1)), ack));
 
@@ -67,8 +77,7 @@ class AckOrderingTest {
     void aSuccessfulBatchIsAcknowledgedExactlyOnceAfterTheEngineReturns() {
         var engineReturned = new AtomicBoolean();
         var ack = new RecordingAck(engineReturned);
-        var listener = new MoneyOrderListener(new SucceedingEngine(engineReturned), new RecordingDlq(),
-                new SimpleMeterRegistry());
+        var listener = listener(new SucceedingEngine(engineReturned), new RecordingDlq());
 
         listener.onBatch(List.of(record(0), record(1), record(2)), ack);
 
@@ -79,7 +88,7 @@ class AckOrderingTest {
     void anEmptyPollNeitherCallsTheEngineNorAcknowledges() {
         var engine = new SucceedingEngine(new AtomicBoolean());
         var ack = new RecordingAck(new AtomicBoolean(true));
-        var listener = new MoneyOrderListener(engine, new RecordingDlq(), new SimpleMeterRegistry());
+        var listener = listener(engine, new RecordingDlq());
 
         listener.onBatch(List.of(), ack);
 
@@ -95,7 +104,7 @@ class AckOrderingTest {
         var engineReturned = new AtomicBoolean();
         var dlq = new RecordingDlq();
         var ack = new RecordingAck(engineReturned);
-        var listener = new MoneyOrderListener(new QuarantiningEngine(engineReturned), dlq, new SimpleMeterRegistry());
+        var listener = listener(new QuarantiningEngine(engineReturned), dlq);
 
         listener.onBatch(List.of(record(0)), ack);
 

@@ -127,6 +127,21 @@ services:
   otel-lgtm:
     # decision: D00-1
     image: grafana/otel-lgtm:0.33.0@sha256:475319e883b66594d1a2f22ef168c2459802bb94548e6f25d9782bd5f5c19a3a
+    # decision: D07-2, D07-3 (change request CR-S07-01 to D00-3 — adds mounts to this service).
+    # Dashboards and alert rules are provisioned from the repository, read-only. A dashboard that exists only in
+    # someone's browser cannot be reviewed and dies with the container, so M12(b) would rest on an unreproducible
+    # screenshot.
+    volumes:
+      # grafana/otel-lgtm runs Grafana with homepath /otel-lgtm/grafana, so it reads conf/provisioning — NOT
+      # /etc/grafana/provisioning. Mounting the latter looked right, the files were visibly present in the container,
+      # and Grafana ignored them completely: both dashboard UIDs returned 404 and zero alert rules provisioned.
+      # Grafana scans these directories for FILES, not subdirectories. Mounting a folder made it log
+      # "file has invalid suffix 'zerosum' (.yaml,.yml,.json accepted), skipping" for alerting, and skip the
+      # dashboard provider entirely. The provider and rules files are therefore mounted individually, and the
+      # dashboard JSON directory is mounted where the provider's `path` points.
+      - ./infra/grafana/provisioning/dashboards/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/zerosum.yaml:ro
+      - ./infra/grafana/provisioning/dashboards/zerosum:/otel-lgtm/grafana/conf/provisioning/dashboards/zerosum:ro
+      - ./infra/grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/zerosum-rules.yaml:ro
     ports:
       - "127.0.0.1:3000:3000"
       # Local-only OTLP ports (D00-3 exception): host-run spikes and tools export here.
