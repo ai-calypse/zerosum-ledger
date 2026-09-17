@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<!--
+  decision: D09-4 — docs/step_09_demo_docs_release.md#s09-t03
+
+  The Ledger Explorer. One self-contained file, served by ledger-service, with no third-party script, font or style:
+  everything the Content-Security-Policy allows is in this file, and ExplorerHeaders derives the CSP hashes from these
+  exact bytes at startup.
+
+  Two rules this page does not bend:
+    * Every value is written with textContent. Nothing here uses innerHTML, so an idempotency key containing
+      <img src=x onerror=...> renders as the characters a user typed, not as markup.
+    * Signs are never recomputed. The API already reports each balance on its account's normal side (ADR-0003);
+      a second opinion in JavaScript is how a UI ends up disagreeing with the ledger it displays.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZeroSum Explorer</title>
+<style>
+:root {
+  --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e6e8ee; --muted: #8b93a7;
+  --good: #3fb950; --bad: #f85149; --warn: #d29922; --accent: #58a6ff;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f6f7f9; --panel: #fff; --line: #e1e4ea; --text: #1c2027; --muted: #5b6474; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+header { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 16px;
+  align-items: center; flex-wrap: wrap; }
+h1 { font-size: 16px; margin: 0; letter-spacing: .04em; }
+h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+main { padding: 20px; display: grid; gap: 16px; max-width: 1100px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+input { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 10px; font: inherit; min-width: 240px; }
+button { background: var(--accent); color: #06111f; border: 0; border-radius: 6px; padding: 7px 14px;
+  font: inherit; font-weight: 600; cursor: pointer; }
+button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.muted { color: var(--muted); }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); }
+.pill.ok { color: var(--good); border-color: var(--good); }
+.pill.bad { color: var(--bad); border-color: var(--bad); }
+.pill.warn { color: var(--warn); border-color: var(--warn); }
+.stale { opacity: .55; }
+.err { color: var(--bad); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.stat { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.stat .k { color: var(--muted); font-size: 12px; }
+.stat .v { font-size: 18px; margin-top: 2px; }
+code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
+  display: block; overflow-x: auto; white-space: pre; margin-top: 6px; }
+@media (max-width: 640px) { main { padding: 12px; } th, td { padding: 5px 6px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ZeroSum Explorer</h1>
+  <span class="muted" id="origin-note"></span>
+  <span style="flex:1"></span>
+  <label class="muted" for="token">reader token</label>
+  <input id="token" type="password" autocomplete="off" placeholder="ZS_READER_TOKEN">
+</header>
+
+<main>
+  <section class="panel" id="system-panel">
+    <h2>System</h2>
+    <div class="row">
+      <button id="refresh-system" class="secondary">Refresh</button>
+      <span id="system-error" class="err"></span>
+    </div>
+    <div class="grid2" id="system-stats" style="margin-top:12px"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Entity</h2>
+    <div class="row">
+      <input id="entity" placeholder="rider:R1" autocomplete="off" spellcheck="false">
+      <button id="lookup">Look up</button>
+      <button id="verify" class="secondary">Verify</button>
+      <span id="entity-error" class="err"></span>
+    </div>
+    <div id="verify-result" style="margin-top:12px"></div>
+  </section>
+
+  <section class="panel" id="balances-panel" hidden>
+    <h2>Balances</h2>
+    <div id="balances"></div>
+  </section>
+
+  <section class="panel" id="changelog-panel" hidden>
+    <h2>Changelog</h2>
+    <div id="changelog"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="next-page" class="secondary">Next page</button>
+      <span id="changelog-note" class="muted"></span>
+    </div>
+    <div id="order-detail"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var state = { token: "", entity: "", cursor: null, busy: false };
+
+  function $(id) { return document.getElementById(id); }
+
+  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } }
+
+  function el(tag, text, className) {
+    var node = document.createElement(tag);
+    if (text !== undefined && text !== null) { node.textContent = String(text); }
+    if (className) { node.className = className; }
+    return node;
+  }
+
+  /*
+   * Amounts can exceed Number.MAX_SAFE_INTEGER once balances aggregate, and JSON.parse would silently round them.
+   * Long integer literals are quoted before parsing so they survive as exact digit strings; anything quoted this way
+   * is displayed raw and flagged rather than formatted, because a rounded ledger figure is worse than an ugly one.
+   */
+  function parseJson(text) {
+    return JSON.parse(text.replace(/:\s*(-?\d{16,})(?=\s*[,}\]])/g, ': "$1"'));
+  }
+
+  function amountCell(value, currency) {
+    var cell = el("td", null, "num");
+    if (typeof value === "string") {
+      cell.appendChild(el("span", value + " " + currency));
+      cell.appendChild(document.createTextNode(" "));
+      var flag = el("span", "exact", "pill warn");
+      flag.title = "Beyond JavaScript's safe integer range; shown as raw digits, never rounded.";
+      cell.appendChild(flag);
+      return cell;
+    }
+    var span = el("span", value + " " + currency, value < 0 ? "neg" : value > 0 ? "pos" : "muted");
+    cell.appendChild(span);
+    return cell;
+  }
+
+  function api(path, options) {
+    var opts = options || {};
+    opts.headers = { "Authorization": "Bearer " + state.token };
+    return fetch(path, opts).then(function (response) {
+      if (response.status === 401 || response.status === 403) {
+        state.token = "";
+        $("token").value = "";
+        throw new Error("not authorised — enter the reader token again");
+      }
+      return response.text().then(function (text) {
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status + (text ? ": " + text.slice(0, 200) : ""));
+        }
+        return parseJson(text);
+      });
+    });
+  }
+
+  /* ---- system panel ---------------------------------------------------------------------------------------- */
+
+  function stat(key, value, className) {
+    var box = el("div", null, "stat");
+    box.appendChild(el("div", key, "k"));
+    var v = el("div", null, "v");
+    v.appendChild(el("span", value, className));
+    box.appendChild(v);
+    return box;
+  }
+
+  function loadSystem() {
+    $("system-error").textContent = "";
+    var stats = $("system-stats");
+    stats.classList.add("stale");
+
+    Promise.all([api("/v1/invariants"), api("/v1/freshness")]).then(function (results) {
+      var invariants = results[0];
+      var freshness = results[1];
+      clear(stats);
+      stats.classList.remove("stale");
+
+      stats.appendChild(stat("invariants",
+        invariants.consistent ? "consistent" : "VIOLATED",
+        invariants.consistent ? "pill ok" : "pill bad"));
+      stats.appendChild(stat("quarantined", invariants.unresolved_quarantined_count,
+        invariants.unresolved_quarantined_count > 0 ? "pill bad" : "pill ok"));
+      stats.appendChild(stat("clearing accounts non-zero",
+        (invariants.non_zero_clearing_balances || []).length,
+        (invariants.non_zero_clearing_balances || []).length > 0 ? "pill warn" : "pill ok"));
+
+      if (freshness.status === "ok") {
+        stats.appendChild(stat("consumer lag", freshness.total_lag_records + " records", "pill ok"));
+        stats.appendChild(stat("oldest unapplied",
+          freshness.oldest_unapplied_age_seconds === null
+            ? "nothing pending" : freshness.oldest_unapplied_age_seconds + "s", "pill ok"));
+      } else {
+        // Fail closed, exactly as the endpoint does: no number at all beats a reassuring zero.
+        stats.appendChild(stat("consumer lag", "unmeasurable", "pill bad"));
+      }
+      stats.appendChild(stat("listener", freshness.listener_paused ? "PAUSED" : "running",
+        freshness.listener_paused ? "pill bad" : "pill ok"));
+    }).catch(function (error) {
+      stats.classList.remove("stale");
+      $("system-error").textContent = error.message;
+    });
+  }
+
+  /* ---- entity ---------------------------------------------------------------------------------------------- */
+
+  var ENTITY_PATTERN = /^[a-z][a-z0-9_]*:[A-Za-z0-9._:-]+$/;
+
+  function lookup() {
+    var id = $("entity").value.trim();
+    $("entity-error").textContent = "";
+    clear($("verify-result"));
+    clear($("order-detail"));
+
+    if (!ENTITY_PATTERN.test(id)) {
+      // Exact-id lookup only; search is deferred (§0.3 C15). The server's own 404 is still shown as "not found".
+      $("entity-error").textContent = "enter an exact entity id, such as rider:R1";
+      return;
+    }
+    state.entity = id;
+    state.cursor = null;
+
+    api("/v1/entities/" + encodeURIComponent(id) + "/balances").then(function (balances) {
+      renderBalances(balances);
+      $("balances-panel").hidden = false;
+      $("changelog-panel").hidden = false;
+      clear($("changelog"));
+      loadChangelog();
+    }).catch(function (error) {
+      $("balances-panel").hidden = true;
+      $("changelog-panel").hidden = true;
+      $("entity-error").textContent =
+        error.message.indexOf("404") >= 0 ? "not found: " + id : error.message;
+    });
+  }
+
+  function renderBalances(balances) {
+    var host = $("balances");
+    clear(host);
+
+    var caption = el("div", "as of sequence " + balances.as_of_seq + " · kind " + balances.kind, "muted");
+    host.appendChild(caption);
+
+    if (!balances.accounts || balances.accounts.length === 0) {
+      host.appendChild(el("p", "no balances", "muted"));
+      return;
+    }
+
+    var table = el("table");
+    var head = el("tr");
+    ["account", "currency", "normal side", "balance (normal side)", "stored (signed)"].forEach(function (h) {
+      head.appendChild(el("th", h));
+    });
+    table.appendChild(head);
+
+    balances.accounts.forEach(function (account) {
+      var tr = el("tr");
+      tr.appendChild(el("td", account.account));
+      tr.appendChild(el("td", account.currency));
+      tr.appendChild(el("td", account.normal_side.toLowerCase(), "muted"));
+      // Shown exactly as returned. The server decides the sign convention (ADR-0003); this page only displays it.
+      tr.appendChild(amountCell(account.presented_minor, account.currency));
+      tr.appendChild(amountCell(account.signed_minor, account.currency));
+      table.appendChild(tr);
+    });
+    host.appendChild(table);
+  }
+
+  /* ---- changelog ------------------------------------------------------------------------------------------- */
+
+  function loadChangelog() {
+    var path = "/v1/entities/" + encodeURIComponent(state.entity) + "/changelog"
+      + (state.cursor === null ? "" : "?after_seq=" + state.cursor);
+
+    $("changelog-note").textContent = "loading…";
+    api(path).then(function (page) {
+      renderChangelogPage(page);
+      state.cursor = page.next_after_seq === undefined ? null : page.next_after_seq;
+      $("next-page").disabled = state.cursor === null;
+      $("changelog-note").textContent = state.cursor === null ? "end of changelog" : "";
+    }).catch(function (error) {
+      $("changelog-note").textContent = "";
+      $("changelog").classList.add("stale");
+      var retry = el("button", "Retry", "secondary");
+      retry.addEventListener("click", function () {
+        $("changelog").classList.remove("stale");
+        loadChangelog();
+      });
+      var note = el("div", null);
+      note.appendChild(el("span", error.message + " ", "err"));
+      note.appendChild(retry);
+      $("changelog").appendChild(note);
+    });
+  }
+
+  function renderChangelogPage(page) {
+    var host = $("changelog");
+    var table = host.querySelector("table");
+
+    if (!table) {
+      clear(host);
+      if (!page.rows || page.rows.length === 0) {
+        host.appendChild(el("p", "no entries — this entity has no ledger activity", "muted"));
+        return;
+      }
+      table = el("table");
+      var head = el("tr");
+      ["seq", "account", "currency", "delta", "balance after", "recorded", "source key", ""].forEach(function (h) {
+        head.appendChild(el("th", h));
+      });
+      table.appendChild(head);
+      host.appendChild(table);
+    }
+
+    (page.rows || []).forEach(function (row) {
+      var tr = el("tr");
+      tr.appendChild(el("td", row.seq));
+      tr.appendChild(el("td", row.account));
+      tr.appendChild(el("td", row.currency));
+      tr.appendChild(amountCell(row.delta_minor, row.currency));
+      tr.appendChild(amountCell(row.balance_after_minor, row.currency));
+      tr.appendChild(el("td", row.recorded_at, "muted"));
+      // M6 (a): the link back to the source. textContent means an idempotency key full of markup stays text.
+      tr.appendChild(el("td", row.source ? row.source.idempotency_key : ""));
+
+      var actions = el("td");
+      var button = el("button", "order", "secondary");
+      button.addEventListener("click", function () { showOrder(row); });
+      actions.appendChild(button);
+      tr.appendChild(actions);
+
+      table.appendChild(tr);
+    });
+  }
+
+  /*
+   * Option (b) of D09-4: show the order id and a copyable request, with no cross-origin call. order-service is a
+   * different origin and no CORS allowance exists for this page; inventing one would widen a trust boundary (TB1)
+   * to save a click.
+   */
+  function showOrder(row) {
+    var host = $("order-detail");
+    clear(host);
+
+    host.appendChild(el("h2", "Money order"));
+    host.appendChild(el("div", row.order_id));
+    host.appendChild(el("div", "source: " + (row.source ? row.source.system : "?")
+      + " · idempotency key: " + (row.source ? row.source.idempotency_key : "?"), "muted"));
+    host.appendChild(el("code",
+      "curl -s localhost:8081/v1/money-orders/" + row.order_id + " \\\n"
+      + "  -H 'Authorization: Bearer $ZS_READER_TOKEN'"));
+    host.appendChild(el("div",
+      "order-service is a separate origin, so this page does not call it directly.", "muted"));
+  }
+
+  /* ---- verify ---------------------------------------------------------------------------------------------- */
+
+  function verify() {
+    if (state.busy) { return; }
+    var id = $("entity").value.trim();
+    if (!ENTITY_PATTERN.test(id)) {
+      $("entity-error").textContent = "enter an exact entity id first";
+      return;
+    }
+    state.busy = true;
+    $("verify").disabled = true;
+
+    var host = $("verify-result");
+    clear(host);
+    host.appendChild(el("span", "verifying — this rebuilds every balance from the changelog…", "muted"));
+
+    var started = Date.now();
+    api("/v1/entities/" + encodeURIComponent(id) + "/verify", { method: "POST" })
+      .then(function (result) {
+        var elapsed = Date.now() - started;
+        clear(host);
+        host.appendChild(el("span", result.consistent ? "consistent" : "INCONSISTENT",
+          result.consistent ? "pill ok" : "pill bad"));
+        host.appendChild(document.createTextNode(" "));
+        host.appendChild(el("span", result.rows_checked + " rows checked · " + elapsed + " ms", "muted"));
+        if (!result.consistent) {
+          host.appendChild(el("div", "first bad sequence: " + result.first_bad_seq, "err"));
+          host.appendChild(el("div", (result.failure || "") + " " + (result.detail || ""), "err"));
+        }
+      })
+      .catch(function (error) {
+        clear(host);
+        host.appendChild(el("span", error.message, "err"));
+      })
+      .then(function () {
+        state.busy = false;
+        $("verify").disabled = false;
+      });
+  }
+
+  /* ---- wiring ---------------------------------------------------------------------------------------------- */
+
+  $("token").addEventListener("input", function (event) {
+    // Kept in a variable for the lifetime of the page only: never storage, never the URL, never a cookie.
+    state.token = event.target.value;
+  });
+  $("lookup").addEventListener("click", lookup);
+  $("entity").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { lookup(); }
+  });
+  $("verify").addEventListener("click", verify);
+  $("next-page").addEventListener("click", loadChangelog);
+  $("refresh-system").addEventListener("click", loadSystem);
+
+  if (location.protocol === "file:") {
+    $("origin-note").textContent =
+      "opened from disk — open this page through the ledger-service URL instead, or its API calls cannot work";
+    $("origin-note").className = "err";
+  } else {
+    $("origin-note").textContent = location.origin;
+  }
+})();
+</script>
+</body>
+</html>
