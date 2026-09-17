@@ -14,6 +14,9 @@ dependencies {
     // (S05-T08, §0.3 C9). Same module as order-service and ledger-service: three services authenticating three
     // ways is how one of them ends up weaker.
     implementation(project(":libs:auth"))
+    // decision: D04-1, D04-2 — instrument-service consumes money orders through the instrument-policy consumer
+    // (S05-T09), provisions its own topics, and runs the outbox relay that publishes payment events.
+    implementation(libs.spring.boot.starter.kafka)
 
     // decision: D05-1 — the S05-T06 boundary rule (core must never name an adapter). No HTTP stub library is added:
     // the classification tests drive a JDK com.sun.net.httpserver stub, which is enough to hold a socket open past a
@@ -27,6 +30,13 @@ dependencies {
     // AttemptEndpointsIT validates real responses against openapi/instrument-service.yaml with it, rather than
     // adding a second validator.
     testImplementation(libs.json.schema.validator)
+
+    // decision: D05-6 — CollectionPolicyIT needs a real broker: a mocked listener cannot prove that an order
+    // delivered three times charges the rider once, because the uniqueness that makes it true is in the database
+    // and the ordering that makes it safe is in the broker.
+    testImplementation(libs.testcontainers.kafka)
+    // decision: D03-5 — the M4(b) publish-path rule ships as a libs/outbox fixture rather than being copied here.
+    testImplementation(testFixtures(project(":libs:outbox")))
 }
 
 tasks.withType<Test>().configureEach {

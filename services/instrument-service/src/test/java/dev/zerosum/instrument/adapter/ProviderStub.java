@@ -12,25 +12,32 @@ import java.nio.charset.StandardCharsets;
  *
  * <p>No stubbing library: what these tests need is a socket that can answer 500, or accept a request and then say
  * nothing at all until the read timeout fires. The JDK does both, and it is one fewer dependency to pin.
+ *
+ * <p>Public since S05-T09, so the collection-policy tests drive the real adapters against it rather than standing up
+ * a second stub. The rule that only {@code ..instrument.adapter..} may name an adapter is about production code; a
+ * second stub would simply be a second place for the provider's wire format to drift.
  */
-final class ProviderStub implements AutoCloseable {
+public final class ProviderStub implements AutoCloseable {
 
     private final HttpServer server;
 
+    /** Ground truth for "was the provider called at all", which is what a kill-switch test has to prove. */
+    private final java.util.concurrent.atomic.AtomicInteger requests = new java.util.concurrent.atomic.AtomicInteger();
+
     /** When set, every response uses this status instead of the routed one. */
-    volatile int forcedStatus;
+    public volatile int forcedStatus;
 
     /** When positive, the handler stalls this long before answering — the read-timeout case. */
-    volatile long stallMillis;
+    public volatile long stallMillis;
 
     /** Routed GET responses, so a lookup can be made to return nothing or several rows. */
-    volatile String lookupBody = "[]";
+    public volatile String lookupBody = "[]";
 
     private ProviderStub(HttpServer server) {
         this.server = server;
     }
 
-    static ProviderStub start() {
+    public static ProviderStub start() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             var stub = new ProviderStub(server);
@@ -42,11 +49,19 @@ final class ProviderStub implements AutoCloseable {
         }
     }
 
-    String baseUrl() {
+    public String baseUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
+    /** Every request this stub has answered, of any kind. */
+    public int requestCount() {
+        return requests.get();
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
+        // Counted before the stall, so a request in flight already shows up: a test that waited for the count would
+        // otherwise deadlock against its own stall.
+        requests.incrementAndGet();
         if (stallMillis > 0) {
             try {
                 Thread.sleep(stallMillis);

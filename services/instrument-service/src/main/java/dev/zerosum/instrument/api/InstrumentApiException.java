@@ -41,6 +41,20 @@ class InstrumentApiException extends RuntimeException {
         return new InstrumentApiException(HttpStatus.NOT_FOUND, "attempt_not_found", "no such attempt: " + attemptId);
     }
 
+    /** decision: D05-6 — a registration body that could never produce a usable attempt. */
+    static InstrumentApiException invalidRegistration(String detail) {
+        return new InstrumentApiException(HttpStatus.BAD_REQUEST, "invalid_registration", detail);
+    }
+
+    /**
+     * A provider no adapter serves. Refused at registration rather than accepted and discovered later, when the
+     * symptom would be a rider who was simply never charged and nothing in the logs to say why.
+     */
+    static InstrumentApiException unknownProvider(String provider) {
+        return new InstrumentApiException(HttpStatus.BAD_REQUEST, "unknown_provider",
+                "no payment instrument is registered for provider " + provider);
+    }
+
     /**
      * Cancellation is allowed only from {@code CREATED} (master §5.11). The current status is in the detail, because
      * the caller's next decision depends on which way the race went: an attempt already {@code SUBMITTING} may still

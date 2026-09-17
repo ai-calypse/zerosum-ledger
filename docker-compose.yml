@@ -251,6 +251,14 @@ services:
       # the same class of defect as a localhost broker bootstrap: invisible to every test, fatal in the stack.
       ZS_FAKECARD_BASE_URL: http://fake-providers:8090
       ZS_FAKEBANK_BASE_URL: http://fake-providers:8090
+      # decision: D04-2 — the broker inside the Compose network, from S05-T09 when this service gained the
+      # instrument-policy consumer and the outbox relay. application.yml defaults to localhost:9092 for local runs;
+      # inside a container localhost is the container itself, so without this the consumer dials itself, no payment
+      # event ever reaches Kafka and the ledger silently never learns that money moved.
+      ZS_KAFKA_BOOTSTRAP: kafka:29092
+      # decision: D05-11 — the collections kill switch. Not a secret and not required: absent means collections run,
+      # which is the state the stack should come up in. Set to false to freeze collections per the runbook.
+      ZS_COLLECTIONS_ENABLED: ${ZS_COLLECTIONS_ENABLED:-true}
       # decision: D03-4 — static per-role tokens, from S05-T08 when this service gained its first authenticated
       # endpoints. Without these the container authenticates nobody: the same defect that order-service and
       # ledger-service shipped, invisible to every test because tests set the tokens themselves.
