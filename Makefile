@@ -8,9 +8,10 @@ LEDGER  := http://127.0.0.1:8082
 ORDERS  := http://127.0.0.1:8081
 PROVIDERS := http://127.0.0.1:8090
 GRAFANA := http://127.0.0.1:3000
+PROXY   := http://127.0.0.1:8080
 
 .DEFAULT_GOAL := help
-.PHONY: help env build up down ps logs test integration e2e explorer grafana demo providers verify-stack
+.PHONY: help env build up up-proxy down ps logs test integration e2e explorer dashboard grafana demo providers verify-stack
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -24,6 +25,17 @@ build: ## Build service jars and the OpenTelemetry agent
 up: build ## Start the whole stack, including the reachable fake providers
 	$(COMPOSE) up -d --build --wait
 	@$(MAKE) --no-print-directory ps
+
+up-proxy: up ## Same, plus the reverse proxy that puts every service on one origin
+	@echo ""
+	@echo "  Dashboard:  $(PROXY)/explorer.html   (every service under one origin)"
+	@echo "  Grafana:    $(PROXY)/grafana/"
+	@echo ""
+	@echo "  The Explorer's payment-attempt panel only works through this URL: instrument-service is a"
+	@echo "  different origin on 8083, and the page's CSP is connect-src 'self' by design."
+
+dashboard: ## Open the Explorer through the proxy (run `make up-proxy` first)
+	@command -v open >/dev/null && open "$(PROXY)/explorer.html" || echo "$(PROXY)/explorer.html"
 
 down: ## Stop everything and delete all data
 	$(COMPOSE) down -v

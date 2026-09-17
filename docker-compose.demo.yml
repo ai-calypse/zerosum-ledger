@@ -18,3 +18,37 @@ services:
   fake-providers:
     ports:
       - "127.0.0.1:8090:8090"
+
+  # decision: S09 — one origin for the whole system.
+  #
+  # The Explorer is served by ledger-service under a Content-Security-Policy of `connect-src 'self'`. That policy is
+  # deliberate: a page that rendered hostile input would have nowhere to send a reader token. It also means the page
+  # structurally cannot call instrument-service on another port. Weakening the CSP or opening CORS on the money
+  # services would trade a trust boundary (TB1) for a convenience; a proxy removes the problem instead, because every
+  # service then answers under one origin and `connect-src 'self'` stays exactly as strict.
+  #
+  # Opt-in, like the rest of this overlay. The default topology keeps these services on the internal network.
+  proxy:
+    # decision: D00-1 — pinned by digest, like every other image here.
+    image: nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      # Answered by nginx itself, so the proxy reports on its own readiness rather than on whichever upstream is
+      # slowest to start.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    depends_on:
+      ledger-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      instrument-service:
+        condition: service_healthy
+      fake-providers:
+        condition: service_healthy

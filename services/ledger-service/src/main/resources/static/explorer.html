@@ -92,6 +92,16 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
     <div id="verify-result" style="margin-top:12px"></div>
   </section>
 
+  <section class="panel">
+    <h2>Payment attempt</h2>
+    <div class="row">
+      <input id="attempt" placeholder="attempt id (uuid)" autocomplete="off" spellcheck="false">
+      <button id="lookup-attempt" class="secondary">Look up</button>
+      <span id="attempt-error" class="err"></span>
+    </div>
+    <div id="attempt-result" style="margin-top:12px"></div>
+  </section>
+
   <section class="panel" id="balances-panel" hidden>
     <h2>Balances</h2>
     <div id="balances"></div>
@@ -407,6 +417,85 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
   }
 
   /* ---- wiring ---------------------------------------------------------------------------------------------- */
+
+  /*
+   * instrument-service is a different origin from ledger-service, and this page's CSP is connect-src 'self' — which
+   * is the right policy and deliberately not widened. The reverse proxy in docker-compose.demo.yml puts every
+   * service under one origin, where this prefixed path resolves. Opened directly on ledger-service's own port it
+   * will 404, and the panel says so rather than failing mysteriously.
+   */
+  var INSTRUMENTS = "/instruments";
+
+  function lookupAttempt() {
+    var id = $("attempt").value.trim();
+    $("attempt-error").textContent = "";
+    clear($("attempt-result"));
+
+    if (!/^[0-9a-fA-F-]{36}$/.test(id)) {
+      $("attempt-error").textContent = "enter an attempt id (uuid)";
+      return;
+    }
+
+    api(INSTRUMENTS + "/v1/payment-attempts/" + encodeURIComponent(id)).then(function (attempt) {
+      renderAttempt(attempt);
+    }).catch(function (error) {
+      if (error.message.indexOf("404") >= 0) {
+        // Ambiguous on purpose: ledger-service answers 404 for this path too, so say what to check.
+        $("attempt-error").textContent =
+          "not found here. If the Explorer is open on port 8082, instrument-service is a different origin — "
+          + "open it through the proxy (make up-proxy, then 127.0.0.1:8080/explorer.html).";
+        return;
+      }
+      $("attempt-error").textContent = error.message;
+    });
+  }
+
+  function renderAttempt(attempt) {
+    var host = $("attempt-result");
+    clear(host);
+
+    var summary = el("div", null);
+    summary.appendChild(el("span", attempt.kind + " ", "muted"));
+    summary.appendChild(el("span", attempt.status,
+      attempt.status === "SUCCEEDED" || attempt.status === "SETTLED" ? "pill ok"
+        : attempt.status === "NEEDS_REVIEW" || attempt.status === "UNKNOWN" ? "pill warn" : "pill"));
+    host.appendChild(summary);
+
+    host.appendChild(el("div", attempt.entity_id + " · " + attempt.provider
+      + " · provider_ref " + (attempt.provider_ref || "none"), "muted"));
+
+    if (attempt.money) {
+      var amount = el("div", null);
+      amount.appendChild(amountCell(attempt.money.amount_minor, attempt.money.currency).firstChild);
+      host.appendChild(amount);
+    }
+
+    var rows = attempt.transitions || attempt.history || [];
+    if (rows.length === 0) {
+      host.appendChild(el("p", "no transitions recorded", "muted"));
+      return;
+    }
+
+    var table = el("table");
+    var head = el("tr");
+    ["seq", "from", "to", "cause", "at"].forEach(function (h) { head.appendChild(el("th", h)); });
+    table.appendChild(head);
+    rows.forEach(function (row) {
+      var tr = el("tr");
+      tr.appendChild(el("td", row.seq));
+      tr.appendChild(el("td", row.from_status === null ? "—" : row.from_status, "muted"));
+      tr.appendChild(el("td", row.to_status));
+      tr.appendChild(el("td", row.cause));
+      tr.appendChild(el("td", row.at, "muted"));
+      table.appendChild(tr);
+    });
+    host.appendChild(table);
+  }
+
+  $("lookup-attempt").addEventListener("click", lookupAttempt);
+  $("attempt").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { lookupAttempt(); }
+  });
 
   $("token").addEventListener("input", function (event) {
     // Kept in a variable for the lifetime of the page only: never storage, never the URL, never a cookie.
