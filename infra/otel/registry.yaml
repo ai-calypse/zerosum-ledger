@@ -250,12 +250,81 @@ metrics:
     verified_in_backend: true
     note: "Kafka record-timestamp basis (§0.3 C12), reusing the D04-5 computation rather than a second one."
 
+  # ---- services/instrument-service (D05-8, S05-T12) — the §0.3 O9 alert signals ----
+  # Names are the master's (§6.4) and are PROVISIONAL under D05-14: D07-1 owns the catalogue from S07 on. They were
+  # listed under `blocked:` until S05-T12 built the sweeper that measures them.
+  - kind: gauge
+    name_in_code: unknown_attempts_oldest_seconds
+    unit: seconds
+    labels: []
+    module: services/instrument-service
+    owning_decision: D05-8 (provisional; D07-1 owns the name from S07)
+    consumers: [dashboard/providers, alert/unknown-attempts]
+    status: added
+    verified_in_backend: false
+    note: >-
+      Age of the oldest attempt still UNKNOWN; master §10.5 alerts above 5 minutes and §6.6 repeats it. Measured on
+      the sweeper's tick, never on scrape: a scrape-driven query would put an externally triggered database call on
+      the money path, and would report nothing in the window that matters most. Reports NaN until the first
+      successful measurement — "we have not looked" and "nothing is stuck" are different facts — and a real zero
+      once measured. NOT yet verified in the backend: no Compose run was made by this task.
+  - kind: gauge
+    name_in_code: pending_payouts_oldest_seconds
+    unit: seconds
+    labels: []
+    module: services/instrument-service
+    owning_decision: D05-8 (provisional; D07-1 owns the name from S07)
+    consumers: [dashboard/providers, alert/pending-payouts]
+    status: added
+    verified_in_backend: false
+    note: >-
+      Age of the oldest PENDING payout, which is how a dropped webhook becomes visible (master §6.6, §10.5). Same
+      NaN-until-measured rule as above. NOT yet verified in the backend.
+  - kind: gauge
+    name_in_code: attempts_needs_review
+    unit: attempts
+    labels: []
+    module: services/instrument-service
+    owning_decision: D05-8 (provisional; D07-1 owns the name from S07)
+    consumers: [alert/unknown-attempts]
+    status: added
+    verified_in_backend: false
+    note: >-
+      Not in master §6.4; added because the §10.5 alert reads "Oldest UNKNOWN > 5 min, OR ANY NEEDS_REVIEW", and the
+      second half cannot be expressed by an age gauge — an attempt that reached NEEDS_REVIEW has stopped being
+      UNKNOWN, so the age it contributed disappears at exactly the moment it becomes most alarming. Always present
+      at zero, so the alert expression does not depend on a series existing. Raised to D07-1 for a name.
+  - kind: gauge
+    name_in_code: attempts_state_total
+    labels: [kind, status]
+    module: services/instrument-service
+    owning_decision: D05-8 (provisional; D07-1 owns the name from S07)
+    consumers: [dashboard/providers]
+    status: added
+    verified_in_backend: false
+    note: >-
+      The "attempts by state" panel. TWO DISCREPANCIES raised rather than silently resolved. (1) Master §6.4 lists
+      this under Counts and the name ends in _total, but the panel needs how many attempts are in each state NOW,
+      which is a gauge; emitted as a gauge under the master's name rather than inventing one. (2) The label is
+      `kind`, matching instrument_illegal_transitions_total and instrument_policy_attempts_created_total already in
+      this service, but label_policy above allows `attempt_kind`. One of the two should move; D07-1 decides which.
+      Series are registered per (kind, status) on first observation — most of the 33 combinations are impossible, and
+      a permanently zero series for an unreachable state is noise — and a pair that empties reports zero rather than
+      vanishing. NOT yet verified in the backend.
+
 # Signals the master requires that CANNOT be emitted yet, because the steps that own them are not built.
 # Listed rather than omitted, so a missing dashboard panel or alert reads as blocked work and not as an oversight.
 blocked:
-  - names: [provider_call_seconds, attempts_state_total, unknown_attempts_oldest_seconds, pending_payouts_oldest_seconds]
-    blocked_on: S05 (instrument-service; D05-2, D05-5, D05-8)
-    consumers_blocked: [dashboard/providers, alert/unknown-attempts, alert/pending-payouts]
+  - names: [provider_call_seconds]
+    blocked_on: S05 (instrument-service; D05-2, D05-14) — the adapter call path, not the recovery sweep
+    consumers_blocked: [dashboard/providers (call-latency panel)]
+    note: >-
+      S05-T12 unblocked the other three names this entry used to carry — attempts_state_total,
+      unknown_attempts_oldest_seconds and pending_payouts_oldest_seconds — which are emitted now and listed above.
+      provider_call_seconds stays blocked and is NOT part of that work: it times every adapter call by provider,
+      operation and outcome, which belongs to the S05-T05 adapter path (ProviderHttp), and nothing times those calls
+      yet. The providers dashboard therefore has its attempts-by-state panel and both alert signals, and still has
+      no call-latency panel.
   - names: [reconciliation_breaks]
     blocked_on: S06 (reconciliation; D06-4)
     consumers_blocked: [dashboard/money-invariants (recon panel), alert/recon-breaks]

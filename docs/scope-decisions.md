@@ -249,6 +249,19 @@ to document has no code to attach to.
 
 **If S05-T09 is ever built**, it takes the next free ADR number and links back to ADR-0010, rather than renumbering.
 
+**Superseded:** 2026-09-17, during S05-T12. The resolver was built — as **S05-T12**, which is where the final plan
+puts it — so the question above came due. It did **not** take the next free ADR number.
+
+ADR-0010 already states the quiet-period rule in its decision list (decision 5) and its consequences, and it is
+Accepted. A second ADR would have had to restate that rule to make sense on its own, leaving two documents that must
+agree about how long a bank is left alone before money is sent again — the failure mode being that someone changes
+one of them. So S05-T12 **extended ADR-0010 in place**, as a dated amendment recording the implementation: the
+chosen 60 s and what bounds it, the two-condition rule and why neither condition is sufficient alone, the residual
+duplicate-payout risk, and how S08 A3 and F8 relate.
+
+The note above anticipated a separate ADR; this is the deviation from it, and the reason. `D05-9` in H.1 points at
+ADR-0010 accordingly, which is what the step's own instruction ("link it from D05-9") asks for either way.
+
 ## S05 scope revised mid-step: T07 and T08 are deferred too
 
 **Revised:** 2026-09-16, after S05-T06.

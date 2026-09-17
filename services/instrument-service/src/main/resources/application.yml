@@ -119,6 +119,33 @@ zs:
     # Short on purpose: an operator waiting on a hung freshness read learns nothing, and the honest answer after a
     # timeout is to refuse rather than pay against a figure nobody could produce.
     read-timeout: ${ZS_PAYOUT_READ_TIMEOUT:2s}
+  # decision: D05-8 — the sweeper and the UNKNOWN resolution schedule (S05-T12; master §5.10, §5.11, §6.6).
+  # Every value here decides how long money stays in an unknown state, so each is stated rather than defaulted in
+  # code. The sweeper claims work through the optimistic guard and holds no lock across a provider call, so a second
+  # instance is safe rather than forbidden — the master calls for one, and correctness does not depend on it.
+  sweeper:
+    # How often one pass runs. A pass is a few indexed queries; every provider call it finds is handed to the
+    # bounded policy executor, so the scheduler thread is never parked on a socket.
+    interval: ${ZS_SWEEPER_INTERVAL:1s}
+    # master §5.11: "Sweeper threshold = read timeout + 10 s". The margin is configured and the threshold derived
+    # from the read timeout, because two independently configured values would eventually disagree about when a
+    # provider call is over — and the gap between them is where an attempt would sit unswept.
+    submitting-margin: ${ZS_SWEEPER_SUBMITTING_MARGIN:10s}
+    # §0.3 C24 — how long an attempt may sit in CREATED before the sweep submits it. Long enough that the normal
+    # path (submit straight after the creating transaction commits) always wins the race, so this picks up only
+    # genuine crashes before submission and kill switches that have just been turned back on.
+    created-threshold: ${ZS_SWEEPER_CREATED_THRESHOLD:30s}
+    # master §5.10 — the resolution schedule, as the gaps between checks: 1 s, 5 s, 30 s, 2 min, 10 min...
+    resolution-schedule: [1s, 5s, 30s, 2m, 10m]
+    # ...then every 30 minutes...
+    resolution-interval: ${ZS_SWEEPER_RESOLUTION_INTERVAL:30m}
+    # ...until 24 h, after which the attempt becomes NEEDS_REVIEW, which raises an alert and has no automatic exit.
+    review-cutoff: ${ZS_SWEEPER_REVIEW_CUTOFF:24h}
+    # master §6.6 — a PENDING payout older than this is looked up, so a dropped webhook becomes a delay rather than
+    # a payout that stays pending for ever.
+    pending-payout-poll: ${ZS_SWEEPER_PENDING_PAYOUT_POLL:10m}
+    # How many attempts one pass claims per sweep, so a backlog is worked through in bounded pieces.
+    batch-size: 100
   # decision: D05-6 — the instrument-policy consumer and the executor its submissions run on.
   policy:
     consumer:

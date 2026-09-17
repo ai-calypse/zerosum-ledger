@@ -62,3 +62,75 @@ caller to guess.
 - **`SettlementReport` is declared, not designed.** S05 defines only what the interface method needs; its lines and
   totals belong to S06, which extends it through the change procedure. Filling it in here would freeze a shape that
   step has not designed.
+
+---
+
+## Amendment — the quiet period, as implemented (S05-T12, D05-9)
+
+- **Added:** 2026-09-17, by S05-T12.
+- **Status:** unchanged (Accepted). This amendment records the *implementation* of decision 5 above, which until now
+  had no code attached to it.
+
+Decision 5 says a provider without idempotency keys needs a quiet period. It did not say how long, measured from
+when, or what else has to be true before a resubmission is allowed. Those are the questions that decide whether a
+driver is paid once or twice, so they are answered here rather than in a comment.
+
+### The chosen quiet period, and why
+
+**60 seconds**, from master §5.10, configured at `zs.instruments.quiet-period` and reaching the resolver only as
+`Capabilities.safeResubmitQuietPeriod` — the resolver never names FakeBank, it asks the capability.
+
+The number is not arithmetic; it is a bound on someone else's behaviour. It has to exceed the longest time FakeBank
+can still act on a request we have already given up on. FakeBank's own `max_processing_delay_ms` is that time, so the
+rule is simply that the delay stays below the quiet period. That is **enforced, not documented**: `FaultKnobs`
+refuses a profile whose `max_processing_delay_ms` reaches the quiet period (the S05-T02 configuration test), so the
+simulator cannot be configured into a state whose duplicate payouts would then be blamed on the resolver.
+
+### The two-condition resubmission rule
+
+A payout is resubmitted only when **both** hold:
+
+1. at least `safeResubmitQuietPeriod` has passed since the most recent submission, **and**
+2. a lookup returns `NotFound`.
+
+Neither is sufficient alone, and the reasons differ. Condition 2 alone is the obvious trap: `NotFound` a second after
+sending means the bank has not recorded the request *yet*, not that it never will. Condition 1 alone is worse — it is
+a timer deciding to move money with nobody asked.
+
+The two conditions are folded into a **single event**, `QUIET_PERIOD_ELAPSED`, which the resolver raises only once it
+has established both. The state machine therefore has one arrow back to `CREATED`, reachable one way. A design with
+an arrow per condition would let a future caller take the timer half on its own.
+
+`Unavailable` is **not** `NotFound`, per decision 4, and this is where that distinction earns its keep: an
+unreachable bank leaves the attempt exactly where it is and schedules another check. An outage must never be able to
+present itself as evidence that nothing happened.
+
+The clock for condition 1 runs from the **most recent submission**, read from the append-only `attempt_transitions`
+history rather than from any field a later write could move. A service restarted mid-resubmission finds the attempt
+in `SUBMITTING`, sweeps it to `UNKNOWN`, and measures the quiet period from the submission that is actually
+outstanding — not from the first one.
+
+### Residual risk
+
+**A bank that processes a request more than 60 seconds after receiving it can still be paid twice.** The lookup said
+`NotFound`, the quiet period expired, we resubmitted, and the original then landed. Nothing in this design detects
+that at the moment of resubmission; it is caught afterwards, as a duplicate client reference in provider ground truth
+and by reconciliation (I7).
+
+The risk is **reduced, not eliminated**, and the reduction is entirely the processing-delay bound. That is why the
+bound is enforced by a test rather than trusted, and why the resolver refuses to resubmit on *any* lookup that finds
+something — including one that finds several, which means a duplicate has already happened and a third payout would
+only deepen it.
+
+Carried in H.5 as a known limitation and in the release honesty items, because a residual risk that lives only in an
+ADR is one nobody reads before shipping.
+
+### How S08 relates
+
+- **A3** (§0.3 E7) resubmits **the same attempt with a fresh provider idempotency key** rather than creating a new
+  attempt — the attempt uniqueness constraint is what forces that, and it keeps one attempt to one movement of money.
+  A3 is therefore a different recovery from this one: it applies where keys exist, this applies where they do not.
+- **F8** exercises this path by holding FakeBank past the read timeout, which is the condition that produces the
+  `UNKNOWN` attempts the resolver resolves.
+- **F3**'s breakpoint hook (§0.3 E9) is added by S08-T02 as a seam on D05-5, by change request. No seam for it is
+  added here: a hook with no caller is untested code on the path that moves money.

@@ -7,7 +7,7 @@ import dev.zerosum.instrument.core.PaymentInstrument;
 import dev.zerosum.instrument.core.ProviderEvent;
 import dev.zerosum.instrument.core.ProviderRegistry;
 import dev.zerosum.instrument.core.WebhookRequest;
-import dev.zerosum.instrument.webhooks.AheadOfStateResolver;
+import dev.zerosum.instrument.recovery.AttemptResolver;
 import dev.zerosum.instrument.webhooks.WebhookReceiver;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
@@ -43,9 +43,10 @@ class WebhookController {
 
     private final ProviderRegistry providers;
     private final WebhookReceiver receiver;
-    private final AheadOfStateResolver resolver;
+    /** The one resolver (S05-T12): a webhook that outran our state and the sweeper share this implementation. */
+    private final AttemptResolver resolver;
 
-    WebhookController(ProviderRegistry providers, WebhookReceiver receiver, AheadOfStateResolver resolver) {
+    WebhookController(ProviderRegistry providers, WebhookReceiver receiver, AttemptResolver resolver) {
         this.providers = providers;
         this.receiver = receiver;
         this.resolver = resolver;
