@@ -247,8 +247,22 @@ class OrderStoreIT {
         var flyway = db.flyway();
         flyway.validate();
         assertEquals(0, flyway.migrate().migrationsExecuted, "re-running migrations executes nothing");
-        assertEquals(List.of("1", "2"), java.util.Arrays.stream(flyway.info().applied())
-                .map(i -> i.getVersion().getVersion()).toList(), "baseline then the orders schema");
+        // Derived from the migration directory rather than hard-coded: adding a migration must not break this test,
+        // which is meant to assert that what is on disk is what is applied.
+        List<String> onDisk;
+        try (var files = java.nio.file.Files.list(
+                OrderTestDatabase.ROOT.resolve("services/order-service/src/main/resources/db/migration"))) {
+            onDisk = files.map(f -> f.getFileName().toString())
+                    .filter(name -> name.startsWith("V") && name.endsWith(".sql"))
+                    .map(name -> name.substring(1, name.indexOf("__")))
+                    .sorted(java.util.Comparator.comparingInt(Integer::parseInt))
+                    .toList();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+        assertEquals(onDisk, java.util.Arrays.stream(flyway.info().applied())
+                .map(i -> i.getVersion().getVersion()).toList(), "every migration on disk is applied, in order");
+        assertTrue(onDisk.size() >= 2, "at least the baseline and the orders schema");
     }
 
     private static long count(String sql) {

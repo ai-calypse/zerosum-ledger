@@ -1,0 +1,39 @@
+# S03-T02 immutability and commit-time zero-sum  2026-09-16
+
+./gradlew :services:order-service:test :services:order-service:integrationTest --rerun --continue   (exit 0)
+  OrdersImmutabilityIT  19 tests, 0 failures
+  OrderStoreIT           9 tests, 0 failures
+  RequestHasherTest      6 tests, 0 failures
+  TOTAL 34 tests, 0 failures
+
+M2 (a) append-only, 10 parameterised cells plus 3 truncate cases:
+  UPDATE and DELETE on money_orders and money_order_entries -> 42501 for orders_app AND orders_owner.
+  TRUNCATE money_order_entries -> 42501 for both roles.
+  TRUNCATE money_orders, money_order_entries (together) -> 42501 for both roles. This is the case where the D02-2
+    statement trigger is genuinely what stops it, since truncating both satisfies the foreign key.
+  TRUNCATE money_orders alone -> refused by the FOREIGN KEY, not the trigger. Recorded as a separate, independent
+    protection rather than credited to the trigger. The ledger never hit this because its two append-only tables have
+    no foreign key between them.
+
+M2 (b) commit-time zero-sum, via raw JDBC that bypasses the store entirely:
+  unbalanced entries            -> 23514 at COMMIT, no row
+  header with no entries        -> 23514 at COMMIT, no row  (§0.3 C3: the check is attached to the header table too,
+                                   because the entries trigger can never fire for a header with nothing attached)
+  per-currency imbalance        -> 23514 at COMMIT, no row  (+2500 USD, -2500 EUR: nets to zero overall, so a total-only
+                                   check would have passed it)
+
+A PRODUCTION BUG THIS TASK FOUND AND FIXED
+  The first run failed with TransactionSystemException "JDBC commit failed". OrderStore classified commit-time
+  rejections by catching DataIntegrityViolationException, but a DEFERRED trigger fires at COMMIT, and Spring wraps
+  commit failures in TransactionSystemException, so NOT_ZERO_SUM was never returned and the caller would have seen a
+  500. It now classifies by the SQLSTATE in the cause chain regardless of the wrapping exception, and a test asserts
+  the store returns NOT_ZERO_SUM rather than throwing.
+
+TWO TEST DEFECTS OF MINE, ALSO FIXED
+  The TRUNCATE assertion claimed 42501 for a case the foreign key rejects first (see above).
+  The Flyway assertion hard-coded the migration list [1, 2] and broke when V3 arrived; it now derives the expected
+  versions from the migration directory, so adding a migration cannot break a test about migrations being applied.
+
+NOT TESTED, BY INSTRUCTION
+  The owner can still run ALTER TABLE ... DISABLE TRIGGER, and a superuser bypasses triggers. Recorded in H.5; a test
+  would only demonstrate that superusers are superusers.

@@ -34,7 +34,13 @@ public class OrderStore {
         /** The key was already used with a different request (M3 (b)). */
         KEY_REUSED,
         /** Another transaction holds the key and had not committed within the lock-wait bound (M3 (c)). */
-        IN_PROGRESS
+        IN_PROGRESS,
+        /**
+         * The deferred trigger rejected the order at COMMIT (M2 (b)): entries do not sum to zero per currency, or the
+         * header has fewer than two entries. Application validation should have caught it first, so reaching here means
+         * validation was bypassed — it is still a client error, never a 500 (D03-2).
+         */
+        NOT_ZERO_SUM
     }
 
     /** {@code order} is present for CREATED and REPLAYED, and absent for KEY_REUSED and IN_PROGRESS. */
@@ -106,11 +112,33 @@ public class OrderStore {
                         ? new Result(Status.REPLAYED, existing)
                         : Result.of(Status.KEY_REUSED);
             });
-        } catch (QueryTimeoutException waitedTooLong) {
-            // Someone else holds the key and has not committed. Reporting IN_PROGRESS is honest: the outcome is not yet
-            // decided, and the caller may retry the same key safely.
-            return Result.of(Status.IN_PROGRESS);
+        } catch (RuntimeException failure) {
+            // Classify by the SQLSTATE in the cause chain, not by which Spring exception happens to wrap it. A deferred
+            // trigger fires at COMMIT, so the rejection arrives as TransactionSystemException ("JDBC commit failed"),
+            // not the DataIntegrityViolationException a statement-time violation would produce.
+            if (zeroSumViolation(failure)) {
+                return Result.of(Status.NOT_ZERO_SUM);
+            }
+            if (failure instanceof QueryTimeoutException) {
+                // Someone else holds the key and has not committed. IN_PROGRESS is honest: the outcome is undecided,
+                // and the caller may safely retry the same key.
+                return Result.of(Status.IN_PROGRESS);
+            }
+            throw failure;
         }
+    }
+
+    /** decision: D03-1 — the deferred trigger raises SQLSTATE 23514 (check_violation) at COMMIT. */
+    private static boolean zeroSumViolation(Throwable failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (current instanceof java.sql.SQLException sql && "23514".equals(sql.getSQLState())) {
+                return true;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return false;
     }
 
     private void assertAdjustmentIsInTheSameGroup(NewOrder order) {
