@@ -16,6 +16,9 @@ dependencies {
     implementation(libs.spring.boot.starter.kafka)
     testImplementation(testFixtures(project(":libs:money")))
     testImplementation(libs.testcontainers.postgresql)
+    // decision: D03-6 — the consumer test needs a real broker: a mocked listener would not prove that a redelivered
+    // record produces exactly one order, which is the whole claim (I8).
+    testImplementation(libs.testcontainers.kafka)
     // decision: D03-5 — the M4(b) publish-path rule ships as a libs/outbox fixture rather than being copied here.
     testImplementation(testFixtures(project(":libs:outbox")))
     testImplementation(libs.archunit.junit5)

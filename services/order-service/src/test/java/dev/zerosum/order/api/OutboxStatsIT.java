@@ -43,6 +43,8 @@ class OutboxStatsIT {
         registry.add("zs.auth.writer-tokens", () -> "trip-simulator:" + WRITER);
         registry.add("zs.auth.reader-token", () -> READER);
         registry.add("zs.auth.admin-token", () -> "admin-token");
+        // No broker in this test, so the payment-event listener stays stopped rather than dialling one.
+        registry.add("zs.consumer.enabled", () -> "false");
     }
 
     @Test

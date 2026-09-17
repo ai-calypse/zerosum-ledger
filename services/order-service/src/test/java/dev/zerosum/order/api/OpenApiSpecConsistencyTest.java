@@ -51,6 +51,8 @@ class OpenApiSpecConsistencyTest {
         registry.add("zs.auth.writer-tokens", () -> "trip-simulator:w");
         registry.add("zs.auth.reader-token", () -> "r");
         registry.add("zs.auth.admin-token", () -> "a");
+        // No broker in this test, so the payment-event listener stays stopped rather than dialling one.
+        registry.add("zs.consumer.enabled", () -> "false");
     }
 
     @SuppressWarnings("unchecked")
