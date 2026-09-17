@@ -80,6 +80,37 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  /v1/instrument-tokens:
+    post:
+      operationId: registerInstrumentToken
+      summary: Register the instrument an entity's money moves through
+      description: |
+        Requires the **writer** role: registering an instrument decides where a rider's money will be taken from,
+        which is a money operation rather than a read.
+
+        **Re-registration replaces the token for future attempts only.** An attempt copies the token when it is
+        created, so a charge already on its way keeps the instrument it was submitted with, and a refund goes back
+        to the card that paid rather than to whichever card was registered last.
+
+        The token is never returned, here or anywhere else: it is the one field that identifies a payment
+        instrument, and echoing it would put it in every client log (D00-8).
+      tags: [instruments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InstrumentRegistration' }
+      responses:
+        '200':
+          description: Registered. The body repeats what was registered, without the token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegisteredInstrument' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -99,7 +130,7 @@ components:
 
   responses:
     BadRequest:
-      description: The attempt id is not a UUID.
+      description: The attempt id is not a UUID, or a registration names an unusable entity, token or provider.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -241,6 +272,35 @@ components:
           type: string
           description: RFC 3339 with a Z offset.
 
+    InstrumentRegistration:
+      type: object
+      additionalProperties: false
+      required: [entity_id, provider, token]
+      properties:
+        entity_id:
+          type: string
+          description: The rider or driver whose instrument this is, for example `rider:R1` (D01-5 rule 3).
+          pattern: '^(rider|driver|platform|provider):[A-Za-z0-9_-]{1,64}$'
+        provider:
+          type: string
+          description: |
+            The provider holding the instrument, for example `fakecard`. Refused when no adapter serves it: a token
+            registered for an unknown provider would create attempts that could never be submitted, and the symptom
+            would be a rider who was simply never charged.
+          pattern: '^[a-z][a-z0-9_-]{0,31}$'
+        token:
+          type: string
+          minLength: 1
+          description: The provider's own token. A fake magic string in this project; never a card or bank number.
+
+    RegisteredInstrument:
+      type: object
+      additionalProperties: false
+      required: [entity_id, provider]
+      properties:
+        entity_id: { type: string }
+        provider: { type: string }
+
     Problem:
       # RFC 9457, plus the stable `code` the master's conventions require.
       type: object
@@ -253,5 +313,6 @@ components:
         instance: { type: string }
         code:
           type: string
-          enum: [invalid_attempt_id, attempt_not_found, not_cancellable, unauthorized, forbidden, database_unavailable]
+          enum: [invalid_attempt_id, attempt_not_found, not_cancellable, invalid_registration, unknown_provider,
+                 unauthorized, forbidden, database_unavailable]
           description: Stable machine-readable error code; callers branch on this, never on `title`.

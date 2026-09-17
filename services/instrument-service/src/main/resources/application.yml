@@ -21,6 +21,35 @@ spring:
     password: ${ZS_INSTRUMENTS_OWNER_DB_PASSWORD}
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
+  # decision: D04-2 — docs/step_04_kafka_pipeline.md#decisions-and-outputs (master §5.4 common settings)
+  # Copied from ledger-service and order-service rather than varied: every value is stated even where it matches a
+  # default, so a framework default cannot change pipeline behaviour silently. The consumer is the instrument-policy
+  # consumer (S05-T09); the producer settings are the outbox relay's, which is the only publisher in this service.
+  kafka:
+    bootstrap-servers: ${ZS_KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      # decision: D04-1 — the group id is TopicDefinitions.INSTRUMENT_POLICY_GROUP; stated here too so the deployed
+      # consumer and the contract cannot drift apart silently.
+      group-id: instrument-policy
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      isolation-level: read_committed
+      max-poll-records: 500
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # The relay marks rows published on acknowledgement, so a weaker acks setting would mark money delivered that a
+      # broker failover could still lose.
+      acks: all
+      properties:
+        enable.idempotence: true
+    listener:
+      # MANUAL: offsets are acknowledged by the listener after its transaction commits, never by the container on a
+      # timer. An auto-commit could advance past an order whose charge was never created.
+      ack-mode: manual
+      # One record at a time: policy throughput is not a gate, and per-record handling keeps quarantine attribution
+      # exact (D03-6 made the same choice for the same reason).
+      type: single
 
 # decision: D05-1 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
 # Provider endpoints and the timeouts that decide when an outcome becomes UNKNOWN rather than merely slow.
@@ -43,8 +72,8 @@ zs:
     # above FakeBank's maximum processing delay, or a resubmission could still duplicate a payout.
     quiet-period: ${ZS_PROVIDER_QUIET_PERIOD:60s}
   # decision: D03-5 — the outbox library ships no defaults, so a deployment cannot silently inherit one; every value
-  # is stated here. Only the writer is wired today (S05-T07): the relay and the cleanup job start with their first
-  # producer in S05-T09, and these are the values they will run with.
+  # is stated here. The writer was wired in S05-T07; the relay and the cleanup job started with their first producer
+  # in S05-T09, which is the collection policy, and run with exactly these values.
   outbox:
     batch-size: 500
     poll-interval: 50ms
@@ -54,6 +83,25 @@ zs:
     retention: 1h
     cleanup-interval: 10m
     cleanup-batch-size: 1000
+  # decision: D05-11 — money-movement kill switches. Checked before any submission, never before creation: when a
+  # switch is off the attempt is still created, so no order is lost, and it waits in CREATED until the switch is on
+  # and the S05-T12 old-CREATED sweep submits it (§0.3 C24). Default enabled, because a stack that came up frozen
+  # would look healthy and move no money.
+  kill-switches:
+    collections-enabled: ${ZS_COLLECTIONS_ENABLED:true}
+  # decision: D05-6 — the instrument-policy consumer and the executor its submissions run on.
+  policy:
+    consumer:
+      # Lets a test without a broker run without a listener dialling one; production leaves it true.
+      enabled: true
+      # decision: D04-4 — how often a paused listener probes its own database pool before resuming. Short enough that
+      # a brief restart costs seconds, long enough not to hammer a database that is still down.
+      resume-probe-interval: 5s
+    # Bounded in both directions: threads cap how many provider calls are outstanding, and the queue caps how far
+    # behind the policy may fall before attempts are left in CREATED for the sweeper instead of being queued. An
+    # unbounded queue would absorb an outage silently and then replay hours of charges at a provider just recovering.
+    submit-threads: 4
+    submit-queue: 200
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
