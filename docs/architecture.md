@@ -58,7 +58,7 @@ All ten ADRs are Accepted. See [docs/adr/](adr/).
 Compiled from `docs/results/**`, `docs/scope-decisions.md` and test sources. **Plan text is never evidence.** A
 criterion is MET only where a named test or recorded run demonstrates it.
 
-**22 MET · 9 PARTIAL · 12 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
+**23 MET · 10 PARTIAL · 10 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
 
 M13(a) moved from NOT MET to PARTIAL when the simulator and verifier stopped being stubs (CR-S09-01). It is
 deliberately **not** MET: the command exists and is exercised, but never against the running system, and this table
@@ -96,7 +96,8 @@ does not promote a criterion on a stub.
 | M9(a) Bad signature / stale timestamp → 400 | MET | `WebhookSignatureTest` (7) and `WebhookReceiverIT` (9): a forged, tampered, unsigned or stale delivery is **400 and writes nothing**; tampering by one digit fails; the 300 s tolerance is rejected in either direction; both secrets verify during rotation |
 | M9(b) 30% duplicates + 30% reordering | PARTIAL | The **dedupe half** is evidenced: one event delivered many times, sequentially and concurrently, is recorded once and applied once (`WebhookReceiverIT`). The criterion asks for 30% duplicates *plus 30% reordering at volume*, and no reorder-rate run exists — the sender's reorder knob (S05-T03) has never been driven |
 | M10(a)(b)(c) Payouts and returns | **NOT MET** | T10 deferred. The freshness endpoint exists and is tested, but nothing consumes it, so no 409 |
-| M11(a)(b) Reconciliation | **MET** | FakeCard settles a closed day, and a matching report emits `SETTLEMENT_RECEIVED` equal field-by-field to golden O6 (`ReconciliationRunIT`, 6 tests). Each injected discrepancy produces its **own** break type — missing→`MISSING_IN_REPORT`, off-by-one→`AMOUNT_MISMATCH`, duplicate→`DUPLICATE_LINE` (`SettlementMatcherTest` 13, `DiscrepancyKnobIT` 5). Evidence stops at the outbox row: the booking itself is order-service's mapper, covered by its own golden test. [docs/results/s06/reconciliation.md](results/s06/reconciliation.md) |
+| M11(a) Settlement report → SETTLEMENT order | PARTIAL | A matching report emits `SETTLEMENT_RECEIVED` equal field-by-field to golden O6 (`ReconciliationRunIT`, 6 tests), validated against D01-8 inside the builder. **Evidence stops at the outbox row.** The criterion asks for a SETTLEMENT *order*; writing it is order-service's mapper, which has its own golden test, but no run has been observed producing the order. Held at PARTIAL for the same reason as M7(a) and M13(a): the last hop is untested, not merely undocumented |
+| M11(b) Injected discrepancies → typed breaks | MET | Each knob maps to its **own** break type — missing→`MISSING_IN_REPORT`, off-by-one→`AMOUNT_MISMATCH`, duplicate→`DUPLICATE_LINE` — and the tests assert the *type*, not the count, so a matcher that flagged everything as "mismatch" would fail (`SettlementMatcherTest` 13, `DiscrepancyKnobIT` 5). Totals are recomputed from the served lines, so a corrupted report is self-consistent and only line-level matching finds it. [docs/results/s06/reconciliation.md](results/s06/reconciliation.md) |
 | M11(c) Reconciliation under chaos | **NOT RUN** | No A0 chaos orchestration, and no scheduler advances settlement cycles, so "0 unexplained breaks after 2 cycles" cannot be evaluated. Neither met nor failed. |
 | M12(a) One trace across the pipeline | PARTIAL | `s04-trace-propagation.md`: connected **by links**, deliberately not claimed as one parent-child trace |
 | M12(b) Dashboards for flow, invariants, providers | PARTIAL | Flow and invariants load from the repository; the providers dashboard is blocked on S05 |
@@ -121,8 +122,8 @@ does not promote a criterion on a stub.
 
 | Layer | Count | What it runs against |
 |---|---|---|
-| Unit | 334 (0 failed, 2 skipped) | No containers |
-| Integration | 249 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
+| Unit | 347 (0 failed, 1 skipped) | No containers |
+| Integration | 264 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
 | End-to-end | 1 (0 failed) | Re-measured on the running seven-container stack after all three merges; see [results/s05/deployment-check.md](results/s05/deployment-check.md) |
 
 Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of
@@ -134,10 +135,11 @@ on arrival — parallel work makes a count true only for the tree it was taken o
 tree, after all three merges. Of them, the evidence harness contributes 20 tests — `libs/evidence` 8 unit,
 `tools/simulator` 12 unit, `tools/verifier` 6 integration.
 
-The two remaining skips are deliberate: the adapter contract suite aborts its **settlement-report** case on an
-assumption naming the missing capability, once per provider, so a gap is reported rather than omitted. It was four
-until S05-T11 — the webhook-parsing case now runs on both adapters instead of skipping, which is what a skip is for:
-it disappears when the capability arrives.
+The single remaining skip is deliberate, and it is the only one left of four. The adapter contract suite aborts its
+**settlement-report** case on an assumption naming the missing capability — for **FakeBank only**, which genuinely
+has no settlement reports. S05-T11 removed the two webhook-parsing skips by implementing the capability, and S06
+removed FakeCard's by implementing settlement reports. That is what a skip is for: it disappears when the gap
+closes, rather than quietly passing all along.
 
 **The e2e layer is one test.** It covers the money path only. Crash recovery, the provider path, fault injection and
 reconciliation have no end-to-end coverage at all, and the e2e job runs only on a schedule or manual dispatch, never

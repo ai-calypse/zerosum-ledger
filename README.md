@@ -30,8 +30,8 @@ proves only that nothing changed — and because this build sets `failOnNoDiscov
 
 | What | Result | Where |
 |---|---|---|
-| Unit tests, 10 modules | 334 passed, 0 failed, 2 skipped | `./gradlew test` |
-| Integration tests, 8 modules (Testcontainers) | 249 passed, 0 failed, 0 skipped | `./gradlew integrationTest` |
+| Unit tests, 10 modules | 347 passed, 0 failed, 1 skipped | `./gradlew test` |
+| Integration tests, 7 modules (Testcontainers) | 264 passed, 0 failed, 0 skipped | `./gradlew integrationTest` |
 | Ledger lock contention study (SP1) | [docs/results/sp1-lock-study.md](docs/results/sp1-lock-study.md) | measured |
 | Stack version compatibility spike (SP3) | [docs/results/sp3-stack-compat.md](docs/results/sp3-stack-compat.md) | measured |
 | Fake providers and adapters | [docs/results/s05/providers.md](docs/results/s05/providers.md) | measured |
@@ -40,10 +40,11 @@ proves only that nothing changed — and because this build sets `failOnNoDiscov
 | Ledger invariant verifier (I2, I3, I4) | 6 tests, 0 failed — fails a corrupted ledger and names the invariant | [docs/results/m13/verifier.md](docs/results/m13/verifier.md) |
 | Seeded W1 scenario runner | 12 tests, 0 failed — **not run against the live stack** | [docs/results/m13/simulator.md](docs/results/m13/simulator.md) |
 
-The two skipped tests are deliberate. The shared adapter contract suite runs against **both** providers, and on
-each one its settlement-report case aborts on a JUnit assumption naming the capability that is not implemented. It
-was four until the webhook receiver landed: those cases now run instead of skipping, which is exactly what a skip is
-for — it disappears when the capability arrives, rather than quietly passing all along.
+The one skipped test is deliberate, and it is all that remains of four. The shared adapter contract suite aborts its
+settlement-report case on a JUnit assumption naming the missing capability — for **FakeBank only**, which genuinely
+has no settlement reports. The webhook receiver removed two of them and settlement reports removed the third, by
+implementing the capabilities rather than deleting the cases. That is what a skip is for: it disappears when the gap
+closes, rather than quietly passing all along.
 
 ## What is *not* built
 
