@@ -628,8 +628,8 @@ Related master risks: R2 (correctness under redelivery), R3 (hot-entity ceiling)
 
 | ID | Decision | Rationale | Alternatives considered | Status | Date |
 |---|---|---|---|---|---|
-| D04-1 | — | — | — | Pending | — |
-| D04-2 | — | — | — | Pending | — |
+| D04-1 | **Topic definitions live in one place**, `libs/contracts/src/main/java/dev/zerosum/contracts/kafka/TopicDefinitions.java` (plain Java, no Spring): `payments.money-orders.v1` and `payments.payment-events.v1`, both 12 partitions, 7 days, keyed by `order_group_id`; `dlqFor(source)` derives `<topic>.dlq` at 3 partitions and 30 days keeping the original key. Consumer group ids (`ledger-apply`, `order-mapper`, `instrument-policy`) are named here too, so a service and the T04 freshness query cannot disagree. **Provisioning:** each service declares `NewTopic` beans for the topics it produces to, consumes from or dead-letters to; both services declare money-orders on purpose, since creation is idempotent and start-up order must not be part of the contract. **Partition count is contract, not configuration** — the key is the order group (ADR-0007), so changing it remaps groups to partitions. **Partial:** the startup mismatch check and `TopicMismatchIT` are **not implemented** (deferred, [docs/scope-decisions.md](scope-decisions.md)); a leftover topic with a different partition count is not yet detected | One definition source is what stops a consumer dead-lettering into a name nobody provisioned, and derived DLQ names remove the second place to misspell | A YAML topic list per service (two places to drift); a shared provisioning service (start-up ordering becomes a dependency); letting the admin client add partitions to match (silently breaks per-group ordering) | Accepted | 2026-09-16 |
+| D04-2 | **Every client property is set explicitly**, in each service's `spring.kafka` section, even where it matches a framework default. Producers: `acks=all` and `enable.idempotence=true`. Consumers: `enable.auto.commit=false`, `isolation.level=read_committed`, `max.poll.records=500`, `auto.offset.reset=earliest`, explicit String deserializers, and the group id from D04-1. Ledger-service additionally sets `listener.ack-mode=manual` and `listener.type=batch`, which S04-T02 depends on. **Verified by reading the effective built properties** (`KafkaProperties.buildConsumerProperties()`) in a per-service configuration test, not by reading the file | A default that changes between versions would change pipeline behaviour silently; and in S03 a misplaced YAML block bound to a key nothing read, producing a listener that consumed nothing while looking healthy — asserting effective values is the cheap defence against both | Relying on framework defaults (invisible when they change); asserting the YAML text (proves the file's content, not what the client received) | Accepted | 2026-09-16 |
 | D04-3 | — | — | — | Pending | — |
 | D04-4 | — | — | — | Pending | — |
 | D04-5 | — | — | — | Pending | — |
@@ -670,8 +670,8 @@ Related master risks: R2 (correctness under redelivery), R3 (hot-entity ceiling)
 
 | Check | Method | Result | Evidence path | Date |
 |---|---|---|---|---|
-| Topic provisioning and mismatch behavior | `TopicProvisioningIT`, `TopicMismatchIT` | Not run | — | — |
-| Explicit client configuration and group protocol | Per-service configuration tests; group type check | Not run | — | — |
+| Topic provisioning and mismatch behavior | `TopicProvisioningIT`, `TopicMismatchIT` | **Partial.** `TopicProvisioningIT` **passed** (3 tests): every defined topic is created with its contracted partition count and retention, a second declaration of an existing topic raises exactly `TopicExistsException` and leaves the topic unaltered, and DLQ names are derived rather than spelled twice. **`TopicMismatchIT` and the startup partition-count check are not implemented** — deferred per [docs/scope-decisions.md](scope-decisions.md), so a leftover topic with a different partition count is still undetected. Not claimed as passing | [docs/results/s04/s04-t01-topics-clients.txt](results/s04/s04-t01-topics-clients.txt) | 2026-09-16 |
+| Explicit client configuration and group protocol | Per-service configuration tests; group type check | **Partial.** `KafkaClientConfigTest` **passed** (3 tests) against the *effective* built properties: consumer group, `auto.offset.reset`, auto-commit off, `read_committed`, `max.poll.records=500`; producer `acks=all` with idempotence; and `ack-mode=MANUAL` with `type=BATCH`. **The KIP-848 group-protocol assertion after first poll is not implemented** (deferred). Order-service's equivalent configuration test is not yet written | [docs/results/s04/s04-t01-topics-clients.txt](results/s04/s04-t01-topics-clients.txt) | 2026-09-16 |
 | Partition key | `PartitionKeyIT` | Not run | — | — |
 | Ack only after commit | `AckOrderingTest` | Not run | — | — |
 | Listener correctness under duplicates | `LedgerListenerIT`, `DuplicateDeliveryIT` | Not run | — | — |
@@ -717,7 +717,7 @@ Related master risks: R2 (correctness under redelivery), R3 (hot-entity ceiling)
 
 | Task ID | Status | Output paths | Evidence | Blockers |
 |---|---|---|---|---|
-| S04-T01 | Planned | — | — | — |
+| S04-T01 | Done | `libs/contracts/src/main/java/dev/zerosum/contracts/kafka/TopicDefinitions.java`, `services/{ledger,order}-service/src/main/java/…/KafkaTopicsConfig.java`, both `application.yml` `spring.kafka` sections, `services/ledger-service/build.gradle.kts` (Kafka starter + Testcontainers), [docs/adr/0007-partition-key.md](adr/0007-partition-key.md), `…/kafka/{KafkaClientConfigTest,TopicProvisioningIT}.java` | [docs/results/s04/s04-t01-topics-clients.txt](results/s04/s04-t01-topics-clients.txt): 6 tests green | **Partial by choice:** no startup partition-mismatch check or `TopicMismatchIT`, no KIP-848 group-protocol assertion, no order-service config test; `PartitionKeyIT` moves to T02 where the relay exists. All recorded as deferred, none reported as passing |
 | S04-T02 | Planned | — | — | — |
 | S04-T03 | Planned | — | — | — |
 | S04-T04 | Planned | — | — | — |

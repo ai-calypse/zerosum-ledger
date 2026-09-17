@@ -1,0 +1,46 @@
+# S04-T01 topic provisioning and explicit client configuration  2026-09-16
+
+RESULT
+  TopicProvisioningIT     3 tests, 0 failures (integration, Kafka Testcontainers)
+  KafkaClientConfigTest   3 tests, 0 failures (ledger-service, reads the effective built properties)
+
+WHAT EXISTS
+  libs/contracts/.../kafka/TopicDefinitions.java is the single definition source: name, partition count, retention and
+  key semantics per topic, plus dlqFor() deriving a DLQ name from its source. Plain Java, no Spring, so both services
+  and any test read the same values. Consumer group ids live here too, so a service and the freshness query (T04)
+  cannot disagree about the group name.
+  Each service declares NewTopic beans for the topics it produces to, consumes from or dead-letters to. Both services
+  declare payments.money-orders.v1 deliberately: creation is idempotent, and requiring one service to start before the
+  other would make start-up order part of the contract.
+  Explicit client properties per D04-2 in both application.yml files - acks, idempotence, auto-commit off, isolation
+  level, max.poll.records - set even where they match a framework default.
+
+WHY THE CONFIG TEST EXISTS
+  It reads what the application actually built (KafkaProperties.buildConsumerProperties()), not what the file appears
+  to say. In S03 a kafka block sat one indent level off, bound to a key nothing read, and produced a listener that
+  started, subscribed, got partitions assigned and consumed nothing for two full test runs. Asserting effective values
+  is what turns that class of mistake into a failing test instead of an investigation.
+
+PARTITION COUNT IS A CONTRACT, NOT A KNOB
+  The key is order_group_id (ADR-0007, written this task), so the partition count decides how groups map to
+  partitions. Changing it lets a later record for a group land on a different partition from its predecessors.
+  TopicProvisioningIT asserts the created partition count and retention against the definitions rather than trusting
+  that a NewTopic bean was declared.
+
+A DEFECT IN MY OWN TEST
+  TopicProvisioningIT first failed with TopicExistsException: it assumed it ran before the test that re-declares a
+  topic. The production path is unaffected (Spring's KafkaAdmin treats "already exists" as success, which is exactly
+  what lets both services declare the same topic), but the raw admin client surfaces it. Creation in the test is now
+  tolerant of an existing topic, and the re-declaration test asserts the error is specifically TopicExistsException -
+  any other error would be a real provisioning fault being swallowed. An order-dependent test is a defect of its own.
+
+DEFERRED HERE (see docs/scope-decisions.md)
+  TopicMismatchIT and the startup partition-count check: a topic left over with a different partition count is not yet
+  detected at startup. Recorded as NOT done rather than folded into the passing row.
+  The consumer-group-protocol (KIP-848) assertion after first poll.
+  Order-service's own equivalent configuration test.
+  PartitionKeyIT needs the relay publishing real orders, so it moves to S04-T02 rather than being stubbed here.
+
+REPRODUCE
+  ./gradlew :services:ledger-service:test --tests '*KafkaClientConfigTest'
+  ./gradlew :services:ledger-service:integrationTest --tests '*TopicProvisioningIT'

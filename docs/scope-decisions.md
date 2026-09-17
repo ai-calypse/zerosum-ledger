@@ -48,3 +48,39 @@ This is recorded rather than applied silently, because the pack forbids weakenin
 5. **S06** verifier only.
 6. **S09** README, architecture doc, demo.
 7. **S08** a few faults and the ablations, only if the budget allows.
+
+## S04 Kafka pipeline — scope cut (2026-09-16)
+
+The user's direction stands: "do not follow the steps verbatim, just make it workable and resume presentable", and
+defer anything complex that does not serve an end-to-end system with observability, monitoring and CI/CD. S04 as
+written is the largest step in the pack (T03 alone carries 14 instructions and 7 integration tests), so it is cut to
+its spine.
+
+**Kept**
+
+- **T01 topic provisioning and explicit client configuration.** One topic-definition source, `NewTopic` beans per
+  service, and producer/consumer properties set explicitly rather than inherited. This is what makes the pipeline
+  reproducible, and it closes the "misspelled topic auto-created with broker defaults" hole.
+- **T02 ledger batch listener with manual ack after the database commit.** The M5 end-to-end spine: without it the
+  ledger has an apply engine that nothing feeds.
+- **T03 error handling, trimmed.** Transient-versus-poison classification, DLQ publishing with error headers, the
+  quarantine row, and a pause on exhausted or unclassified failure. This also discharges the DLQ deferral recorded in
+  S03-T07.
+- **T04 freshness endpoint.** Small, and S05's payout eligibility depends on it.
+- **T05 pipeline e2e.** Kept deliberately: it proves the API → outbox → relay → broker → ledger path end to end, and
+  it establishes the first e2e harness, which is also what the deferred M4(a) SIGKILL test needs.
+- **T06 trace propagation.** Directly serves the observability story that S07 builds on.
+
+**Deferred**
+
+- **T07 relay-lag measurement and the SP2 trigger decision**, and **S04-C01 (SP2 tuning and the Debezium Outbox Event
+  Router spike).** Both are tuning exercises for a latency problem that has not been observed. Recorded as the upgrade
+  path in ADR-0008 already.
+- **D04-8 crash-point seam** (an interface for tests to halt the JVM between engine return and acknowledgement).
+  Needed by S08's fault injection, not by a working pipeline; S08 is itself deferred.
+- **The long tail of T03's edge-case integration tests** (`DlqPartitioningIT`, `QuarantineIdempotencyIT`,
+  `UnclassifiedErrorIT` as separate suites) and **T01's `TopicMismatchIT`**. The behaviours they cover are implemented;
+  what is dropped is a dedicated container test per edge case.
+- **The quarantine re-publish runbook dry run.** The runbook step is written; executing it as a test is not.
+
+Anything deferred here is recorded as deferred in the step register, never reported as passing.
