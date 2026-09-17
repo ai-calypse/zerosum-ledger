@@ -127,6 +127,13 @@ services:
   otel-lgtm:
     # decision: D00-1
     image: grafana/otel-lgtm:0.33.0@sha256:475319e883b66594d1a2f22ef168c2459802bb94548e6f25d9782bd5f5c19a3a
+    # decision: D07-2, D07-3 (change request CR-S07-01 to D00-3 — adds mounts to this service).
+    # Dashboards and alert rules are provisioned from the repository, read-only. A dashboard that exists only in
+    # someone's browser cannot be reviewed and dies with the container, so M12(b) would rest on an unreproducible
+    # screenshot.
+    volumes:
+      - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
     ports:
       - "127.0.0.1:3000:3000"
       # Local-only OTLP ports (D00-3 exception): host-run spikes and tools export here.

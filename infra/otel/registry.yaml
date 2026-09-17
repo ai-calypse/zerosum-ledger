@@ -1,0 +1,278 @@
+# decision: D07-1 — docs/step_07_observability_performance.md#decisions-and-outputs
+#
+# The span and metric registry: every signal the project relies on, what emits it, who consumes it, and whether it
+# actually reaches the backend.
+#
+# Two rules this file exists to enforce:
+#   1. A signal nobody consumes is noise. Every entry names its consumers, or says "none yet" and why.
+#   2. A name in code is not a series in the backend. `verified_in_backend` is false until
+#      infra/otel/check-registry.sh has observed the series under the export mode D00-7 selected (Micrometer OTLP
+#      push; the agent exports traces only). Nothing here claims a backend name from first principles.
+
+export_mode:
+  decision: D00-7
+  traces: "OpenTelemetry Java agent 2.31.1 (agent's own metrics and logs exporters disabled)"
+  metrics: "Micrometer OtlpMeterRegistry -> otel-lgtm, step 10s"
+  note: >-
+    SP3 observed the OTLP->Prometheus path producing `sp3_spike_consumed_total` and `jvm_memory_used_bytes`, so the
+    path does apply suffixes. Per-series backend names are still confirmed by the check script rather than assumed.
+
+histogram_buckets:
+  decision: D07-1
+  slo_milliseconds: [5, 10, 25, 50, 100, 250, 500, 1000, 2500]
+  rationale: >-
+    Bucket histograms with the master's SLO boundaries (§6.4), not client-side percentiles: percentiles computed per
+    instance cannot be aggregated across instances or re-windowed, which is exactly what S07-T05 needs to do.
+
+label_policy:
+  allowed: [service, provider, operation, outcome, attempt_kind, status, invariant, currency, topic, retry_class]
+  forbidden: [entity_id, order_id, attempt_id, order_group_id, idempotency_key]
+  rationale: >-
+    Unbounded labels turn one metric into a series per order. The forbidden list is identifiers; correlation to a
+    specific order belongs in traces and logs, not in metric labels.
+
+metrics:
+  # ---- libs/outbox (D03-5), existing before S07 ----
+  - kind: histogram
+    name_in_code: outbox_publish_lag_seconds
+    unit: seconds
+    labels: []
+    module: libs/outbox
+    owning_decision: D03-5
+    consumers: [dashboard/flow, perf/P2]
+    status: existing
+    verified_in_backend: false
+  - kind: gauge
+    name_in_code: outbox_oldest_unpublished_seconds
+    unit: seconds
+    labels: []
+    module: libs/outbox
+    owning_decision: D03-5
+    consumers: [dashboard/flow, alert/outbox-backlog]
+    status: existing
+    verified_in_backend: false
+    note: "Read at scrape time from the database, so it stays truthful while the relay is stuck."
+  - kind: gauge
+    name_in_code: outbox_batch_size
+    unit: records
+    labels: []
+    module: libs/outbox
+    owning_decision: D03-5
+    consumers: [dashboard/flow]
+    status: existing
+    verified_in_backend: false
+  - kind: counter
+    name_in_code: outbox_send_failures_total
+    unit: batches
+    labels: []
+    module: libs/outbox
+    owning_decision: D03-5
+    consumers: [dashboard/flow]
+    status: existing
+    verified_in_backend: false
+    note: "Was dead for synchronous send failures until S03-T05 moved the send loop inside its try block."
+  - kind: counter
+    name_in_code: outbox_guard_skips_total
+    unit: batches
+    labels: []
+    module: libs/outbox
+    owning_decision: D03-5
+    consumers: [dashboard/flow]
+    status: existing
+    verified_in_backend: false
+
+  # ---- ledger-service listener (D04-3, D04-4), existing before S07 ----
+  - kind: counter
+    name_in_code: ledger_records_received_total
+    unit: records
+    labels: []
+    module: services/ledger-service
+    owning_decision: D04-3
+    consumers: [dashboard/flow]
+    status: existing
+    verified_in_backend: false
+  - kind: counter
+    name_in_code: ledger_orders_applied_total
+    unit: orders
+    labels: []
+    module: services/ledger-service
+    owning_decision: D04-3
+    consumers: [dashboard/flow, perf/P1]
+    status: existing
+    verified_in_backend: false
+  - kind: counter
+    name_in_code: ledger_duplicates_skipped_total
+    unit: orders
+    labels: []
+    module: services/ledger-service
+    owning_decision: D04-3
+    consumers: [dashboard/flow]
+    status: existing
+    verified_in_backend: false
+    note: "Non-zero is healthy: it is what effectively-once looks like under redelivery (M5(a))."
+  - kind: counter
+    name_in_code: ledger_quarantined_total
+    unit: records
+    labels: []
+    module: services/ledger-service
+    owning_decision: D04-4
+    consumers: [dashboard/money-invariants, alert/quarantine]
+    status: existing
+    verified_in_backend: false
+    note: "Already matches the master's proposed name (§6.4), so no rename is requested."
+  - kind: counter
+    name_in_code: ledger_listener_pauses_total
+    unit: pauses
+    labels: []
+    module: services/ledger-service
+    owning_decision: D04-4
+    consumers: [dashboard/flow, alert/consumer-lag]
+    status: existing
+    verified_in_backend: false
+  - kind: gauge
+    name_in_code: ledger_listener_paused
+    unit: boolean
+    labels: []
+    module: services/ledger-service
+    owning_decision: D04-4
+    consumers: [alert/consumer-lag, s08/recovery-signal]
+    status: existing
+    verified_in_backend: false
+    note: >-
+      Means "stopped because of a failure", not "we called pause()". S04-T03 found it set inside the
+      do-not-pause-twice guard, which would have left an already-paused container failing with no signal.
+
+  # ---- added by S07-T01 ----
+  - kind: histogram
+    name_in_code: order_to_apply_seconds
+    unit: seconds
+    labels: []
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/flow, perf/P2]
+    status: added
+    verified_in_backend: false
+    note: >-
+      One observation per APPLIED order, never per batch and never for a duplicate. Counting redeliveries would make
+      a pipeline reprocessing its backlog look like a pipeline doing more work.
+  - kind: histogram
+    name_in_code: ledger_apply_seconds
+    unit: seconds
+    labels: []
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/flow, perf/P1, perf/P4]
+    status: added
+    verified_in_backend: false
+    note: "One observation per committed batch. S07-T05 must not read batch counts as order throughput."
+  - kind: histogram
+    name_in_code: ledger_lock_wait_seconds
+    unit: seconds
+    labels: []
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/platform, perf/SP4]
+    status: added
+    verified_in_backend: false
+    note: "Taken from the engine's own measurement (ApplyBatchResult.lockWait); not re-timed in the listener."
+  - kind: counter
+    name_in_code: ledger_apply_retries_total
+    unit: retries
+    labels: [retry_class]
+    label_values:
+      retry_class: [deadlock, lock_timeout, connection]
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/platform, perf/SP4]
+    status: added
+    verified_in_backend: false
+    note: "Initialised at zero for all three classes, so an empty panel cannot be mistaken for a broken metric."
+  - kind: gauge
+    name_in_code: invariant_violations
+    unit: violations
+    labels: [invariant]
+    label_values:
+      invariant: [i2, i3, i4, clearing_non_zero]
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/money-invariants, alert/invariant-violation]
+    status: added
+    verified_in_backend: false
+    note: >-
+      One series per invariant, not a single consistent flag: an alert that fires without naming the broken
+      invariant sends an operator to read code at 3am.
+  - kind: gauge
+    name_in_code: ledger_invariant_evaluation_failed
+    unit: boolean
+    labels: []
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [alert/invariant-violation]
+    status: added
+    verified_in_backend: false
+    note: >-
+      Guards the gauge above. Violation counts that stop updating would otherwise read as a healthy zero forever.
+  - kind: gauge
+    name_in_code: kafka_consumer_lag_records
+    unit: records
+    labels: []
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/flow, alert/consumer-lag]
+    status: added
+    verified_in_backend: false
+    note: >-
+      S04 computed lag only inside the freshness endpoint, so an alert could not see it without HTTP traffic. This
+      publishes the same computation on a schedule and reports ABSENCE (NaN), never zero, when it cannot measure.
+  - kind: gauge
+    name_in_code: kafka_consumer_lag_seconds
+    unit: seconds
+    labels: []
+    module: services/ledger-service
+    owning_decision: D07-1
+    consumers: [dashboard/flow, alert/consumer-lag, s05/payout-freshness]
+    status: added
+    verified_in_backend: false
+    note: "Kafka record-timestamp basis (§0.3 C12), reusing the D04-5 computation rather than a second one."
+
+# Signals the master requires that CANNOT be emitted yet, because the steps that own them are not built.
+# Listed rather than omitted, so a missing dashboard panel or alert reads as blocked work and not as an oversight.
+blocked:
+  - names: [provider_call_seconds, attempts_state_total, unknown_attempts_oldest_seconds, pending_payouts_oldest_seconds]
+    blocked_on: S05 (instrument-service; D05-2, D05-5, D05-8)
+    consumers_blocked: [dashboard/providers, alert/unknown-attempts, alert/pending-payouts]
+  - names: [reconciliation_breaks]
+    blocked_on: S06 (reconciliation; D06-4)
+    consumers_blocked: [dashboard/money-invariants (recon panel), alert/recon-breaks]
+
+spans:
+  - name: POST /v1/money-orders
+    kind: server
+    module: services/order-service
+    source: OTel agent auto-instrumentation
+    status: existing
+  - name: payments.money-orders.v1 publish
+    kind: producer
+    module: libs/outbox (relay)
+    source: OTel agent, parented by the context the relay restores (CR-S04-01)
+    status: existing
+    note: >-
+      Was an orphan root until CR-S04-01. Storing the traceparent header was not enough; the relay now makes the
+      stored context current around the send. Verified live: the publish span sits inside the request trace.
+  - name: payments.money-orders.v1 process
+    kind: consumer
+    module: services/ledger-service
+    source: OTel agent
+    status: existing
+    note: >-
+      A ROOT span with a LINK to the publish span, not a child. S04-T06 measured this on the live stack, which
+      contradicts D00-7's note that the consumer span is a child. The registry records what the backend holds;
+      the discrepancy is raised against D00-7 rather than followed.
+  - name: order.validate / order.persist / relay.batch / ledger.apply.batch
+    kind: internal
+    module: order-service, libs/outbox, ledger-service
+    status: not_added
+    note: >-
+      The master proposes these custom stage spans. Not added: the agent already produces HTTP, JDBC and Kafka spans
+      covering these boundaries, and the stage timings they would carry are published as histograms above. Recorded
+      as a deliberate omission, not an oversight.

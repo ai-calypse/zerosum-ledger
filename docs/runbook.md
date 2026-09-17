@@ -98,3 +98,63 @@ procedure below does not require you to prove the order was never applied.
   database answers (D04-4); check `ledger_listener_paused` rather than re-publishing anything.
 - It has **not been executed as an automated test**. The steps are written and the SQL and CLI invocations are real,
   but the dry run is deferred ([docs/scope-decisions.md](scope-decisions.md)), so treat the first live use carefully.
+
+<a id="invariant-violation"></a>
+## Invariant violation (critical)
+
+**Fires when:** any `invariant_violations{invariant=…}` is above zero, or `ledger_invariant_evaluation_failed` is 1.
+
+**What it means:** the books disagree with themselves. `i2` — balances do not sum to zero for a currency. `i3` — an
+account's balance disagrees with its summed changelog deltas. `i4` — a changelog row's running balance is
+inconsistent. `clearing_non_zero` — a clearing account has not returned to zero.
+
+> If `ledger_invariant_evaluation_failed` is 1, the violation counts beside it are **stale**. Fix the query failure
+> first; a frozen gauge reads as perfect health.
+
+1. **Freeze outbound money movement** before diagnosing, so the error cannot propagate into payouts.
+2. **Diagnose:** `GET /v1/invariants` names the affected currencies, accounts and entities;
+   `GET /v1/entities/{id}/verify` finds the first bad `seq` for one entity.
+3. **Trace** the bad row to its order via the changelog (`order_id` and source idempotency key), then to the order
+   itself — the [audit walk](#quarantine-republish) uses the same path.
+4. **Fix forward.** Correct the books with **compensating money orders**. Never edit or delete ledger rows: the tables
+   are append-only and the runtime role cannot mutate them, which is the property that makes the ledger trustworthy.
+5. **Verify** with the verifier, then unfreeze, then write a post-incident note under `docs/results/`.
+
+**Not yet written:** the freeze itself. `ZS_PAYOUTS_ENABLED` / `ZS_COLLECTIONS_ENABLED` are S05's kill switches and do
+not exist — until then, stopping instrument-service is the only freeze available, and instrument-service is not built.
+
+<a id="outbox-backlog"></a>
+## Outbox backlog (high)
+
+**Fires when:** `outbox_oldest_unpublished_seconds` exceeds 30 for 2 minutes.
+
+**What it means — read this before escalating:** the orders are **safe**. The outbox committed them in the same
+transaction as the money orders, so nothing is lost; the relay simply cannot publish. The API keeps accepting writes
+by design.
+
+1. **Check the broker first.** `docker compose ps kafka`, then the relay's log — `outbox batch failed; retrying after
+   N ms` means it is backing off and will drain on its own once Kafka returns.
+2. **Confirm the backlog is moving:** `GET /v1/outbox/stats` twice, a minute apart. A falling `unpublished_count`
+   means recovery is under way; leave it alone.
+3. **If the count is static while Kafka is healthy,** look for a poison row larger than the broker's message limit.
+   The relay will not skip money, so one unsendable row blocks everything behind it. Its id is in the relay log.
+4. **Never delete outbox rows** to clear the backlog. That is money that has been promised and not delivered.
+
+<a id="consumer-lag"></a>
+## Consumer lag or paused (high)
+
+**Fires when:** `kafka_consumer_lag_seconds` exceeds 10 for 2 minutes, `ledger_listener_paused` is 1, or the lag
+series is **absent** (absence is alerted, not treated as healthy — an unmeasurable lag is not a lag of zero).
+
+1. **Paused?** The listener pauses on exhausted transient failures and on unclassified errors, never on poison. It
+   probes its own database every 5 s and **resumes unattended**. Check PostgreSQL before doing anything: recovery
+   usually needs no human.
+2. **Lagging but not paused?** Compare `ledger_apply_seconds` p95 and `ledger_lock_wait_seconds` p95. High lock wait
+   with rising `ledger_apply_retries_total{retry_class="lock_timeout"}` is hot-entity contention, not a stuck
+   consumer.
+3. **Lag absent?** The broker is unreachable or the offsets are untrustworthy. `GET /v1/freshness` returns the reason
+   in its `error` field; it fails closed rather than reporting a comfortable zero.
+4. **Do not reset offsets** to clear lag. Skipping records skips money; the dedupe makes reprocessing harmless, so
+   catching up is always preferable.
+
+**Not yet written:** recovery-time targets under fault injection, which S08 owns.

@@ -1,0 +1,149 @@
+# decision: D07-3 — docs/step_07_observability_performance.md#decisions-and-outputs
+#
+# One rule per alert in the master's table (§10.5) that can actually be evaluated today. Rules are provisioned from
+# the repository for the same reason dashboards are: an alert that exists only in a browser dies with the container.
+#
+# ABSENT DELIBERATELY — the signals do not exist yet, so a rule would be permanently silent and read as "healthy":
+#   * Unknown attempts       -> blocked on S05 (unknown_attempts_oldest_seconds, NEEDS_REVIEW count)
+#   * Pending payouts        -> blocked on S05 (pending_payouts_oldest_seconds)
+#   * Reconciliation breaks  -> blocked on S06 (D06-4 reconciliation metrics)
+#   * Disk                   -> needs a node/host exporter, which D00-3 does not run
+# See infra/otel/registry.yaml -> blocked.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: zerosum-money
+    folder: ZeroSum
+    interval: 1m
+    rules:
+      - uid: zs-invariant-violation
+        title: Invariant violation
+        condition: BREACH
+        # Critical: the books disagree with themselves. Runbook: docs/runbook.md#invariant-violation
+        annotations:
+          summary: "Invariant {{ $labels.invariant }} is violated"
+          runbook_url: "docs/runbook.md#invariant-violation"
+          description: >-
+            One of the D02-8 invariants reports a non-zero violation count. Freeze outbound money movement before
+            diagnosing: correct the books with compensating orders, never by editing rows.
+        labels: { severity: critical }
+        for: 0m
+        noDataState: Alerting
+        execErrState: Alerting
+        data:
+          - refId: BREACH
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: 'max by (invariant) (invariant_violations) > 0'
+              instant: true
+
+      - uid: zs-invariant-check-stale
+        title: Invariant check not evaluating
+        condition: STALE
+        annotations:
+          summary: "The invariant queries are failing, so violation counts are stale"
+          runbook_url: "docs/runbook.md#invariant-violation"
+          description: >-
+            invariant_violations is only trustworthy while its evaluation succeeds. A frozen gauge reads as perfect
+            health, which is the most dangerous shape this signal can take.
+        labels: { severity: high }
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        data:
+          - refId: STALE
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              expr: 'max(ledger_invariant_evaluation_failed) > 0'
+              instant: true
+
+      - uid: zs-quarantine
+        title: Quarantine
+        condition: BREACH
+        annotations:
+          summary: "Records were quarantined by the apply engine"
+          runbook_url: "docs/runbook.md#quarantine-republish"
+          description: >-
+            A record could not become ledger entries. Its payload is in quarantined_orders with Kafka coordinates and
+            on the dead-letter topic. Resolve by fixing the cause and re-publishing; never by deleting the row.
+        labels: { severity: critical }
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        data:
+          - refId: BREACH
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: 'sum(increase(ledger_quarantined_total[5m])) > 0'
+              instant: true
+
+      - uid: zs-dlq-messages
+        title: DLQ messages
+        condition: BREACH
+        annotations:
+          summary: "A dead-letter topic received a message"
+          runbook_url: "docs/runbook.md#quarantine-republish"
+        labels: { severity: high }
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        data:
+          - refId: BREACH
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              # Every quarantined record is dead-lettered by the listener before the offset moves, so this tracks the
+              # same event from the publishing side. A dedicated DLQ counter is owed once S05 adds its own consumer.
+              expr: 'sum(increase(ledger_quarantined_total[5m])) > 0'
+              instant: true
+
+  - orgId: 1
+    name: zerosum-pipeline
+    folder: ZeroSum
+    interval: 1m
+    rules:
+      - uid: zs-outbox-backlog
+        title: Outbox backlog
+        condition: BREACH
+        annotations:
+          summary: "Oldest unpublished outbox row is older than 30s"
+          runbook_url: "docs/runbook.md#outbox-backlog"
+          description: >-
+            The API is still accepting orders — that is the outbox working — but nothing is reaching Kafka. Check the
+            broker and the relay before assuming data loss: the rows are durable.
+        labels: { severity: high }
+        for: 2m
+        noDataState: NoData
+        execErrState: Alerting
+        data:
+          - refId: BREACH
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              expr: 'max(outbox_oldest_unpublished_seconds) > 30'
+              instant: true
+
+      - uid: zs-consumer-lag-or-paused
+        title: Consumer lag or paused
+        condition: BREACH
+        annotations:
+          summary: "Ledger apply is behind by more than 10s, or its listener is paused"
+          runbook_url: "docs/runbook.md#consumer-lag"
+          description: >-
+            A paused listener resumes on its own once its database answers, so check the database first. Lag gaps mean
+            the lag could not be measured at all, which NoData handling treats as alerting rather than healthy.
+        labels: { severity: high }
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        data:
+          - refId: BREACH
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              expr: 'max(kafka_consumer_lag_seconds) > 10 or max(ledger_listener_paused) > 0'
+              instant: true

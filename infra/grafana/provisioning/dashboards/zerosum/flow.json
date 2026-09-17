@@ -1,0 +1,112 @@
+{
+  "uid": "zs-flow",
+  "title": "ZeroSum — Flow",
+  "tags": ["zerosum", "d07-2"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "description": "Order intake through outbox, relay and Kafka to ledger apply. Panels are bound to series listed in infra/otel/registry.yaml; a panel that renders empty should be checked with infra/otel/check-registry.sh before it is believed.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Apply rate (orders/s)",
+      "description": "Orders the ledger actually applied. Duplicates are excluded by construction, so a backlog being reprocessed does not inflate this.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(ledger_orders_applied_total[1m]))", "legendFormat": "applied" },
+        { "refId": "B", "expr": "sum(rate(ledger_duplicates_skipped_total[1m]))", "legendFormat": "duplicates skipped" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Order to apply (P2)",
+      "description": "From order creation in order-service to the ledger apply commit. One observation per applied order. Quantiles are computed from bucket histograms, so they aggregate correctly across instances and windows.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum(rate(order_to_apply_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(order_to_apply_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Outbox oldest unpublished age",
+      "description": "Grows whenever the relay cannot publish. Read from the database at scrape time, so it stays truthful while the relay is stuck — which is exactly when it matters. Alert fires above 30s for 2 minutes.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 30 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [ { "refId": "A", "expr": "max(outbox_oldest_unpublished_seconds)", "legendFormat": "oldest unpublished" } ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Consumer lag",
+      "description": "Sampled on a schedule, not only when someone calls the freshness endpoint. Gaps in this line mean the lag could NOT be measured — absence, never a reassuring zero.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [
+        { "matcher": { "id": "byName", "options": "lag (seconds)" }, "properties": [ { "id": "unit", "value": "s" } ] }
+      ] },
+      "targets": [
+        { "refId": "A", "expr": "max(kafka_consumer_lag_records)", "legendFormat": "lag (records)" },
+        { "refId": "B", "expr": "max(kafka_consumer_lag_seconds)", "legendFormat": "lag (seconds)" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Listener paused",
+      "description": "1 means the ledger listener stopped because of a failure and is waiting for its database probe to succeed. It does not mean someone paused it deliberately.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "0": { "text": "running", "color": "green" }, "1": { "text": "PAUSED", "color": "red" } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [ { "refId": "A", "expr": "max(ledger_listener_paused)", "legendFormat": "paused" } ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Relay health",
+      "description": "Send failures and guard skips. A non-zero guard skip count means more than one relay instance is running, which the advisory lock is containing.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(outbox_send_failures_total[5m]))", "legendFormat": "send failures/s" },
+        { "refId": "B", "expr": "sum(rate(outbox_guard_skips_total[5m]))", "legendFormat": "guard skips/s" },
+        { "refId": "C", "expr": "histogram_quantile(0.95, sum(rate(outbox_publish_lag_seconds_bucket[5m])) by (le))", "legendFormat": "publish lag p95" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Apply duration and retries",
+      "description": "Apply duration is per batch, not per order. Retry classes come from the D02-4 SQLSTATE classification: deadlock, lock timeout, connection.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(ledger_apply_seconds_bucket[5m])) by (le))", "legendFormat": "apply p95 (s)" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(ledger_lock_wait_seconds_bucket[5m])) by (le))", "legendFormat": "lock wait p95 (s)" },
+        { "refId": "C", "expr": "sum by (retry_class) (rate(ledger_apply_retries_total[5m]))", "legendFormat": "{{retry_class}} retries/s" }
+      ]
+    }
+  ]
+}

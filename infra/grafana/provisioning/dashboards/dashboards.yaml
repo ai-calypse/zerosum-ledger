@@ -1,0 +1,19 @@
+# decision: D07-2 — docs/step_07_observability_performance.md#decisions-and-outputs
+#
+# Dashboards are provisioned from the repository, never imported by hand. A dashboard that exists only in someone's
+# browser is not part of the system: it cannot be reviewed, it dies with the container, and M12(b) would rest on a
+# screenshot nobody can reproduce.
+apiVersion: 1
+
+providers:
+  - name: zerosum
+    orgId: 1
+    folder: ZeroSum
+    type: file
+    disableDeletion: false
+    # Edits made in the UI are overwritten on the next reload. That is deliberate: the repository is the source.
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/zerosum
+      foldersFromFilesStructure: false

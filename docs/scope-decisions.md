@@ -120,3 +120,46 @@ someone actually looked at a trace.
 
 **Consequence for the step's exit criteria.** S04 will close with T05 partial (Case E only, C and D Blocked) and T06
 either executed or `Not run`. The step register records both honestly instead of reporting a green step.
+
+## S07 Observability and performance — scope cut (2026-09-16)
+
+S07 is the user's stated centrepiece ("observability, monitoring"), so it is cut *less* aggressively than S04. But it
+has a hard ordering conflict that has to be stated rather than worked around.
+
+**The ordering conflict.** S07's inherited decisions include **D05-2/5/8/11/12/13** (instrument-service fault knobs,
+attempt state machines, sweeper schedule, kill switches, scenario runner) and **D06-4/D06-5** (reconciliation metrics,
+verifier). The agreed priority order runs S07 *before* S05 and S06, so none of those exist. Consequently:
+
+- **Unbuildable now, blocked on S05:** `provider_call_seconds`, `attempts_state_total`, `unknown_attempts_oldest_seconds`,
+  `pending_payouts_oldest_seconds`, `NEEDS_REVIEW` count — and therefore the whole **Providers dashboard** and the
+  **Unknown attempts** and **Pending payouts** alert rows.
+- **Unbuildable now, blocked on S06:** reconciliation-break signals — the **Reconciliation breaks** alert row and the
+  reconciliation panel of the Money-invariants dashboard.
+- **T01 instruction 1** also requires the D05-12 scenario runner to generate smoke traffic. It does not exist, so
+  traffic is driven with the real HTTP API instead, and the substitution is recorded.
+
+**Kept, because it exists and carries the step's value**
+
+- **T01 registry and missing instrumentation**, scoped to order-service, ledger-service and `libs/outbox`: the
+  order-to-apply and apply-duration histograms, lock wait, retry counters by class, the invariant gauge from the D02-8
+  queries, and the scheduled consumer-lag gauges S04 left computed on-request only.
+- **T02 dashboards**, reduced to the two that can be populated: **Flow** and **Money invariants** (minus its
+  reconciliation panel). Provisioned from the repository, not hand-imported.
+- **T03 alert rules** for the signals that exist — invariant violation, quarantine, outbox backlog, consumer lag or
+  paused, DLQ messages — with offline rule tests and runbook stubs. The blocked rows are listed as absent, not quietly
+  dropped.
+
+**Deferred**
+
+- **T04 k6 scripts, perf runner and lock-wait sampler**, and **T05 perf runs and analysis.** k6 is not installed, the
+  runs need a quiet reference machine, and the honest-evidence rule makes a hurried single-repetition run worse than
+  none. This leaves the **G3 gate and the performance hard gates unevaluated**, which is recorded as such.
+- **T06 SP4 hot-entity mitigation**, which depends on T05 evidence, and **S07-C01**.
+
+**Consequence.** S07 will close with M12(a) and M12(b) addressed for the services that exist, M12(c) partial, and **no
+performance evidence at all**. The register says so plainly instead of reporting a green step.
+
+**One discrepancy to carry into D07-1.** D00-7 records that the "Kafka consumer span is a child of the producer span,
+not a link". S04-T06 measured the opposite on the live stack: the consumer span is a **root with a link** to the
+producer. The registry records what the backend actually holds, and the discrepancy is raised against D00-7 rather
+than silently followed.

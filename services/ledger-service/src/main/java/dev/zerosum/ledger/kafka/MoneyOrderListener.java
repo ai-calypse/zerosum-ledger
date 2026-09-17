@@ -33,14 +33,19 @@ class MoneyOrderListener {
 
     private final LedgerApplyEngine engine;
     private final DlqPublisher dlq;
+    private final ApplyMetrics applyMetrics;
+    private final org.springframework.jdbc.core.JdbcTemplate template;
     private final Counter received;
     private final Counter applied;
     private final Counter duplicates;
     private final Counter quarantined;
 
-    MoneyOrderListener(LedgerApplyEngine engine, DlqPublisher dlq, MeterRegistry meters) {
+    MoneyOrderListener(LedgerApplyEngine engine, DlqPublisher dlq, ApplyMetrics applyMetrics,
+            org.springframework.jdbc.core.JdbcTemplate template, MeterRegistry meters) {
         this.engine = engine;
         this.dlq = dlq;
+        this.applyMetrics = applyMetrics;
+        this.template = template;
         // Names follow the master's instrumentation style; S07 (D07-1) owns the permanent catalogue and may rename
         // them through the change procedure.
         this.received = meters.counter("ledger_records_received_total");
@@ -68,6 +73,10 @@ class MoneyOrderListener {
 
         ApplyBatchResult result = engine.apply(batch);
 
+        // Latency and retry signals, taken from what the engine measured rather than re-timed here (D07-1).
+        applyMetrics.batchApplied(result);
+        recordOrderToApply(result);
+
         applied.increment(result.countOf(ApplyOutcome.Status.APPLIED));
         duplicates.increment(result.countOf(ApplyOutcome.Status.DUPLICATE));
         quarantined.increment(result.countOf(ApplyOutcome.Status.QUARANTINED));
@@ -85,6 +94,40 @@ class MoneyOrderListener {
             log.info("applied batch of {} with {} retries ({} deadlock, {} lock timeout, {} connection)",
                     records.size(), result.totalRetries(), result.deadlockRetries(), result.lockTimeoutRetries(),
                     result.connectionRetries());
+        }
+    }
+
+    /**
+     * One order-to-apply observation per order actually applied (P2).
+     *
+     * <p>The creation time is read back from {@code applied_orders}, which the engine has just written inside the
+     * committed transaction. {@link ApplyOutcome} carries no timestamp, and widening the engine's return type to
+     * carry one would change a contract S02 owns for the sake of a metric.
+     */
+    private void recordOrderToApply(ApplyBatchResult result) {
+        List<java.util.UUID> appliedIds = result.outcomes().stream()
+                .filter(o -> o.status() == ApplyOutcome.Status.APPLIED)
+                .map(ApplyOutcome::orderId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (appliedIds.isEmpty()) {
+            return;
+        }
+        try {
+            String placeholders = String.join(",", java.util.Collections.nCopies(appliedIds.size(), "?"));
+            template.query("SELECT order_id, order_created_at FROM applied_orders WHERE order_id IN (" + placeholders + ")",
+                    rs -> {
+                        var createdAt = rs.getTimestamp("order_created_at");
+                        var id = (java.util.UUID) rs.getObject("order_id");
+                        result.outcomes().stream()
+                                .filter(o -> id.equals(o.orderId()))
+                                .findFirst()
+                                .ifPresent(o -> applyMetrics.orderApplied(o,
+                                        createdAt == null ? null : createdAt.toInstant()));
+                    }, appliedIds.toArray());
+        } catch (RuntimeException failure) {
+            // A metric must never fail an apply that has already committed.
+            log.debug("could not record order-to-apply latency", failure);
         }
     }
 
