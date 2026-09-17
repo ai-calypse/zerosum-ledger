@@ -45,9 +45,9 @@ class ApplyMetrics {
 
     ApplyMetrics(MeterRegistry meters) {
         this.meters = meters;
-        this.applyDuration = histogram("ledger_apply_seconds", "Wall time of one apply batch, including retries");
-        this.lockWait = histogram("ledger_lock_wait_seconds", "Time spent acquiring sorted entity locks, per batch");
-        this.orderToApply = histogram("order_to_apply_seconds",
+        this.applyDuration = histogram("ledger_apply", "Wall time of one apply batch, including retries");
+        this.lockWait = histogram("ledger_lock_wait", "Time spent acquiring sorted entity locks, per batch");
+        this.orderToApply = histogram("order_to_apply",
                 "From the order's creation in order-service to its ledger apply commit (P2)");
         // Counters start at zero for every known retry class, so a dashboard shows "no deadlocks" rather than an
         // empty panel that could equally mean the metric is broken.
@@ -56,6 +56,11 @@ class ApplyMetrics {
         }
     }
 
+    /**
+     * Names carry no unit suffix on purpose. Micrometer's OTLP exporter appends the unit itself, so a meter named
+     * {@code *_seconds} arrives as {@code *_seconds_milliseconds_bucket} — a series that states two units and
+     * reports the millisecond one. The registry check caught this on a live backend.
+     */
     private Timer histogram(String name, String description) {
         return Timer.builder(name).description(description).serviceLevelObjectives(SLO_BUCKETS).register(meters);
     }

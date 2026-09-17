@@ -15,5 +15,8 @@ providers:
     allowUiUpdates: false
     updateIntervalSeconds: 30
     options:
-      path: /etc/grafana/provisioning/dashboards/zerosum
+      # Grafana scans conf/provisioning/dashboards for provider FILES; this provider is mounted there as
+      # zerosum.yaml, and the dashboard JSON lives in the sibling directory below. Earlier attempts nested both in a
+      # subdirectory, which Grafana skipped without loading — the log said so plainly once I finally read it.
+      path: /otel-lgtm/grafana/conf/provisioning/dashboards/zerosum
       foldersFromFilesStructure: false

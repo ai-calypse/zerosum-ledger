@@ -29,13 +29,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -f "$REGISTRY" ]] || { echo "registry not found: $REGISTRY" >&2; exit 2; }
+REGISTRY_PARSER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/parse-registry.py"
+[[ -f "$REGISTRY_PARSER" ]] || { echo "parser not found: $REGISTRY_PARSER" >&2; exit 2; }
+REGISTRY_EXTRA="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/unregistered-series.py"
 
 # The backend applies suffixes (_total for counters, _bucket/_count/_sum for histograms), so a registered name is
 # looked up as itself and as its plausible exported forms. A hit on any of them counts, and the form that matched is
 # reported so the registry can record the real series name rather than a guess.
 query_series() {
   local name="$1"
-  for candidate in "$name" "${name}_total" "${name}_count" "${name}_bucket" "${name}_sum"; do
+  # The OTLP exporter appends the unit as well as the aggregation suffix, so a Timer named "ledger_apply"
+  # arrives as "ledger_apply_milliseconds_bucket". Without these candidates the check reports a live series
+  # as MISSING — a false alarm from the very tool meant to catch false comfort.
+  for candidate in "$name" "${name}_total" "${name}_count" "${name}_bucket" "${name}_sum" \
+                   "${name}_milliseconds_bucket" "${name}_milliseconds_count" "${name}_milliseconds_sum" \
+                   "${name}_seconds_milliseconds_bucket" "${name}_max_milliseconds"; do
     local encoded body count
     encoded=$(printf 'count(%s)' "$candidate" | sed 's/ /%20/g; s/(/%28/g; s/)/%29/g')
     body=$(curl -s --max-time 10 "${PROM_URL}/api/v1/query?query=${encoded}" 2>/dev/null) || continue
@@ -56,22 +64,14 @@ print(len(d.get("data",{}).get("result",[])))
 }
 
 # Registered metric names, read straight from the registry rather than duplicated here.
-mapfile -t REGISTERED < <(python3 - "$REGISTRY" <<'PY'
-import re, sys
-text = open(sys.argv[1]).read()
-# Deliberately simple parsing: no YAML dependency is pinned for shell tooling (D00-1), and the file's shape is ours.
-in_metrics = False
-for line in text.splitlines():
-    if line.startswith('metrics:'):
-        in_metrics = True
-        continue
-    if in_metrics and line and not line[0].isspace():
-        break   # next top-level key ends the metrics block
-    m = re.match(r'\s*name_in_code:\s*(\S+)', line)
-    if in_metrics and m:
-        print(m.group(1))
-PY
-)
+# Plain command substitution, not mapfile + process substitution: that form failed with "bad substitution" on macOS
+# and left the array unset, so the script reported nothing while appearing to run.
+REGISTERED=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && REGISTERED+=("$line")
+done <<EOF
+$(python3 "$REGISTRY_PARSER" "$REGISTRY")
+EOF
 
 if [[ ${#REGISTERED[@]} -eq 0 ]]; then
   echo "no metrics parsed from the registry — refusing to report success" >&2
@@ -101,21 +101,7 @@ done
 
 # Series the project emits but nobody registered. A warning by default: an unregistered series is untracked, not
 # broken, and failing on it would make adding a metric harder than it should be.
-unregistered=$(curl -s --max-time 10 "${PROM_URL}/api/v1/label/__name__/values" 2>/dev/null | python3 - "${REGISTERED[@]}" <<'PY'
-import json, re, sys
-registered = set(sys.argv[1:])
-try:
-    names = json.load(sys.stdin).get('data', [])
-except Exception:
-    raise SystemExit
-ours = re.compile(r'^(outbox_|ledger_|order_to_apply|invariant_violations|kafka_consumer_lag)')
-def base(n):
-    return re.sub(r'_(total|count|bucket|sum)$', '', n)
-extra = sorted({n for n in names if ours.match(n) and base(n) not in registered and n not in registered})
-for n in extra:
-    print(n)
-PY
-)
+unregistered=$(curl -s --max-time 10 "${PROM_URL}/api/v1/label/__name__/values" 2>/dev/null | python3 "$REGISTRY_EXTRA" "${REGISTERED[@]}")
 
 if [[ -n "$unregistered" ]]; then
   echo ""

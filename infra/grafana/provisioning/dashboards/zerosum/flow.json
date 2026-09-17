@@ -31,8 +31,8 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.50, sum(rate(order_to_apply_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
-        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(order_to_apply_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum(rate(order_to_apply_milliseconds_bucket[5m])) by (le)) / 1000", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(order_to_apply_milliseconds_bucket[5m])) by (le)) / 1000", "legendFormat": "p95" }
       ]
     },
     {
@@ -92,7 +92,7 @@
       "targets": [
         { "refId": "A", "expr": "sum(rate(outbox_send_failures_total[5m]))", "legendFormat": "send failures/s" },
         { "refId": "B", "expr": "sum(rate(outbox_guard_skips_total[5m]))", "legendFormat": "guard skips/s" },
-        { "refId": "C", "expr": "histogram_quantile(0.95, sum(rate(outbox_publish_lag_seconds_bucket[5m])) by (le))", "legendFormat": "publish lag p95" }
+        { "refId": "C", "expr": "histogram_quantile(0.95, sum(rate(outbox_publish_lag_seconds_milliseconds_bucket[5m])) by (le)) / 1000", "legendFormat": "publish lag p95 (s)" }
       ]
     },
     {
@@ -103,8 +103,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(ledger_apply_seconds_bucket[5m])) by (le))", "legendFormat": "apply p95 (s)" },
-        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(ledger_lock_wait_seconds_bucket[5m])) by (le))", "legendFormat": "lock wait p95 (s)" },
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(ledger_apply_milliseconds_bucket[5m])) by (le)) / 1000", "legendFormat": "apply p95 (s)" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(ledger_lock_wait_milliseconds_bucket[5m])) by (le)) / 1000", "legendFormat": "lock wait p95 (s)" },
         { "refId": "C", "expr": "sum by (retry_class) (rate(ledger_apply_retries_total[5m]))", "legendFormat": "{{retry_class}} retries/s" }
       ]
     }

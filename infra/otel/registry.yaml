@@ -5,6 +5,11 @@
 #
 # Two rules this file exists to enforce:
 #   1. A signal nobody consumes is noise. Every entry names its consumers, or says "none yet" and why.
+#   NOTE (2026-09-16): Prometheus still holds pre-rename series named *_seconds_milliseconds_* from earlier runs.
+#   They are flat (no new increments) while the renamed series climb, so they are a dead series being carried
+#   forward, not a second emitter. They age out of the retention window; the check reports them as UNREGISTERED
+#   warnings, which is the correct behaviour rather than something to silence.
+#
 #   2. A name in code is not a series in the backend. `verified_in_backend` is false until
 #      infra/otel/check-registry.sh has observed the series under the export mode D00-7 selected (Micrometer OTLP
 #      push; the agent exports traces only). Nothing here claims a backend name from first principles.
@@ -35,13 +40,20 @@ metrics:
   # ---- libs/outbox (D03-5), existing before S07 ----
   - kind: histogram
     name_in_code: outbox_publish_lag_seconds
+    series_in_backend: outbox_publish_lag_seconds_milliseconds_{bucket,count,sum}, plus outbox_publish_lag_seconds_max_milliseconds
     unit: seconds
     labels: []
     module: libs/outbox
     owning_decision: D03-5
     consumers: [dashboard/flow, perf/P2]
-    status: existing
-    verified_in_backend: false
+    status: rename_requested
+    verified_in_backend: true
+    note: >-
+      OBSERVED, and the name is wrong. Micrometer's OTLP path appends its own unit suffix, so a meter already named
+      "_seconds" exports as "_seconds_milliseconds_*" — a name that states two different units and reports the
+      millisecond one. Dashboards must query outbox_publish_lag_seconds_milliseconds_bucket. A rename to
+      outbox_publish_lag (letting the exporter supply the unit) is requested from D03-5 rather than renamed here,
+      since S03 owns the meter. This is exactly the code-name-versus-series gap the registry exists to expose.
   - kind: gauge
     name_in_code: outbox_oldest_unpublished_seconds
     unit: seconds
@@ -50,7 +62,7 @@ metrics:
     owning_decision: D03-5
     consumers: [dashboard/flow, alert/outbox-backlog]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Read at scrape time from the database, so it stays truthful while the relay is stuck."
   - kind: gauge
     name_in_code: outbox_batch_size
@@ -60,7 +72,7 @@ metrics:
     owning_decision: D03-5
     consumers: [dashboard/flow]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
   - kind: counter
     name_in_code: outbox_send_failures_total
     unit: batches
@@ -69,7 +81,7 @@ metrics:
     owning_decision: D03-5
     consumers: [dashboard/flow]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Was dead for synchronous send failures until S03-T05 moved the send loop inside its try block."
   - kind: counter
     name_in_code: outbox_guard_skips_total
@@ -79,7 +91,7 @@ metrics:
     owning_decision: D03-5
     consumers: [dashboard/flow]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
 
   # ---- ledger-service listener (D04-3, D04-4), existing before S07 ----
   - kind: counter
@@ -90,7 +102,7 @@ metrics:
     owning_decision: D04-3
     consumers: [dashboard/flow]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
   - kind: counter
     name_in_code: ledger_orders_applied_total
     unit: orders
@@ -99,7 +111,7 @@ metrics:
     owning_decision: D04-3
     consumers: [dashboard/flow, perf/P1]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
   - kind: counter
     name_in_code: ledger_duplicates_skipped_total
     unit: orders
@@ -108,7 +120,7 @@ metrics:
     owning_decision: D04-3
     consumers: [dashboard/flow]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Non-zero is healthy: it is what effectively-once looks like under redelivery (M5(a))."
   - kind: counter
     name_in_code: ledger_quarantined_total
@@ -118,7 +130,7 @@ metrics:
     owning_decision: D04-4
     consumers: [dashboard/money-invariants, alert/quarantine]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Already matches the master's proposed name (§6.4), so no rename is requested."
   - kind: counter
     name_in_code: ledger_listener_pauses_total
@@ -128,7 +140,7 @@ metrics:
     owning_decision: D04-4
     consumers: [dashboard/flow, alert/consumer-lag]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
   - kind: gauge
     name_in_code: ledger_listener_paused
     unit: boolean
@@ -137,43 +149,46 @@ metrics:
     owning_decision: D04-4
     consumers: [alert/consumer-lag, s08/recovery-signal]
     status: existing
-    verified_in_backend: false
+    verified_in_backend: true
     note: >-
       Means "stopped because of a failure", not "we called pause()". S04-T03 found it set inside the
       do-not-pause-twice guard, which would have left an already-paused container failing with no signal.
 
   # ---- added by S07-T01 ----
   - kind: histogram
-    name_in_code: order_to_apply_seconds
-    unit: seconds
+    name_in_code: order_to_apply
+    series_in_backend: order_to_apply_milliseconds_{bucket,count,sum}
+    unit: milliseconds (supplied by the exporter)
     labels: []
     module: services/ledger-service
     owning_decision: D07-1
     consumers: [dashboard/flow, perf/P2]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: >-
       One observation per APPLIED order, never per batch and never for a duplicate. Counting redeliveries would make
       a pipeline reprocessing its backlog look like a pipeline doing more work.
   - kind: histogram
-    name_in_code: ledger_apply_seconds
-    unit: seconds
+    name_in_code: ledger_apply
+    series_in_backend: ledger_apply_milliseconds_{bucket,count,sum}
+    unit: milliseconds (supplied by the exporter)
     labels: []
     module: services/ledger-service
     owning_decision: D07-1
     consumers: [dashboard/flow, perf/P1, perf/P4]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: "One observation per committed batch. S07-T05 must not read batch counts as order throughput."
   - kind: histogram
-    name_in_code: ledger_lock_wait_seconds
-    unit: seconds
+    name_in_code: ledger_lock_wait
+    series_in_backend: ledger_lock_wait_milliseconds_{bucket,count,sum}
+    unit: milliseconds (supplied by the exporter)
     labels: []
     module: services/ledger-service
     owning_decision: D07-1
     consumers: [dashboard/platform, perf/SP4]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Taken from the engine's own measurement (ApplyBatchResult.lockWait); not re-timed in the listener."
   - kind: counter
     name_in_code: ledger_apply_retries_total
@@ -185,7 +200,7 @@ metrics:
     owning_decision: D07-1
     consumers: [dashboard/platform, perf/SP4]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Initialised at zero for all three classes, so an empty panel cannot be mistaken for a broken metric."
   - kind: gauge
     name_in_code: invariant_violations
@@ -197,7 +212,7 @@ metrics:
     owning_decision: D07-1
     consumers: [dashboard/money-invariants, alert/invariant-violation]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: >-
       One series per invariant, not a single consistent flag: an alert that fires without naming the broken
       invariant sends an operator to read code at 3am.
@@ -209,7 +224,7 @@ metrics:
     owning_decision: D07-1
     consumers: [alert/invariant-violation]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: >-
       Guards the gauge above. Violation counts that stop updating would otherwise read as a healthy zero forever.
   - kind: gauge
@@ -220,7 +235,7 @@ metrics:
     owning_decision: D07-1
     consumers: [dashboard/flow, alert/consumer-lag]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: >-
       S04 computed lag only inside the freshness endpoint, so an alert could not see it without HTTP traffic. This
       publishes the same computation on a schedule and reports ABSENCE (NaN), never zero, when it cannot measure.
@@ -232,7 +247,7 @@ metrics:
     owning_decision: D07-1
     consumers: [dashboard/flow, alert/consumer-lag, s05/payout-freshness]
     status: added
-    verified_in_backend: false
+    verified_in_backend: true
     note: "Kafka record-timestamp basis (§0.3 C12), reusing the D04-5 computation rather than a second one."
 
 # Signals the master requires that CANNOT be emitted yet, because the steps that own them are not built.

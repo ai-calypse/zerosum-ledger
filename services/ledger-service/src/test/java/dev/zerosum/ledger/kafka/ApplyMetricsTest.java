@@ -37,10 +37,10 @@ class ApplyMetricsTest {
         metrics.batchApplied(batch(List.of(new ApplyOutcome(0, UUID.randomUUID(), ApplyOutcome.Status.APPLIED, null, null)),
                 Duration.ofMillis(40), Duration.ofMillis(12), 0, 0, 0));
 
-        assertEquals(1, meters.get("ledger_apply_seconds").timer().count(),
+        assertEquals(1, meters.get("ledger_apply").timer().count(),
                 "one observation per batch, not per order — S07-T05 must not read batch counts as throughput");
-        assertEquals(1, meters.get("ledger_lock_wait_seconds").timer().count());
-        assertTrue(meters.get("ledger_apply_seconds").timer().totalTime(java.util.concurrent.TimeUnit.MILLISECONDS) >= 40);
+        assertEquals(1, meters.get("ledger_lock_wait").timer().count());
+        assertTrue(meters.get("ledger_apply").timer().totalTime(java.util.concurrent.TimeUnit.MILLISECONDS) >= 40);
     }
 
     @Test
@@ -55,7 +55,7 @@ class ApplyMetricsTest {
         metrics.orderApplied(new ApplyOutcome(1, UUID.randomUUID(), ApplyOutcome.Status.DUPLICATE, null, null), createdAt);
         metrics.orderApplied(new ApplyOutcome(2, null, ApplyOutcome.Status.QUARANTINED, QuarantineCode.SCHEMA_INVALID, "bad"), createdAt);
 
-        assertEquals(1, meters.get("order_to_apply_seconds").timer().count(),
+        assertEquals(1, meters.get("order_to_apply").timer().count(),
                 "duplicates and quarantined records are not applications");
     }
 
@@ -66,8 +66,8 @@ class ApplyMetricsTest {
         var meters = new SimpleMeterRegistry();
         new ApplyMetrics(meters);
 
-        assertEquals(0, meters.get("ledger_apply_seconds").timer().count());
-        assertEquals(0, meters.get("order_to_apply_seconds").timer().count());
+        assertEquals(0, meters.get("ledger_apply").timer().count());
+        assertEquals(0, meters.get("order_to_apply").timer().count());
     }
 
     @Test
@@ -102,8 +102,8 @@ class ApplyMetricsTest {
 
         metrics.orderApplied(new ApplyOutcome(0, UUID.randomUUID(), ApplyOutcome.Status.APPLIED, null, null), Instant.now().plusSeconds(30));
 
-        assertEquals(1, meters.get("order_to_apply_seconds").timer().count());
-        assertTrue(meters.get("order_to_apply_seconds").timer().totalTime(java.util.concurrent.TimeUnit.SECONDS) >= 0,
+        assertEquals(1, meters.get("order_to_apply").timer().count());
+        assertTrue(meters.get("order_to_apply").timer().totalTime(java.util.concurrent.TimeUnit.SECONDS) >= 0,
                 "an order cannot apply before it was created; skew is clamped, not recorded as negative latency");
     }
 }
