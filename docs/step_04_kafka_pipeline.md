@@ -605,21 +605,21 @@ Related master risks: R2 (correctness under redelivery), R3 (hot-entity ceiling)
 <a id="acceptance-checklist"></a>
 ## G. Acceptance checklist
 
-- [ ] **M5 (a)** ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have)): T05 Case B passes. Repeated delivery yields balances identical to single delivery, and the fault-exercised assertion holds.
-- [ ] **M5 (b)–(d)** hold end to end after Cases B and C, checked with the D02-8 queries for I2–I4 ([docs/zerosum_ledger_mvp_plan.md#invariants](zerosum_ledger_mvp_plan.md#invariants)).
-- [ ] **M6 (c)** ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have); E11 in [docs/zerosum_ledger_mvp_plan.md#decomposition-clarifications](zerosum_ledger_mvp_plan.md#decomposition-clarifications)): T05 Case E completes the audit walk within the M6 (c) call bound.
-- [ ] **M4 (c), downstream half:** T05 Case D passes, or is recorded as Blocked with the named D03-5 dependency. Never mark it passed without running it.
-- [ ] **Crash before ack:** Case C passes, and the committed offset was proven to be behind the applied records at the moment of the crash.
-- [ ] **Poison messages** behave as in [docs/zerosum_ledger_mvp_plan.md#degraded](zerosum_ledger_mvp_plan.md#degraded): `PoisonRecordIT`, `DlqPartitioningIT`, `QuarantineIdempotencyIT` and `MapperPoisonIT` pass (or the D03-6 blocker is recorded), the partition continues, and the D04-4 manual re-publish runbook step is written (§0.3 C14).
-- [ ] **Stuck consumer** behaves as in [docs/zerosum_ledger_mvp_plan.md#degraded](zerosum_ledger_mvp_plan.md#degraded): `TransientRetryIT`, `PauseResumeIT` and `UnclassifiedErrorIT` pass. No record is skipped, and resume is automatic.
-- [ ] **Explicit client configuration** per [docs/zerosum_ledger_mvp_plan.md#platform-limits](zerosum_ledger_mvp_plan.md#platform-limits): the per-service configuration tests pass, and the consumer-group protocol type is verified.
-- [ ] **Topics:** every topic matches D04-1, a mismatch fails startup, and ADR-0007 is committed.
-- [ ] **Freshness:** the endpoint meets D04-5 with the §0.3 C12 timestamp basis, fails closed, and is published in the ledger OpenAPI file, ready for S05 to enforce M10 (c).
-- [ ] **M12 (c) signals:** the quarantine and DLQ counters, and the v1.2 listener-paused and consumer-lag signals (records and seconds; §0.3 O9), are exposed, with their emitted names recorded in H.2 for the alerts in [docs/zerosum_ledger_mvp_plan.md#monitoring](zerosum_ledger_mvp_plan.md#monitoring).
-- [ ] **M12 (a) input:** the single trace from API to ledger apply is verified (§0.3 C11) and recorded in `docs/results/s04-trace-propagation.md`, and any gap has a change request or handoff item.
-- [ ] **Measurement:** relay lag and informal P2 are recorded as the exit criteria in [docs/zerosum_ledger_mvp_plan.md#step-04](zerosum_ledger_mvp_plan.md#step-04) require. The SP2 decision is evaluated against [docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes) and recorded in D04-7 (or marked `Not run` with the reason).
-- [ ] **CI:** every S04 test is tagged per D00-10 and green in the D00-5 jobs.
-- [ ] **Registers:** H.1–H.6 and I.1–I.2 are current, every change request raised is listed with its outcome, and change detection was re-run before handoff.
+- [ ] **M5 (a)** ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have)): T05 Case B passes. Repeated delivery yields balances identical to single delivery, and the fault-exercised assertion holds. *(**Not met as specified.** No `PipelineE2ETest` exists; repeated delivery is proven at listener level by `DuplicateDeliveryIT`, which is not Case B and carries no fault-exercised assertion.)*
+- [ ] **M5 (b)–(d)** hold end to end after Cases B and C, checked with the D02-8 queries for I2–I4 ([docs/zerosum_ledger_mvp_plan.md#invariants](zerosum_ledger_mvp_plan.md#invariants)). *(**Not met as specified** — depends on Cases B and C; Case C is Blocked on the D04-8 seam. I2–I4 do pass in `LedgerListenerIT` and `DuplicateDeliveryIT` on state that arrived through Kafka.)*
+- [x] **M6 (c)** ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have); E11 in [docs/zerosum_ledger_mvp_plan.md#decomposition-clarifications](zerosum_ledger_mvp_plan.md#decomposition-clarifications)): T05 Case E completes the audit walk within the M6 (c) call bound. *(Case E executed against the live Compose stack — balance → changelog → order in 3 calls, the changelog's idempotency key asserted equal to the order's. Not an automated suite: see D04-6.)*
+- [x] **M4 (c), downstream half:** T05 Case D passes, or is recorded as Blocked with the named D03-5 dependency. Never mark it passed without running it. *(Recorded as **Blocked**, not passed: no D03-5 injection point exists to halt order-service between broker confirmation and marking rows published. CR-S04-02 raised; `libs/outbox` deliberately not forked.)*
+- [ ] **Crash before ack:** Case C passes, and the committed offset was proven to be behind the applied records at the moment of the crash. *(**Blocked on D04-8**, the crash seam this step deferred. Never run, never claimed.)*
+- [ ] **Poison messages** behave as in [docs/zerosum_ledger_mvp_plan.md#degraded](zerosum_ledger_mvp_plan.md#degraded): `PoisonRecordIT`, `DlqPartitioningIT`, `QuarantineIdempotencyIT` and `MapperPoisonIT` pass (or the D03-6 blocker is recorded), the partition continues, and the D04-4 manual re-publish runbook step is written (§0.3 C14). *(**Partial.** `PoisonRecordIT` passes and the runbook step is written (`docs/runbook.md`, created here). `DlqPartitioningIT`, `QuarantineIdempotencyIT` and `MapperPoisonIT` are not written.)*
+- [ ] **Stuck consumer** behaves as in [docs/zerosum_ledger_mvp_plan.md#degraded](zerosum_ledger_mvp_plan.md#degraded): `TransientRetryIT`, `PauseResumeIT` and `UnclassifiedErrorIT` pass. No record is skipped, and resume is automatic. *(**Partial.** The policy is proven by `PausePolicyTest` (pause, no dead-lettering, unattended resume) and transient retry by S02's `ApplyLockTimeoutRetryIT`. A container-level `PauseResumeIT` under a real database fault is not written — a second Spring context would split the `ledger-apply` group.)*
+- [ ] **Explicit client configuration** per [docs/zerosum_ledger_mvp_plan.md#platform-limits](zerosum_ledger_mvp_plan.md#platform-limits): the per-service configuration tests pass, and the consumer-group protocol type is verified. *(**Partial.** `KafkaClientConfigTest` asserts the effective built properties; the consumer-group protocol type is not verified, and order-service has no equivalent test. Note the gap this missed: nothing asserts the address a deployed container actually reaches.)*
+- [ ] **Topics:** every topic matches D04-1, a mismatch fails startup, and ADR-0007 is committed. *(**Partial.** Topics now genuinely provision from D04-1 and were verified on the live broker (12 partitions, 7-day retention), and ADR-0007 is committed — but **a mismatch does not fail startup**; that check is deferred.)*
+- [x] **Freshness:** the endpoint meets D04-5 with the §0.3 C12 timestamp basis, fails closed, and is published in the ledger OpenAPI file, ready for S05 to enforce M10 (c). *(D04-5 met: §0.3 C12 record-timestamp basis, fails closed with figures omitted rather than zeroed — proven through HTTP in a broker-less context — and published in `openapi/ledger-service.yaml`.)*
+- [ ] **M12 (c) signals:** the quarantine and DLQ counters, and the v1.2 listener-paused and consumer-lag signals (records and seconds; §0.3 O9), are exposed, with their emitted names recorded in H.2 for the alerts in [docs/zerosum_ledger_mvp_plan.md#monitoring](zerosum_ledger_mvp_plan.md#monitoring). *(**Partial.** Quarantine, DLQ, pause and outbox counters plus the `ledger_listener_paused` gauge are exposed; the consumer-lag gauges are computed **on request** by the freshness endpoint, not on their own schedule, so alerts cannot yet read them without HTTP traffic.)*
+- [x] **M12 (a) input:** the single trace from API to ledger apply is verified (§0.3 C11) and recorded in `docs/results/s04-trace-propagation.md`, and any gap has a change request or handoff item. *(Verified on the live stack and recorded in `docs/results/s04-trace-propagation.md`. **The result is a defect:** broken at the outbox hop, so M12(a) itself is **not** met. CR-S04-01 raised to S03; the consumer hop is links, handed to S07-T01.)*
+- [x] **Measurement:** relay lag and informal P2 are recorded as the exit criteria in [docs/zerosum_ledger_mvp_plan.md#step-04](zerosum_ledger_mvp_plan.md#step-04) require. The SP2 decision is evaluated against [docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes) and recorded in D04-7 (or marked `Not run` with the reason). *(D04-7 records `Not run` with the reason. SP2 is **not triggered** because nothing was measured — not because the criterion was met.)*
+- [ ] **CI:** every S04 test is tagged per D00-10 and green in the D00-5 jobs. *(Tests are tagged per D00-10; CI has not yet run on this branch.)*
+- [ ] **Registers:** H.1–H.6 and I.1–I.2 are current, every change request raised is listed with its outcome, and change detection was re-run before handoff. *(H.1–H.4 and I.1 are current and both change requests are listed; **change detection was not re-run** before handoff.)*
 
 <a id="decisions-and-outputs"></a>
 ## H. Decisions and outputs register
@@ -768,6 +768,30 @@ Related master risks: R2 (correctness under redelivery), R3 (hot-entity ceiling)
 | Crash-point seam | D04-8 | S08: F2 in [docs/step_08_fault_injection_ablation.md#s08-t02](step_08_fault_injection_ablation.md#s08-t02); guard consolidation in [docs/step_08_fault_injection_ablation.md#s08-t03](step_08_fault_injection_ablation.md#s08-t03) |
 | Pipeline e2e harness | D04-6 | S05 scenario runner ([docs/step_05_instruments_fake_providers.md#s05-t13](step_05_instruments_fake_providers.md#s05-t13)); S08 regression tests with failing seeds ([docs/step_08_fault_injection_ablation.md#s08-c01](step_08_fault_injection_ablation.md#s08-c01)) |
 | M6 (c) audit-walk evidence (§0.3 E11) | `PipelineE2ETest` Case E (H.4) | S09 traceability table: [docs/step_09_demo_docs_release.md#s09-t02](step_09_demo_docs_release.md#s09-t02) |
+
+> **What the table above promises but S04 did not deliver.** Read this before consuming any row.
+>
+> - **Crash-point seam (D04-8) — does not exist.** Deferred by the scope cut. **S08's F2 and its guard consolidation
+>   have nothing to consume**, and S04-T05 Case C is Blocked on the same absence.
+> - **Pipeline e2e harness (D04-6) — does not exist.** No `PipelineE2ETest` and no container-image harness were built;
+>   the `e2eTest` task still selects no tests. **S05's scenario runner and S08's regression tests must build their own
+>   harness or raise a change request**, and the deferred M4(a) SIGKILL test needs the same missing lift.
+> - **`docs/results/s04-relay-lag.md` — was never written.** T07 was not run, so there are no publish-lag percentiles.
+>   D04-7 records SP2 as **not triggered because nothing was measured**, which is not the same as the criterion being
+>   met. S07-T05 inherits the open question.
+> - **M6 (c) audit-walk evidence is not a test.** Case E was executed by hand against the live Compose stack and its
+>   transcript is in [docs/results/s04-trace-propagation.md](results/s04-trace-propagation.md). **S09 cannot cite a
+>   `PipelineE2ETest` Case E**, because there is none; it must cite that transcript or re-run the walk.
+>
+> **Delivered but degraded — do not assume the happy shape.**
+>
+> - **The single-trace result is a defect, not a confirmation.** M12(a) is **not** met: the relay's publish starts an
+>   orphan trace, so the request's trace never reaches Kafka (CR-S04-01). Separately, the consumer hop is **links, not
+>   parent-child**, which S07-T01 must account for even once the outbox hop is fixed.
+> - **Consumer-lag signals are computed on request, not on a schedule.** The freshness endpoint calculates them per
+>   call, so **S07-T03's alerts cannot read them without HTTP traffic**; a scheduled gauge is still owed.
+> - **Topic provisioning has no startup mismatch check.** A topic left over with a different partition count is not
+>   detected, and that silently breaks per-group ordering (ADR-0007).
 
 **Where to resolve current definitions.** Downstream agents read the current D04-n entry in H.1 of [docs/step_04_kafka_pipeline.md#decisions-and-outputs](step_04_kafka_pipeline.md#decisions-and-outputs), then the actual paths in H.2/H.3, then the artifact itself (topic-definition source, `application.yaml`, `openapi/ledger-service.yaml`, ADR-0007). Topic names, partition counts, client property values, retry and probe schedules, and freshness fields are never copied from this document. If S04-C01 adopted Debezium, publication details come from D03-5 and ADR-0008, not from the polling-relay description.
 
