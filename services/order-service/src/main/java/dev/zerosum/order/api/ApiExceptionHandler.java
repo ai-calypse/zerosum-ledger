@@ -24,19 +24,19 @@ class ApiExceptionHandler {
     /** Unknown fields, duplicate keys, a float or string amount, or a body that is not JSON at all. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ProblemDetail handle(HttpMessageNotReadableException failure) {
-        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "validation_failed",
+        return problem(ApiException.Code.VALIDATION_FAILED,
                 "the request body is not a valid money order: unknown fields, duplicate keys and non-integer amounts "
                         + "are rejected rather than coerced");
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
     ProblemDetail handle(MissingServletRequestParameterException failure) {
-        return problem(HttpStatus.BAD_REQUEST, "validation_failed", failure.getParameterName() + " is required");
+        return problem(ApiException.Code.VALIDATION_FAILED, failure.getParameterName() + " is required");
     }
 
     @ExceptionHandler(OrderStore.UnknownAdjustedOrderException.class)
     ProblemDetail handle(OrderStore.UnknownAdjustedOrderException failure) {
-        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "unknown_adjusted_order", failure.getMessage());
+        return problem(ApiException.Code.UNKNOWN_ADJUSTED_ORDER, failure.getMessage());
     }
 
     @ExceptionHandler(OrderStore.AdjustmentGroupMismatchException.class)
@@ -47,13 +47,17 @@ class ApiExceptionHandler {
     /** PostgreSQL unreachable: fail fast after the pool connection timeout, storing nothing (master §6.6). */
     @ExceptionHandler(DataAccessResourceFailureException.class)
     ProblemDetail handle(DataAccessResourceFailureException failure) {
-        return problem(HttpStatus.SERVICE_UNAVAILABLE, "database_unavailable", "the orders database is unreachable");
+        return problem(ApiException.Code.DATABASE_UNAVAILABLE, "the orders database is unreachable");
     }
 
     /** Anything unexpected: a generic problem, never a stack trace or a request echo. */
     @ExceptionHandler(Exception.class)
     ProblemDetail handle(Exception failure) {
-        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error", "the request could not be processed");
+        return problem(ApiException.Code.INTERNAL_ERROR, "the request could not be processed");
+    }
+
+    private static ProblemDetail problem(ApiException.Code code, String detail) {
+        return problem(code.status(), code.wireValue(), detail);
     }
 
     private static ProblemDetail problem(HttpStatus status, String code, String detail) {

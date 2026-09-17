@@ -1,0 +1,291 @@
+# decision: D03-2 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+# Hand-written and kept honest by OpenApiSpecConsistencyTest, which compares it with Spring's registered handler map
+# in both directions and with the ApiException.Code enum. The generated alternative would need a new dependency and a
+# D00-1 change request for no artefact this does not already produce.
+#
+# The outbox stats operation is deliberately absent: S03-T06 adds it, and the consistency test fails until it does.
+openapi: 3.1.0
+info:
+  title: ZeroSum order-service API
+  version: "1.0.0"
+  description: |
+    Creates and reads immutable, zero-sum money orders.
+
+    **Idempotency.** Every create carries an `Idempotency-Key` header. The same key with the same request replays the
+    original response, byte for byte, with `Idempotent-Replayed: true`. The same key with a different request is
+    rejected. Keys never expire, because the money-order row is itself the idempotency record.
+
+    **Source of truth for entries.** Callers send explicit signed entries; the service never computes a fare split.
+servers:
+  - url: http://localhost:8081
+    description: Local Compose topology
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/money-orders:
+    post:
+      operationId: createMoneyOrder
+      summary: Create a COMMERCE money order
+      description: |
+        Requires the **writer** role. `source.system` is derived from the token, never from the body, so a caller
+        cannot write as another system.
+
+        Only COMMERCE is accepted here; every other order type is produced internally by the payment-event mapper.
+
+        A validation failure does not consume the idempotency key, so a corrected retry with the same key succeeds.
+      tags: [money-orders]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: At most 255 characters. Supplies `source.idempotency_key`.
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMoneyOrderRequest' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MoneyOrder' }
+        '200':
+          description: Replay of an earlier identical request.
+          headers:
+            Idempotent-Replayed:
+              description: Present and `true` when this response replays an earlier request.
+              schema: { type: string, enum: ["true"] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MoneyOrder' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+    get:
+      operationId: listMoneyOrdersByGroup
+      summary: List a group's orders in creation order
+      description: |
+        Requires the **reader** role. An order group is a trip's full history, so this returns the original order and
+        every adjustment in the order they were created.
+      tags: [money-orders]
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: The group's orders, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MoneyOrder' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/money-orders/{orderId}:
+    get:
+      operationId: getMoneyOrder
+      summary: Fetch one money order with its entries
+      description: Requires the **reader** role, which writer and admin tokens also satisfy.
+      tags: [money-orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Uuid' }
+      responses:
+        '200':
+          description: The stored order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MoneyOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Static per-role token (D03-4). Writer tokens name the source system they write as. Writer and admin also
+        satisfy reader endpoints; nothing else implies anything, so a writer cannot reach admin operations.
+
+  responses:
+    BadRequest:
+      description: A missing idempotency key or a missing required parameter.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing or unrecognised token.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: A valid token whose role does not satisfy this endpoint.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: No such order.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Another request with this idempotency key is still in flight.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Validation failed, the order is not zero-sum, the key was reused, or the adjusted order is unknown.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unavailable:
+      description: The orders database is unreachable. Nothing was stored.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Uuid:
+      type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    EntityId:
+      # decision: D01-5 — rule 3 entity ID pattern, mirrored from libs/money ValidationLimits
+      type: string
+      maxLength: 73
+      pattern: '^(rider|driver|platform|provider):[A-Za-z0-9_-]{1,64}$'
+
+    AccountCode:
+      # decision: D01-6 — the chart of accounts
+      type: string
+      enum: [receivable, payable, revenue, cash, processing_fees, clearing, payout_clearing]
+
+    CurrencyCode:
+      # decision: D01-7 — mirrors libs/money allowed-currencies.txt
+      type: string
+      enum: [EUR, JPY, KWD, USD]
+
+    Entry:
+      type: object
+      additionalProperties: false
+      required: [entity_id, account, currency, amount_minor]
+      properties:
+        entity_id: { $ref: '#/components/schemas/EntityId' }
+        account: { $ref: '#/components/schemas/AccountCode' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        amount_minor:
+          # decision: D01-5 — rule 2: non-zero, magnitude at most 10^12. Debit positive, credit negative (ADR-0003).
+          type: integer
+          format: int64
+          minimum: -1000000000000
+          maximum: 1000000000000
+          not: { const: 0 }
+
+    CreateMoneyOrderRequest:
+      type: object
+      # Server-assigned fields are not part of this contract, and unknown fields are rejected rather than ignored, so
+      # a body carrying order_id, source or created_at fails instead of appearing to have set them.
+      additionalProperties: false
+      required: [order_group_id, type, reason, entries, effective_at]
+      properties:
+        order_group_id: { type: string, minLength: 1, maxLength: 128 }
+        type:
+          type: string
+          enum: [COMMERCE]
+          description: This endpoint accepts COMMERCE only; other types come from the internal payment-event mapper.
+        reason:
+          type: string
+          maxLength: 64
+          pattern: '^[a-z_]+\.[a-z_]+$'
+        adjusts_order_id:
+          oneOf:
+            - { type: 'null' }
+            - { $ref: '#/components/schemas/Uuid' }
+          description: Must reference an existing order in the same order group.
+        entries:
+          type: array
+          minItems: 2
+          maxItems: 50
+          items: { $ref: '#/components/schemas/Entry' }
+        metadata:
+          type: object
+          description: Free-form. Absent and `{}` are equivalent and hash identically.
+        effective_at:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
+
+    MoneyOrder:
+      type: object
+      additionalProperties: false
+      required: [order_id, order_group_id, type, reason, adjusts_order_id, source, entries, metadata, effective_at, created_at]
+      description: |
+        The stored money order. This is the same shape as the published event contract in `libs/contracts`
+        (`zerosum.money_order.v1`), minus the `schema` discriminator the event carries.
+      properties:
+        order_id: { $ref: '#/components/schemas/Uuid' }
+        order_group_id: { type: string }
+        type: { type: string, enum: [COMMERCE, COLLECTION, REFUND, DISBURSEMENT, SETTLEMENT] }
+        reason: { type: string }
+        adjusts_order_id:
+          oneOf:
+            - { type: 'null' }
+            - { $ref: '#/components/schemas/Uuid' }
+        source:
+          type: object
+          additionalProperties: false
+          required: [system, idempotency_key]
+          properties:
+            system:
+              type: string
+              description: Derived from the authenticated principal, never from the request body.
+            idempotency_key: { type: string, maxLength: 255 }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/Entry' }
+        metadata: { type: object }
+        effective_at: { type: string }
+        created_at: { type: string }
+
+    Problem:
+      # RFC 9457 plus the stable `code` the master's conventions require. Callers branch on `code`, never on `title`.
+      type: object
+      required: [status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          # Checked against the ApiException.Code enum by OpenApiSpecConsistencyTest, so neither can drift.
+          enum:
+            - unauthorized
+            - forbidden
+            - idempotency_key_missing
+            - validation_failed
+            - not_zero_sum
+            - idempotency_key_reused
+            - unknown_adjusted_order
+            - idempotency_key_in_progress
+            - order_not_found
+            - database_unavailable
+            - internal_error
