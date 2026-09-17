@@ -2,6 +2,7 @@ package dev.zerosum.fakeproviders.bank;
 
 import dev.zerosum.fakeproviders.bank.FakeBankApi.PayoutRequest;
 import dev.zerosum.fakeproviders.bank.FakeBankApi.PayoutResponse;
+import dev.zerosum.fakeproviders.faults.FaultProfiles;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -30,13 +31,16 @@ public class FakeBankService {
 
     private final JdbcClient db;
     private final Clock clock;
+    private final FaultProfiles faults;
     private final Duration bankingDay;
 
     // No ProviderEventLog here: accepting a payout emits no event, because acceptance is not an outcome. Events are
     // written by PayoutTransitions when the simulated bank actually reaches one.
-    FakeBankService(JdbcClient db, Clock clock, @Value("${zs.fakebank.banking-day:30s}") Duration bankingDay) {
+    FakeBankService(JdbcClient db, Clock clock, FaultProfiles faults,
+            @Value("${zs.fakebank.banking-day:30s}") Duration bankingDay) {
         this.db = db;
         this.clock = clock;
+        this.faults = faults;
         this.bankingDay = bankingDay;
     }
 
@@ -49,6 +53,11 @@ public class FakeBankService {
         validate(request);
         String payoutId = "po_" + UUID.randomUUID();
         Instant now = clock.instant();
+        // decision: D05-2 — the knob profile wins over the configured banking day when it sets one, and the seeded
+        // processing delay is added on top, bounded by max_processing_delay_ms (kept under ADR-0010's quiet period
+        // by the knob validation). A real bank does not process every payout at the same instant.
+        Instant processAt = now.plus(faults.knobs(PROVIDER).bankingDay(bankingDay))
+                .plusMillis(faults.processingDelayMillis(PROVIDER));
 
         db.sql("""
                 INSERT INTO bank_payouts (payout_id, client_reference, destination_token, amount_minor, currency,
@@ -56,7 +65,7 @@ public class FakeBankService {
                 VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
                 """)
                 .params(payoutId, request.client_reference(), request.destination_token(), request.amount_minor(),
-                        request.currency(), Timestamp.from(now), Timestamp.from(now.plus(bankingDay)))
+                        request.currency(), Timestamp.from(now), Timestamp.from(processAt))
                 .update();
 
         // No event yet: acceptance is not an outcome, and emitting one here would let a consumer treat a payout that
@@ -73,21 +82,27 @@ public class FakeBankService {
                 .list();
     }
 
-    /** A payout whose next simulated transition is due, with everything the transition needs to decide. */
+    /**
+     * A payout whose next simulated transition is due, with everything the transition needs to decide.
+     *
+     * @param returnCode the return the bank has already decided on, set when the payout settled (D05-2). Carried
+     *                   here so the settled → returned step reuses that decision instead of drawing a second one
+     *                   that could disagree with the first.
+     */
     public record Due(String payoutId, String clientReference, String status, long amountMinor, String currency,
-            String destinationToken) {
+            String destinationToken, String returnCode) {
     }
 
     public List<Due> due(Instant now) {
         return db.sql("""
-                SELECT payout_id, client_reference, status, amount_minor, currency, destination_token
+                SELECT payout_id, client_reference, status, amount_minor, currency, destination_token, return_code
                 FROM bank_payouts
                 WHERE status IN ('PENDING','SETTLED') AND process_at <= ?
                 ORDER BY process_at
                 """)
                 .param(Timestamp.from(now))
                 .query((rs, rowNum) -> new Due(rs.getString(1), rs.getString(2), rs.getString(3), rs.getLong(4),
-                        rs.getString(5), rs.getString(6)))
+                        rs.getString(5), rs.getString(6), rs.getString(7)))
                 .list();
     }
 

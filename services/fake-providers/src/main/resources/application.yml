@@ -15,6 +15,13 @@ spring:
     password: ${ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD}
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
+  task:
+    scheduling:
+      pool:
+        # decision: D05-3 — two schedulers now: the payout lifecycle and the webhook sender. On the default
+        # single-threaded pool a webhook POST waiting on its timeout would hold up every payout transition, and
+        # the simulated bank would look broken because the receiver was slow.
+        size: 2
 
 # decision: D05-2 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
 # The simulated banking day. Short by default so tests and the demo see a full payout lifecycle in seconds rather
@@ -23,6 +30,40 @@ zs:
   fakebank:
     banking-day: ${ZS_FAKEBANK_BANKING_DAY:30s}
     lifecycle-interval: ${ZS_FAKEBANK_LIFECYCLE_INTERVAL:1s}
+
+  # decision: D03-4 — the admin token guards the fault and truth endpoints only (TB4); the provider APIs stay
+  # unauthenticated on the internal network. Writer and reader tokens are read so that a non-admin token is
+  # recognised and refused with 403 rather than treated as no token at all.
+  auth:
+    writer-tokens: ${ZS_WRITER_TOKENS:}
+    reader-token: ${ZS_READER_TOKEN:}
+    admin-token: ${ZS_ADMIN_TOKEN:}
+
+  # decision: D05-2 — fault-knob runtime bounds. The knob values themselves arrive through PUT /admin/faults/{provider}
+  # and are persisted, so they are deliberately not listed here: a default profile in configuration would inject
+  # faults into a stack nobody asked to be faulty.
+  faults:
+    # The response is withheld this long after the commit. Must exceed the adapter read timeout (D05-14: 5 s in
+    # services/instrument-service/src/main/resources/application.yml), or the fault would inject nothing.
+    timeout-after-commit-withhold: ${ZS_FAULT_TIMEOUT_WITHHOLD:7s}
+    # decision: D05-9 (ADR-0010) — max_processing_delay_ms is refused at or above the safe-resubmit quiet period:
+    # a bank that processed a payout after the resolver decided resubmission was safe would duplicate money.
+    processing-delay-limit: ${ZS_PROVIDER_QUIET_PERIOD:60s}
+
+  # decision: D05-3 — outbound signed webhooks. No receiver URL by default: instrument-service has no webhook
+  # endpoint until S05-T11, and a sender posting into a void would fill the fault log with meaningless failures.
+  # Events are still written by both providers, so turning delivery on is configuration, not a code change.
+  webhooks:
+    receiver-url: ${ZS_WEBHOOK_RECEIVER_URL:}
+    # ZS_WEBHOOK_SECRETS=current,previous during rotation (D00-8); the sender always signs with the first.
+    secrets: ${ZS_WEBHOOK_SECRETS:}
+    poll-interval: ${ZS_WEBHOOK_POLL_INTERVAL:1s}
+    batch-size: 100
+    # The compressed redelivery schedule from master §5.9; the last interval repeats until a 2xx.
+    redelivery: 1s,5s,30s,2m,10m
+    # How long the reorder knob holds an event back so a later event for the same object overtakes it.
+    reorder-hold: 2s
+    timeout: 2s
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

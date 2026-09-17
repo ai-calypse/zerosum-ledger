@@ -277,6 +277,12 @@ services:
     environment:
       <<: *service-env
       OTEL_SERVICE_NAME: fake-providers
+      # decision: D05-2, D03-4 — the fault and truth endpoints are admin-only (TB4). Without this the container
+      # authenticates nobody and every admin call fails while the container reports healthy.
+      ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
+      # decision: D05-3 — the webhook signing secret. No receiver URL is set: instrument-service has no webhook
+      # endpoint until S05-T11, so the sender stays idle and provider_events simply accumulate.
+      ZS_WEBHOOK_SECRETS: ${ZS_WEBHOOK_SECRETS:?set ZS_WEBHOOK_SECRETS in .env}
       ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD: ${ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD:?set ZS_FAKEPROVIDERS_OWNER_DB_PASSWORD in .env}
       ZS_FAKEPROVIDERS_APP_DB_PASSWORD: ${ZS_FAKEPROVIDERS_APP_DB_PASSWORD:?set ZS_FAKEPROVIDERS_APP_DB_PASSWORD in .env}
     # Internal only (master §4.6): reachable on the Compose network, no published port.
