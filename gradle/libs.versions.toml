@@ -47,6 +47,9 @@ spring-boot-opentelemetry = { module = "org.springframework.boot:spring-boot-ope
 # Not Boot-managed; pinned now, first used in S01 (master §0.3 C16)
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
+# Jackson 3 for the e2e tests, which talk to the running stack over plain HTTP and need to read its JSON.
+# No version: it resolves through the spring-boot-dependencies platform, like the other Boot-managed entries.
+jackson-databind = { module = "tools.jackson.core:jackson-databind" }
 
 # Not Boot-managed; attached to service images (D00-6)
 opentelemetry-javaagent = { module = "io.opentelemetry.javaagent:opentelemetry-javaagent", version.ref = "opentelemetry-javaagent" }

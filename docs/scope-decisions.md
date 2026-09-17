@@ -263,7 +263,7 @@ that behave nothing alike, reached through one interface, with the boundary enfo
   impression that the schema half of the work was going to arrive separately.
 - **Resuming S05 means starting at T07 and going through T09 together**, not picking T07 up alone.
 
-## The CI e2e job currently proves nothing
+## The CI e2e job proved nothing until S09 (resolved)
 
 **Found:** 2026-09-16, while reviewing CI before S09.
 
@@ -286,3 +286,17 @@ it up.
 integration tests against Testcontainers, but never once against the actual Compose stack the demo runs on. S04
 already showed what that gap hides: three defects that 132 green tests could not see, all of them only reachable in a
 real deployment.
+
+**Resolved, 2026-09-16 (S09).** `infra/tests/src/test/java/dev/zerosum/infra/MoneyPathE2ETest.java` is the first
+`@Tag("e2e")` test in the repository. It posts a money order to the running order-service, waits for it to arrive
+through the outbox and Kafka, and asserts the applied balances, the zero-sum property of the order's entries, the
+changelog link back to the order and its idempotency key, and that the ledger's own invariants hold with nothing
+quarantined. Measured: 1 test, 0 failures, 0.699 s against the seven-container stack.
+
+It reads credentials from `.env` rather than from the environment. CI generates `.env`, starts Compose and then runs
+Gradle without exporting anything, so a test using `System.getenv` would have passed on a developer's shell and
+failed in CI — the same hollowness in a new form.
+
+**What is still not covered end to end:** the provider path (instrument-service has no API), crash and restart
+(M4(a)), fault injection, and reconciliation. One test is not a suite, and the e2e job still runs only on a schedule
+or a manual dispatch, never on a pull request.
