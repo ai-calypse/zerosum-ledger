@@ -22,5 +22,10 @@ Thumbs.db
 .env
 !.env.example
 
+# Agent worktrees. Each is a full checkout of this repository (12MB+ at three agents), with a .git file pointing at
+# local absolute paths. Nothing here belongs in a public repository, and a broad `git add -A` would otherwise sweep
+# entire duplicate trees into it.
+.claude/
+
 # Prompt-02 documentation bundle (duplicate of docs/)
 /zerosum-ledger-docs.zip
