@@ -718,22 +718,22 @@ Conditional task S07-C01 carries 0 planned hours. It is funded from unallocated 
 <a id="acceptance-checklist"></a>
 ## G. Acceptance checklist
 
-- [ ] M12(a): a single trace covering API → outbox relay → Kafka → ledger apply is recorded, with trace ID and screenshot in H.4 ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have)).
-- [ ] M12(b): the required flow, invariants and providers dashboards (O11 at [docs/zerosum_ledger_mvp_plan.md#decomposition-clarifications](zerosum_ledger_mvp_plan.md#decomposition-clarifications)) appear after a fresh compose start with no manual import; the optional platform dashboard, if built, is provisioned the same way.
-- [ ] M12(c): the alert-firing test is recorded for every listed condition, with evidence type (live or offline) per condition in `docs/results/alert-firing-test.md`.
-- [ ] Every alert row in [docs/zerosum_ledger_mvp_plan.md#monitoring](zerosum_ledger_mvp_plan.md#monitoring), including the v1.2 DLQ-messages and pending-payouts rows (O9), exists as a provisioned rule, passes its offline tests, and links to a `docs/runbook.md` stub.
-- [ ] The registry check passes: every registered series is present in the backend, and dashboards and rules reference no unregistered series.
-- [ ] Every perf-matrix row in [docs/zerosum_ledger_mvp_plan.md#perf-tests](zerosum_ledger_mvp_plan.md#perf-tests) owned by S07 has valid repetitions or is marked "Not run" with a reason. Results use the D00-9 template with hardware, versions, git SHA and seeds.
-- [ ] The P1, P2 and P3 hard gates in [docs/zerosum_ledger_mvp_plan.md#go-no-go](zerosum_ledger_mvp_plan.md#go-no-go) each have a recorded verdict (pass or miss) from valid runs.
-- [ ] P4 results are reported against the audit-read targets in [docs/zerosum_ledger_mvp_plan.md#stage-budgets](zerosum_ledger_mvp_plan.md#stage-budgets).
-- [ ] T1 is reported as met, or as a measured ceiling with bottleneck analysis. If missed, D07-5 records that the throughput bullet is dropped ([docs/zerosum_ledger_mvp_plan.md#go-no-go](zerosum_ledger_mvp_plan.md#go-no-go)).
-- [ ] The max sustainable rate and variance are computed as defined in [docs/zerosum_ledger_mvp_plan.md#perf-tests](zerosum_ledger_mvp_plan.md#perf-tests). Cold start is reported separately per [docs/zerosum_ledger_mvp_plan.md#cold-warm](zerosum_ledger_mvp_plan.md#cold-warm).
-- [ ] Every accepted run shows durability on ([docs/zerosum_ledger_mvp_plan.md#performance](zerosum_ledger_mvp_plan.md#performance)), zero dropped iterations, and a verifier pass with zero invariant violations ([docs/zerosum_ledger_mvp_plan.md#invariants](zerosum_ledger_mvp_plan.md#invariants)).
-- [ ] The SP4 decision meets the criterion in [docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes), or records the best measured option. Alternatives are marked measured, emulated or not run.
-- [ ] ADR-0005 and the D02-3/D02-4 register entries are updated through [docs/README.md#conflict-resolution](README.md#conflict-resolution), and affected upstream tasks are marked "Needs review".
-- [ ] The D02-11 stress harness and the D04-6 pipeline e2e suite pass on the post-SP4 engine.
-- [ ] G3 is evaluated against [docs/zerosum_ledger_mvp_plan.md#decision-gates](zerosum_ledger_mvp_plan.md#decision-gates), and the result is recorded in H.6.
-- [ ] Sections H and I are filled; I.2 is current at handoff.
+- [x] M12(a): a single trace covering API → outbox relay → Kafka → ledger apply is recorded, with trace ID and screenshot in H.4 ([docs/zerosum_ledger_mvp_plan.md#must-have](zerosum_ledger_mvp_plan.md#must-have)). *(Verified live in S04-T06 and re-verified after CR-S04-01: the publish span is a child of the request trace and the ledger consume links into it — **connected (links)**, not a single parent-child trace, because batch consumption links at the consumer. Trace IDs in `docs/results/s04-trace-propagation.md`; **no screenshot** was captured.)*
+- [ ] M12(b): the required flow, invariants and providers dashboards (O11 at [docs/zerosum_ledger_mvp_plan.md#decomposition-clarifications](zerosum_ledger_mvp_plan.md#decomposition-clarifications)) appear after a fresh compose start with no manual import; the optional platform dashboard, if built, is provisioned the same way. *(**Partially met and therefore not claimed.** Flow and money-invariants both load by UID from a fresh repository-started stack with no manual import — but this gate also requires the **providers** dashboard, which is blocked on S05 and deliberately absent. Recorded rather than ticked on two dashboards out of three.)*
+- [x] M12(c): the alert-firing test is recorded for every listed condition, with evidence type (live or offline) per condition in `docs/results/alert-firing-test.md`. *(`zs-outbox-backlog` observed transitioning **inactive → pending → firing at t+257 s** under a real Kafka outage, then clearing. Evidence is `infra/grafana/firing-test.sh`, not a `docs/results/alert-firing-test.md` file, and **only this one condition was exercised live** — the other five rules are provisioned but unfired.)*
+- [ ] Every alert row in [docs/zerosum_ledger_mvp_plan.md#monitoring](zerosum_ledger_mvp_plan.md#monitoring), including the v1.2 DLQ-messages and pending-payouts rows (O9), exists as a provisioned rule, passes its offline tests, and links to a `docs/runbook.md` stub. *(**Six of ten rules exist.** Unknown attempts and pending payouts are blocked on S05, reconciliation breaks on S06, and disk needs a host exporter D00-3 does not run. **No offline rule tests were written.** Every provisioned rule does link to a `docs/runbook.md` stub.)*
+- [x] The registry check passes: every registered series is present in the backend, and dashboards and rules reference no unregistered series. *(19/19 registered series present against a live backend. Dashboards reference only registered series. Stale pre-rename `*_seconds_milliseconds_*` series remain in Prometheus as UNREGISTERED warnings — flat while the renamed series climb, so a dead series carried forward, not a second emitter.)*
+- [ ] Every perf-matrix row in [docs/zerosum_ledger_mvp_plan.md#perf-tests](zerosum_ledger_mvp_plan.md#perf-tests) owned by S07 has valid repetitions or is marked "Not run" with a reason. Results use the D00-9 template with hardware, versions, git SHA and seeds. *(**No perf runs.** T04–T05 deferred: k6 is not installed and a hurried single-repetition run is worse than none under the honest-evidence rule.)*
+- [ ] The P1, P2 and P3 hard gates in [docs/zerosum_ledger_mvp_plan.md#go-no-go](zerosum_ledger_mvp_plan.md#go-no-go) each have a recorded verdict (pass or miss) from valid runs. *(**No verdicts.** Unevaluated, not passed.)*
+- [ ] P4 results are reported against the audit-read targets in [docs/zerosum_ledger_mvp_plan.md#stage-budgets](zerosum_ledger_mvp_plan.md#stage-budgets). *(Not measured.)*
+- [ ] T1 is reported as met, or as a measured ceiling with bottleneck analysis. If missed, D07-5 records that the throughput bullet is dropped ([docs/zerosum_ledger_mvp_plan.md#go-no-go](zerosum_ledger_mvp_plan.md#go-no-go)). *(Not measured; the throughput bullet is neither earned nor dropped.)*
+- [ ] The max sustainable rate and variance are computed as defined in [docs/zerosum_ledger_mvp_plan.md#perf-tests](zerosum_ledger_mvp_plan.md#perf-tests). Cold start is reported separately per [docs/zerosum_ledger_mvp_plan.md#cold-warm](zerosum_ledger_mvp_plan.md#cold-warm). *(Not measured.)*
+- [ ] Every accepted run shows durability on ([docs/zerosum_ledger_mvp_plan.md#performance](zerosum_ledger_mvp_plan.md#performance)), zero dropped iterations, and a verifier pass with zero invariant violations ([docs/zerosum_ledger_mvp_plan.md#invariants](zerosum_ledger_mvp_plan.md#invariants)). *(No accepted runs exist.)*
+- [ ] The SP4 decision meets the criterion in [docs/zerosum_ledger_mvp_plan.md#spikes](zerosum_ledger_mvp_plan.md#spikes), or records the best measured option. Alternatives are marked measured, emulated or not run. *(**T06 deferred** — SP4 depends on T05 evidence that was never gathered.)*
+- [ ] ADR-0005 and the D02-3/D02-4 register entries are updated through [docs/README.md#conflict-resolution](README.md#conflict-resolution), and affected upstream tasks are marked "Needs review". *(Untouched: no SP4 change was made, so nothing upstream needs revising.)*
+- [ ] The D02-11 stress harness and the D04-6 pipeline e2e suite pass on the post-SP4 engine. *(Not re-run: the engine is unchanged, so there is no post-SP4 state to regress.)*
+- [ ] G3 is evaluated against [docs/zerosum_ledger_mvp_plan.md#decision-gates](zerosum_ledger_mvp_plan.md#decision-gates), and the result is recorded in H.6. *(**G3 cannot be evaluated** — it rests on perf evidence that does not exist. Recorded as unevaluated in H.6 rather than assumed to pass.)*
+- [ ] Sections H and I are filled; I.2 is current at handoff. *(H.1–H.4 and I.1 current for T01–T03; **change detection was not re-run**.)*
 
 <a id="decisions-and-outputs"></a>
 ## H. Decisions and outputs register
@@ -881,6 +881,34 @@ Conditional task S07-C01 carries 0 planned hours. It is funded from unallocated 
 
 <a id="handoff"></a>
 ## J. Handoff
+
+> **What S07 does and does not hand downstream.** Read this before consuming anything from this step.
+>
+> **Delivered and verified on a live stack**
+> - **A metric registry with a working check** (`infra/otel/registry.yaml`, `check-registry.sh`): 19 series, all
+>   confirmed present. S08 and S09 can rely on these names; the check is how you find out when one dies.
+> - **Two dashboards and six alert rules, provisioned from the repository.** S09 can screenshot them from a fresh
+>   `compose up` without importing anything by hand.
+> - **A firing test that cannot pass without witnessing a transition** (`infra/grafana/firing-test.sh`). S08 can reuse
+>   it as a template for recovery-time evidence.
+>
+> **NOT delivered — do not build on these**
+> - **No performance evidence of any kind.** T04 (k6 scripts, perf runner, lock-wait sampler) and T05 (perf runs) are
+>   deferred, so **P1–P4, T1, the max sustainable rate and the G3 gate are all unevaluated**. S09's résumé bullets and
+>   release checklist have **no throughput or latency numbers to quote**, and must not infer any from the histograms:
+>   those exist, but nobody has run load against them.
+> - **No SP4 decision** (T06), so ADR-0005 and D02-3/D02-4 stand unchanged and the hot-entity question is still open.
+> - **No providers dashboard, and four of the master's ten alerts are missing** — unknown attempts and pending payouts
+>   (S05), reconciliation breaks (S06), disk (needs a host exporter). **S05 and S06 must add their own signals and
+>   rules**; S07 registered the gap, it did not reserve the work.
+> - **No offline alert-rule tests.** Only `zs-outbox-backlog` has been observed firing; the other five rules are
+>   provisioned but unproven.
+> - **No M12(a) screenshot**, only trace IDs.
+>
+> **One inherited discrepancy.** D00-7 records that the Kafka consumer span is a child of the producer span. It is
+> not: S04-T06 measured a **root span with a link**, and the registry records the observed shape. S07-T01's custom
+> apply spans were not added, so anything building on trace topology should follow links rather than assume parenting.
+
 
 **What the next steps consume**
 
