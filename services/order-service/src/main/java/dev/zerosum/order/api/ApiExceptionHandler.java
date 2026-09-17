@@ -13,7 +13,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Every failure becomes an RFC 9457 problem with a stable {@code code} (D03-2). Callers branch on {@code code}, never
  * on the human-readable title, and no response carries a stack trace or echoes the request.
  */
-@RestControllerAdvice(assignableTypes = MoneyOrderController.class)
+// Scoped to this package rather than to one controller. It was bound to MoneyOrderController, so the first endpoint
+// added outside it returned 500 for what should have been a 401: the advice simply did not apply, and every problem
+// code — unauthorized, forbidden, validation_failed, database_unavailable — collapsed into internal_error. The
+// package is exactly this service's controllers, so a new one is covered by default instead of by remembering.
+@RestControllerAdvice(basePackageClasses = ApiExceptionHandler.class)
 class ApiExceptionHandler {
 
     @ExceptionHandler(ApiException.class)

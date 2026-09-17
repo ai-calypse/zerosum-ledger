@@ -39,6 +39,10 @@ public final class OutboxFactory {
         return new OutboxRelay(template, producer, properties, metrics, transactionManager);
     }
 
+    public static OutboxStatsQuery stats(JdbcTemplate template) {
+        return new OutboxStatsQuery(template);
+    }
+
     public static OutboxRelayLoop loop(OutboxRelay relay, OutboxProperties properties) {
         return new OutboxRelayLoop(relay, properties);
     }

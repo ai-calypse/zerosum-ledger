@@ -116,6 +116,29 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  /v1/outbox/stats:
+    get:
+      operationId: getOutboxStats
+      summary: How far behind the transactional outbox is
+      description: |
+        Requires the **reader** role. Reports the rows still waiting for the relay and the age of the oldest one.
+
+        This is a staleness signal, not a health check. While Kafka is unreachable the API keeps accepting orders and
+        the backlog grows, so a caller that needs to know whether downstream data is current reads this rather than
+        assuming a 200 from any other endpoint means the pipeline is keeping up.
+      tags: [outbox]
+      responses:
+        '200':
+          description: |
+            The current backlog. An empty outbox reports a count of 0 and an age of 0 rather than omitting the age, so
+            a caller summing freshness across services never has to special-case an absent value.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboxStats' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -163,6 +186,22 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+    OutboxStats:
+      type: object
+      additionalProperties: false
+      required: [unpublished_count, oldest_unpublished_age_seconds]
+      properties:
+        unpublished_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Rows written but not yet acknowledged by the broker.
+        oldest_unpublished_age_seconds:
+          type: number
+          minimum: 0
+          description: |
+            Age of the oldest unpublished row, measured from its `created_at` with the database clock. Zero when the
+            outbox is empty.
     Uuid:
       type: string
       pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'

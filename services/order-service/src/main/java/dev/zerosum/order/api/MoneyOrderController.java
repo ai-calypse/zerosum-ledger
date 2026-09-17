@@ -2,7 +2,6 @@ package dev.zerosum.order.api;
 
 import dev.zerosum.auth.Principal;
 import dev.zerosum.auth.Role;
-import dev.zerosum.auth.TokenAuthFilter;
 import dev.zerosum.money.ChartOfAccounts;
 import dev.zerosum.money.CurrencyRules;
 import dev.zerosum.money.OrderCandidate;
@@ -52,7 +51,7 @@ class MoneyOrderController {
     ResponseEntity<MoneyOrderResponse> create(HttpServletRequest request,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody MoneyOrderRequest body) {
-        Principal principal = require(request, Role.WRITER);
+        Principal principal = ApiAuthorization.require(request, Role.WRITER);
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw ApiException.idempotencyKeyMissing();   // M3 (d)
         }
@@ -78,7 +77,7 @@ class MoneyOrderController {
 
     @GetMapping("/v1/money-orders/{orderId}")
     MoneyOrderResponse fetch(HttpServletRequest request, @PathVariable String orderId) {
-        require(request, Role.READER);
+        ApiAuthorization.require(request, Role.READER);
         UUID id;
         try {
             id = UUID.fromString(orderId);
@@ -90,17 +89,8 @@ class MoneyOrderController {
 
     @GetMapping("/v1/money-orders")
     List<MoneyOrderResponse> listByGroup(HttpServletRequest request, @RequestParam("group_id") String groupId) {
-        require(request, Role.READER);
+        ApiAuthorization.require(request, Role.READER);
         return store.readByGroup(groupId).stream().map(MoneyOrderResponse::of).toList();
-    }
-
-    /** Authenticated by the filter; authorised here, so each endpoint states the role it needs (D03-4). */
-    private static Principal require(HttpServletRequest request, Role required) {
-        Principal principal = TokenAuthFilter.principal(request).orElseThrow(ApiException::unauthorized);
-        if (!principal.role().satisfies(required)) {
-            throw ApiException.forbidden("this endpoint requires the " + required.name().toLowerCase() + " role");
-        }
-        return principal;
     }
 
     private static NewOrder toNewOrder(Principal principal, String idempotencyKey, MoneyOrderRequest body) {

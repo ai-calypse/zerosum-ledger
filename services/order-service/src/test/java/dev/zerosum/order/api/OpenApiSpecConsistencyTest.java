@@ -1,7 +1,6 @@
 package dev.zerosum.order.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.zerosum.order.support.OrderTestDatabase;
@@ -29,8 +28,8 @@ import org.yaml.snakeyaml.Yaml;
  * registered handler map in both directions and with the {@link ApiException.Code} enum, so an endpoint or a problem
  * code cannot be added on one side and forgotten on the other.
  *
- * <p>It deliberately fails while the outbox stats operation is missing from the specification: S03-T06 adds that
- * endpoint, and this test is what forces the specification to be updated in the same change.
+ * <p>Until S03-T06 it deliberately failed while the outbox stats operation was missing from the specification. That
+ * assertion did its job — the endpoint could not be added without documenting it — and is now inverted.
  */
 @Tag("integration")
 @SpringBootTest
@@ -159,11 +158,11 @@ class OpenApiSpecConsistencyTest {
     }
 
     @Test
-    void theStatsOperationIsNotYetDocumented() {
-        // S03-T06 adds GET /v1/outbox/stats. This assertion is the forcing function: when that endpoint is written,
-        // this test fails until the specification is updated in the same change.
-        assertFalse(specOperations().contains("GET /v1/outbox/stats"),
-                "once the stats endpoint exists, document it and delete this assertion");
+    void theStatsOperationIsDocumented() {
+        // Was the inverse assertion until S03-T06: it failed the moment the endpoint existed, which is what forced the
+        // specification to be updated in the same change rather than drifting behind the code.
+        assertTrue(specOperations().contains("GET /v1/outbox/stats"),
+                "the stats endpoint exists, so it must be documented");
     }
 
     private static String readSpec() {

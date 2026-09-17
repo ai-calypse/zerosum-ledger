@@ -7,6 +7,7 @@ import dev.zerosum.outbox.OutboxMetrics;
 import dev.zerosum.outbox.OutboxProperties;
 import dev.zerosum.outbox.OutboxRelay;
 import dev.zerosum.outbox.OutboxRelayLoop;
+import dev.zerosum.outbox.OutboxStatsQuery;
 import dev.zerosum.outbox.OutboxWriter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
@@ -70,6 +71,12 @@ class OrderOutboxConfiguration {
     @Bean
     OutboxCleanupJob outboxCleanupJob(OutboxRelay relay) {
         return OutboxFactory.cleanupJob(relay);
+    }
+
+    /** decision: D03-7 — the stats query lives in the library so instrument-service reuses it in S05. */
+    @Bean
+    OutboxStatsQuery outboxStatsQuery(JdbcTemplate template) {
+        return OutboxFactory.stats(template);
     }
 
     @Bean

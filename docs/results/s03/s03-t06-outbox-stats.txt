@@ -1,0 +1,35 @@
+# S03-T06 outbox stats endpoint  2026-09-16
+
+RESULT
+  order-service 60 tests, 0 failures (OutboxStatsIT 2 new; OpenApiSpecConsistencyTest 5 still green)
+
+WHAT IT DOES
+  GET /v1/outbox/stats, reader role (writer and admin satisfy it). Returns unpublished_count and
+  oldest_unpublished_age_seconds. The query lives in libs/outbox (OutboxStatsQuery) so instrument-service reuses it in
+  S05 rather than writing its own SQL against a table the library owns. Count and age come from ONE statement, so both
+  describe the same instant, and the age uses the database clock (0.3 C12) - a service with a drifted clock would
+  otherwise report a comfortable number while the backlog grew.
+
+EMPTY OUTBOX (D03-7)
+  count 0, age 0 - not an absent field. S05's payout-run freshness sum is then always defined instead of special-casing
+  a missing value.
+
+TESTED WITH NO BROKER RUNNING
+  Which is the only state where this endpoint matters. Orders are accepted, their outbox rows stay unpublished, and the
+  endpoint reports the backlog growing. Creating two orders moves unpublished_count by exactly two, which also proves
+  the create path writes its outbox row in the same transaction as the order.
+
+A REAL DEFECT THIS TASK EXPOSED
+  ApiExceptionHandler was annotated @RestControllerAdvice(assignableTypes = MoneyOrderController.class). The first
+  controller added outside that one - this one - returned 500 where it should have returned 401: the advice did not
+  apply at all, so unauthorized, forbidden, validation_failed and database_unavailable all collapsed into
+  internal_error. The OpenAPI file documented 401/403/503 for the endpoint while the service could not produce them.
+  Now scoped by package (basePackageClasses), so a new controller is covered by default rather than by remembering.
+  Caught because the test asserted the unauthenticated case, not only the happy path.
+
+FORCING ASSERTION DISCHARGED
+  theStatsOperationIsNotYetDocumented (S03-T04) failed the moment this endpoint existed, which is what made the
+  specification get updated in the same change. It is now inverted to theStatsOperationIsDocumented.
+
+REPRODUCE
+  ./gradlew :services:order-service:test :services:order-service:integrationTest
