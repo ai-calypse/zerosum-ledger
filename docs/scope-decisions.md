@@ -381,3 +381,44 @@ and it would make the record of S05-T07 look dishonest when it was the opposite.
 2. **One malformed record would have stopped collections permanently.** `ContractSchemas.validate` *throws* on
    non-JSON bytes rather than returning errors; called outside a `try`, a single poison record would have paused the
    partition and redelivered for ever. Decoding is now classified before anything is written.
+
+## CR-S05-02 — provider ground truth cannot be queried by entity
+
+**Raised:** 2026-09-17, verifying S05-T09 in a deployment.
+**Against:** D05-3 (S05-T03 admin/ground-truth endpoint).
+
+`GET /admin/truth?entity_id=` returns `"charges": []` for **every** entity, including one whose charge had just
+succeeded seconds earlier.
+
+**Confirmed against the database, not inferred.** After a successful charge:
+
+```
+fakeproviders.card_charges : charge_id=ch_30673ba9-…  client_ref=01a0ae99-e019-7da2-8e46-3c661b2e1ae5  SUCCEEDED
+instruments.payment_attempts: attempt=01a0ae99-e019-7da2-8e46-3c661b2e1ae5  entity=rider:OKc401deb3df
+```
+
+The charge is stored against the **client reference**, which is the attempt id. The string `rider:OKc401deb3df`
+appears nowhere in the fakeproviders database, because instrument-service never sends it: the adapter sends the
+attempt id as client reference and instrument token, and nothing else. The endpoint is filtering charges by an
+identifier the provider has never been given, so the filter can only ever match nothing.
+
+**Why this is more than cosmetic.** Invariant **I7** compares the ledger against provider ground truth through this
+endpoint. As it stands, an auditor querying by entity would conclude that no charge had occurred, for any entity, at
+any time — a clean bill of health produced by a lookup that cannot match. The webhook-queue section of the same
+response is populated correctly, which makes the empty `charges` array look like a real answer rather than a broken
+query.
+
+**The tension to resolve, not paper over.** Master §5.6 specifies the parameter as `entity_id`, but a real payment
+provider does not know our entity ids, and teaching fake-providers about them would make the simulator less faithful
+than the thing it simulates. Three ways out, in preference order:
+
+1. **Query ground truth by client reference**, and have the caller resolve entity → attempt ids from the instruments
+   database first. Keeps the provider ignorant of our domain, which is the property that makes it a useful
+   simulation. Requires a change request against the master's §5.6 parameter.
+2. Have instrument-service pass the entity id to the provider as opaque metadata. Faithful to §5.6, less faithful to
+   reality.
+3. Leave it and document that `entity_id` never matches. Rejected: a lookup that silently returns "nothing wrong" is
+   the worst of the three.
+
+**Not fixed here.** The endpoint belongs to S05-T03; fixing it inside a verification pass would put the change in a
+commit whose subject is something else. Recorded, with I7 unusable through this endpoint until it is done.
