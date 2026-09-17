@@ -163,3 +163,40 @@ performance evidence at all**. The register says so plainly instead of reporting
 not a link". S04-T06 measured the opposite on the live stack: the consumer span is a **root with a link** to the
 producer. The registry records what the backend actually holds, and the discrepancy is raised against D00-7 rather
 than silently followed.
+
+## S05 Instruments and fake providers — scope cut (2026-09-17)
+
+Thirteen tasks at roughly 26 hours, covering two simulated providers, an attempt state machine, a collection policy
+consumer, a payout run, an HMAC webhook receiver, sweepers and a scenario catalog. It is the largest step in the pack,
+and under the résumé-scope direction it gets cut to the spine that makes the system demonstrably end-to-end.
+
+**Why this step is worth doing at all rather than skipping.** It is the only source of the signals S07 had to record
+as absent — provider latency, attempt states, `UNKNOWN` age, pending payouts — so it converts four "blocked" register
+rows into real telemetry, and it is what makes the money loop close: an order becomes a real charge, a webhook
+returns, and the ledger reflects it.
+
+**Kept**
+
+- **T04 `PaymentInstrument` interface, capabilities and result types.** The abstraction the whole step exists to show.
+- **T01 FakeCard** (charges, refunds, idempotency keys, lookup) and **T02 FakeBank** (asynchronous payouts, lookup by
+  client reference, settle/fail/return). Both are needed for M7's shared contract suite to mean anything.
+- **T05 adapters** and **T06 the shared contract test suite plus the ArchUnit provider-boundary rule.** M7 in full:
+  one suite both providers pass, and a rule that stops provider packages leaking.
+- **T07 instruments schema, transition persistence with the optimistic guard, and the outbox** — reusing
+  `libs/outbox`, which already carries the trace-context fix from CR-S04-01.
+- **T08 the state × event transition table test.** M8(a). A state machine without an exhaustive table test is a
+  state machine nobody can trust.
+
+**Deferred**
+
+- **T03 fault knobs, seeded randomness, signed webhook sender with redelivery, ground-truth endpoint**, and
+  **T11 the webhook receiver**. This is the painful one: deferring them means **M8(b), M8(c) and M9 cannot be
+  claimed**, because uncertain-outcome and webhook behaviour is exactly what those knobs produce. Recorded as
+  unmet rather than approximated.
+- **T09 collection policy consumer**, **T10 payout run** (so **M10 is unmet**, including the freshness check that
+  S04-T04's endpoint was built to serve), **T12 sweepers and the `UNKNOWN` resolver**, **T13 scenario catalog and
+  runner**, and **S05-C01** (the G2 alternative, which also leaves **gate G2 unevaluated**).
+
+**Consequence, stated plainly.** S05 will deliver **M7 and M8(a)** and leave **M8(b), M8(c), M9 and M10 unmet**. Four
+of S07's blocked signals stay blocked, because the components that emit them are deferred. The register will say so
+rather than reporting a green step.
