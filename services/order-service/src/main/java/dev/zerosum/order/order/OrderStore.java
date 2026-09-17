@@ -71,19 +71,32 @@ public class OrderStore {
         }
     }
 
+    /** Publishes a newly created order. Absent in tests that exercise the store without an outbox. */
+    public interface CreatedOrderPublisher {
+        void publish(StoredOrder order);
+    }
+
     private final JdbcClient jdbc;
     private final JdbcTemplate template;
     private final RequestHasher hasher;
     private final OrderStoreProperties properties;
     private final TransactionTemplate transactions;
+    private final Optional<CreatedOrderPublisher> publisher;
 
     public OrderStore(JdbcClient jdbc, JdbcTemplate template, RequestHasher hasher, OrderStoreProperties properties,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager, Optional<CreatedOrderPublisher> publisher) {
         this.jdbc = jdbc;
         this.template = template;
         this.hasher = hasher;
         this.properties = properties;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.publisher = publisher;
+    }
+
+    /** Without a publisher, for tests that exercise the store alone. */
+    public OrderStore(JdbcClient jdbc, JdbcTemplate template, RequestHasher hasher, OrderStoreProperties properties,
+            PlatformTransactionManager transactionManager) {
+        this(jdbc, template, hasher, properties, transactionManager, Optional.empty());
     }
 
     /**
@@ -102,7 +115,12 @@ public class OrderStore {
                 Optional<UUID> inserted = insertHeader(order, requestHash);
                 if (inserted.isPresent()) {
                     insertEntries(inserted.get(), order.entries());
-                    return new Result(Status.CREATED, read(inserted.get()).orElseThrow());
+                    StoredOrder created = read(inserted.get()).orElseThrow();
+                    // Created only: a replay, a key reuse, an in-flight key or a rejected order must never append a
+                    // row, or the same order would publish twice. Inside this transaction, so the order and its
+                    // outbox row commit together or not at all.
+                    publisher.ifPresent(p -> p.publish(created));
+                    return new Result(Status.CREATED, created);
                 }
 
                 StoredOrder existing = readByKey(order.sourceSystem(), order.idempotencyKey()).orElseThrow(

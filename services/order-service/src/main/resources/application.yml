@@ -28,6 +28,16 @@ orders:
   # decision: D03-2 — TB1 request parsing. Unknown fields are rejected rather than ignored, so a body carrying a
   # server-assigned field (order_id, source, created_at) fails instead of appearing to have set it. Duplicate keys are
   # rejected so the hashed request cannot be ambiguous, and a float or string is never coerced into an integer amount.
+  # decision: D03-5 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+  # Provisional until S04-T01 records D04-2. Master platform-limits requires these to be explicit rather than
+  # inherited: acks=all so a send is acknowledged only once every in-sync replica holds the record, and idempotence so
+  # a producer retry cannot duplicate within its own session. The relay marks rows published on acknowledgement, so a
+  # weaker acks setting would mark money delivered that a broker failover could still lose.
+  kafka:
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
   jackson:
     deserialization:
       # Unknown fields are rejected rather than ignored, so a body carrying a server-assigned order_id, source or
@@ -40,6 +50,15 @@ orders:
       strict-duplicate-detection: true
 
 zs:
+  outbox:
+    batch-size: 500
+    poll-interval: 50ms
+    send-timeout: 10s
+    backoff-min: 100ms
+    backoff-max: 5s
+    retention: 1h
+    cleanup-interval: 10m
+    cleanup-batch-size: 1000
   auth:
     writer-tokens: ${ZS_WRITER_TOKENS:}
     reader-token: ${ZS_READER_TOKEN:}

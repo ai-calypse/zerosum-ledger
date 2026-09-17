@@ -11,8 +11,14 @@ dependencies {
     // decision: D03-4 — shared token auth. ledger-service enforces the 401/403 its OpenAPI already
     // declares (master 0.3 C9); order-service authenticates every money endpoint (TB1).
     implementation(project(":libs:auth"))
+    // decision: D03-5 — the transactional outbox library. Only these classes may call the Kafka producer (M4(b)).
+    implementation(project(":libs:outbox"))
+    implementation(libs.spring.boot.starter.kafka)
     testImplementation(testFixtures(project(":libs:money")))
     testImplementation(libs.testcontainers.postgresql)
+    // decision: D03-5 — the M4(b) publish-path rule ships as a libs/outbox fixture rather than being copied here.
+    testImplementation(testFixtures(project(":libs:outbox")))
+    testImplementation(libs.archunit.junit5)
 }
 
 tasks.withType<Test>().configureEach {

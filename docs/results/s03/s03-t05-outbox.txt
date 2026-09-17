@@ -1,0 +1,46 @@
+# S03-T05 transactional outbox: writer, relay, guard, cleanup, metrics  2026-09-16
+
+RESULT
+  libs/outbox        14 tests, 0 failures (OutboxWriterIT 4, OutboxRelayIT 3, RelayDuplicateIT 1,
+                     RelayGuardIT 2, OutboxCleanupIT 3, RelayRestartRecoveryIT 1)
+  order-service      58 tests, 0 failures, including PublishPathArchitectureTest (M4(b)) 2
+
+WHAT IS PROVEN
+  Writer      append without a transaction throws; a rolled-back transaction leaves no row. Built through a real
+              Spring context, because @Transactional(MANDATORY) is proxy-enforced: a hand-constructed writer would
+              accept the call and the test would prove nothing about how the class is actually wired.
+  Relay       30 rows across 3 keys publish in id order per key on a 3-partition topic; rows are marked only after
+              acknowledgement. With the broker paused, nothing is marked, rows remain, the failure counter rises and
+              the oldest-unpublished gauge grows; the backlog drains once it returns.
+  Duplicates  M4(c) relay side: a test-scoped JdbcTemplate fails the mark once; the rows are re-sent and the copies
+              are byte-identical in key, payload and order-id header.
+  Guard       a batch is skipped and counted while another connection holds the same advisory lock (taken directly,
+              so the skip is deterministic rather than a race). Two relays over one database preserve per-key order.
+  Cleanup     published rows past retention are deleted in bounded batches; unpublished rows survive backdating to
+              30 days old.
+
+M4(a) - NOT CLAIMED
+  RelayRestartRecoveryIT destroys the relay OBJECT and its producer, not the process: 20 rows committed while the
+  broker was paused were all published by a freshly built relay in 148 ms (bound: 5 s). That proves the recovery
+  mechanism, NOT that a SIGKILL of the container loses nothing. The container-level OrderPublishAfterCrashIT is
+  DEFERRED: it needs the first e2e harness (the e2eTest task currently selects no tests) plus the full Compose stack.
+  Recorded as deferred, not as a pass.
+
+THREE DEFECTS FOUND, ALL MINE
+  1. OutboxRelay.send() had the send loop OUTSIDE its try. KafkaProducer.send() throws synchronously when metadata
+     fetch exceeds max.block.ms - exactly what an unreachable broker looks like - so outbox_send_failures_total
+     stayed at zero while the relay was failing. That counter is the signal S07 alerting keys on. Caught only by
+     asserting on the metric, not on the data.
+  2. application.yml gained a SECOND top-level `spring:` key. YAML keeps the later mapping, which would have silently
+     discarded datasource, flyway and jackson configuration at runtime.
+  3. OutboxCleanupJob scheduled itself with "#{@outboxProperties...}". @EnableConfigurationProperties registers that
+     bean as "zs.outbox-dev.zerosum.outbox.OutboxProperties", so the reference resolved to nothing and took the whole
+     application context down - 20 API tests failed as one root cause. Now reads ${zs.outbox.cleanup-interval}.
+
+M4(b) CAUGHT REAL CODE ON ITS FIRST RUN
+  The rule failed against my own OrderOutboxConfiguration, which took a KafkaTemplate parameter to build the relay
+  bean. Rather than carve out "wiring doesn't count" - indistinguishable from a real publish path later - construction
+  moved into OutboxFactory inside the library. No order-service class names a Kafka producer type.
+
+REPRODUCE
+  ./gradlew :libs:outbox:integrationTest :services:order-service:test :services:order-service:integrationTest
