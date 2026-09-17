@@ -34,5 +34,8 @@ tasks.withType<Test>().configureEach {
     systemProperty("zs.rootDir", rootDir.absolutePath)
     inputs.dir(rootDir.resolve("infra/postgres")).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(rootDir.resolve("docker-compose.yml")).withPathSensitivity(PathSensitivity.RELATIVE)
+    // ComposeEnvTest compares these two files, so an edit to either must re-run it. Without this the guard passes
+    // from cache while the thing it guards is broken — which is exactly how it behaved when first written.
+    inputs.file(rootDir.resolve(".env.example")).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir("src/main/resources/db/migration").withPathSensitivity(PathSensitivity.RELATIVE)
 }
