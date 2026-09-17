@@ -44,6 +44,10 @@ spring:
       type: batch
 
 ledger:
+  # decision: D04-3 — the money-order listener. Off in tests that have no broker, exactly as order-service's consumer
+  # flag works; production leaves it true.
+  consumer:
+    enabled: true
   apply:
     # decision: D02-4 — docs/step_02_ledger_core.md#decisions-and-outputs (master §5.11 timeouts)
     lock-timeout: 2s

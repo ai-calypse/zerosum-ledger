@@ -1,0 +1,123 @@
+package dev.zerosum.ledger.kafka;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.zerosum.ledger.apply.ApplyBatchResult;
+import dev.zerosum.ledger.apply.ApplyOutcome;
+import dev.zerosum.ledger.apply.ApplyRecord;
+import dev.zerosum.ledger.apply.LedgerApplyEngine;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.kafka.support.Acknowledgment;
+
+/**
+ * The ordering the whole design rests on: the offset moves only after the apply transaction has committed.
+ *
+ * <p>A unit test rather than an integration one, because the claim is about call order, and a container would let a
+ * passing run depend on timing. If the offset moved first, a crash would skip orders the ledger never applied — money
+ * gone with no trace — whereas acknowledging late merely redelivers, which the engine's dedupe absorbs.
+ */
+@Tag("unit")
+class AckOrderingTest {
+
+    /** Records whether the engine had returned by the time acknowledge() was called. */
+    private static final class RecordingAck implements Acknowledgment {
+
+        private final AtomicInteger calls = new AtomicInteger();
+        private final AtomicBoolean engineReturned;
+
+        private RecordingAck(AtomicBoolean engineReturned) {
+            this.engineReturned = engineReturned;
+        }
+
+        @Override
+        public void acknowledge() {
+            assertTrue(engineReturned.get(), "acknowledge() must not run before the engine returns");
+            calls.incrementAndGet();
+        }
+    }
+
+    private static ConsumerRecord<String, String> record(long offset) {
+        return new ConsumerRecord<>("payments.money-orders.v1", 0, offset, "trip_1", "{}");
+    }
+
+    @Test
+    void aFailedBatchIsNeverAcknowledged() {
+        var engineReturned = new AtomicBoolean();
+        var ack = new RecordingAck(engineReturned);
+        var listener = new MoneyOrderListener(new ThrowingEngine(), new SimpleMeterRegistry());
+
+        assertThrows(IllegalStateException.class, () -> listener.onBatch(List.of(record(0), record(1)), ack));
+
+        assertEquals(0, ack.calls.get(),
+                "an unacknowledged batch is redelivered; acknowledging it would skip orders that never applied");
+        assertFalse(engineReturned.get());
+    }
+
+    @Test
+    void aSuccessfulBatchIsAcknowledgedExactlyOnceAfterTheEngineReturns() {
+        var engineReturned = new AtomicBoolean();
+        var ack = new RecordingAck(engineReturned);
+        var listener = new MoneyOrderListener(new SucceedingEngine(engineReturned), new SimpleMeterRegistry());
+
+        listener.onBatch(List.of(record(0), record(1), record(2)), ack);
+
+        assertEquals(1, ack.calls.get(), "the whole poll batch is acknowledged once, not once per record");
+    }
+
+    @Test
+    void anEmptyPollNeitherCallsTheEngineNorAcknowledges() {
+        var engine = new SucceedingEngine(new AtomicBoolean());
+        var ack = new RecordingAck(new AtomicBoolean(true));
+        var listener = new MoneyOrderListener(engine, new SimpleMeterRegistry());
+
+        listener.onBatch(List.of(), ack);
+
+        assertEquals(0, engine.calls.get(), "an empty poll must not open a transaction");
+        assertEquals(0, ack.calls.get());
+    }
+
+    /** Fails the way a database fault does: the batch's transaction rolled back and nothing was applied. */
+    private static final class ThrowingEngine extends LedgerApplyEngine {
+
+        private ThrowingEngine() {
+            super(null, null, null, null, null, null);
+        }
+
+        @Override
+        public ApplyBatchResult apply(List<ApplyRecord> records) {
+            throw new IllegalStateException("apply failed after exhausting retries");
+        }
+    }
+
+    private static final class SucceedingEngine extends LedgerApplyEngine {
+
+        private final AtomicInteger calls = new AtomicInteger();
+        private final AtomicBoolean returned;
+
+        private SucceedingEngine(AtomicBoolean returned) {
+            super(null, null, null, null, null, null);
+            this.returned = returned;
+        }
+
+        @Override
+        public ApplyBatchResult apply(List<ApplyRecord> records) {
+            calls.incrementAndGet();
+            var outcomes = java.util.stream.IntStream.range(0, records.size())
+                    .mapToObj(i -> new ApplyOutcome(i, java.util.UUID.randomUUID(), ApplyOutcome.Status.APPLIED,
+                            null, null))
+                    .toList();
+            returned.set(true);
+            return new ApplyBatchResult(outcomes, Duration.ZERO, Duration.ZERO, 1, 0, 0, 0);
+        }
+    }
+}

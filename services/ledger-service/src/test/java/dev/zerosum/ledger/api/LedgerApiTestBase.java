@@ -31,6 +31,8 @@ abstract class LedgerApiTestBase {
         // Flyway already migrated this database as the owner when the container started; running it again would need
         // owner credentials in the context for no benefit.
         registry.add("spring.flyway.enabled", () -> "false");
+        // No broker in this test, so the money-order listener stays stopped rather than dialling one.
+        registry.add("ledger.consumer.enabled", () -> "false");
         registry.add("zs.auth.reader-token", () -> "test-reader-token");
     }
 

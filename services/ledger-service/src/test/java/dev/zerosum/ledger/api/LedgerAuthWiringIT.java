@@ -32,6 +32,8 @@ class LedgerAuthWiringIT {
         registry.add("spring.datasource.username", () -> LedgerTestDatabase.APP);
         registry.add("spring.datasource.password", () -> DB.password(LedgerTestDatabase.APP));
         registry.add("spring.flyway.enabled", () -> "false");
+        // No broker in this test, so the money-order listener stays stopped rather than dialling one.
+        registry.add("ledger.consumer.enabled", () -> "false");
         registry.add("zs.auth.reader-token", () -> "reader-token");
         registry.add("zs.auth.writer-tokens", () -> "trip-simulator:writer-token");
         registry.add("zs.auth.admin-token", () -> "admin-token");
