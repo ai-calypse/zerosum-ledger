@@ -58,7 +58,7 @@ All ten ADRs are Accepted. See [docs/adr/](adr/).
 Compiled from `docs/results/**`, `docs/scope-decisions.md` and test sources. **Plan text is never evidence.** A
 criterion is MET only where a named test or recorded run demonstrates it.
 
-**21 MET · 8 PARTIAL · 14 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
+**22 MET · 9 PARTIAL · 12 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
 
 M13(a) moved from NOT MET to PARTIAL when the simulator and verifier stopped being stubs (CR-S09-01). It is
 deliberately **not** MET: the command exists and is exercised, but never against the running system, and this table
@@ -88,13 +88,13 @@ does not promote a criterion on a stub.
 | M6(a) Changelog links order and idempotency key | MET | `ChangelogApiIT`; also asserted by `MoneyPathE2ETest` |
 | M6(b) `verify` rebuilds and matches | MET | `VerifyApiIT`, `HashChainTamperIT`, independent Python reference |
 | M6(c) Audit walk ≤ 3 calls | MET (manual) | Executed by hand against the live stack. **Not a test**, and not reproducible without re-running it |
-| M7(a) Both adapters pass one shared suite | PARTIAL | `PaymentInstrumentContractSuite` passes for both — but against a stub, never the real service. Webhook parsing is an explicit skip |
+| M7(a) Both adapters pass one shared suite | PARTIAL | `PaymentInstrumentContractSuite` passes for both, and its webhook-parsing case now **runs** rather than skipping (S05-T11). Still against a stub, never the real service, which is why this is not MET |
 | M7(b) Provider-boundary ArchUnit rule | MET | `InstrumentBoundaryTest`; fires on a canary |
 | M8(a) State × event table test | MET | `TransitionTableTest` (S05-T08): the state×event product is **generated, not hand-listed**, so adding a state or event without a table decision fails the build. Illegal transitions are logged and counted, asserted with a captured appender and a meter registry |
 | M8(b) 10,000 charges at 0.2 timeout rate | **NOT MET** | Fault knobs (T03) deferred |
 | M8(c) Nothing stuck in UNKNOWN > 5 min | **NOT MET** | instrument-service has no persistence; nothing resolves an Unknown |
-| M9(a) Bad signature / stale timestamp → 400 | **NOT MET** | No webhook receiver exists |
-| M9(b) 30% duplicates + 30% reordering | **NOT MET** | Deferred |
+| M9(a) Bad signature / stale timestamp → 400 | MET | `WebhookSignatureTest` (7) and `WebhookReceiverIT` (9): a forged, tampered, unsigned or stale delivery is **400 and writes nothing**; tampering by one digit fails; the 300 s tolerance is rejected in either direction; both secrets verify during rotation |
+| M9(b) 30% duplicates + 30% reordering | PARTIAL | The **dedupe half** is evidenced: one event delivered many times, sequentially and concurrently, is recorded once and applied once (`WebhookReceiverIT`). The criterion asks for 30% duplicates *plus 30% reordering at volume*, and no reorder-rate run exists — the sender's reorder knob (S05-T03) has never been driven |
 | M10(a)(b)(c) Payouts and returns | **NOT MET** | T10 deferred. The freshness endpoint exists and is tested, but nothing consumes it, so no 409 |
 | M11(a)(b)(c) Reconciliation | **NOT MET** | S06 not started; settlement reports declared only |
 | M12(a) One trace across the pipeline | PARTIAL | `s04-trace-propagation.md`: connected **by links**, deliberately not claimed as one parent-child trace |
@@ -120,8 +120,8 @@ does not promote a criterion on a stub.
 
 | Layer | Count | What it runs against |
 |---|---|---|
-| Unit | 326 (0 failed, 4 skipped) | No containers |
-| Integration | 239 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
+| Unit | 334 (0 failed, 2 skipped) | No containers |
+| Integration | 249 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
 | End-to-end | 1 (0 failed) | Re-measured on the running seven-container stack after all three merges; see [results/s05/deployment-check.md](results/s05/deployment-check.md) |
 
 Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of
@@ -133,8 +133,10 @@ on arrival — parallel work makes a count true only for the tree it was taken o
 tree, after all three merges. Of them, the evidence harness contributes 20 tests — `libs/evidence` 8 unit,
 `tools/simulator` 12 unit, `tools/verifier` 6 integration.
 
-The four skips are deliberate: the adapter contract suite aborts its settlement-report and webhook-parsing cases on
-assumptions naming the missing capability, once per provider, so a gap is reported rather than omitted.
+The two remaining skips are deliberate: the adapter contract suite aborts its **settlement-report** case on an
+assumption naming the missing capability, once per provider, so a gap is reported rather than omitted. It was four
+until S05-T11 — the webhook-parsing case now runs on both adapters instead of skipping, which is what a skip is for:
+it disappears when the capability arrives.
 
 **The e2e layer is one test.** It covers the money path only. Crash recovery, the provider path, fault injection and
 reconciliation have no end-to-end coverage at all, and the e2e job runs only on a schedule or manual dispatch, never
