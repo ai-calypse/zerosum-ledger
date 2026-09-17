@@ -96,6 +96,29 @@ zs:
   # would look healthy and move no money.
   kill-switches:
     collections-enabled: ${ZS_COLLECTIONS_ENABLED:true}
+    # decision: D05-11 — the payouts switch (S05-T10). Independent of collections deliberately: the two paths fail
+    # and are frozen separately, which is the whole point of a switch per path. Checked at the START of a run, so a
+    # frozen run is refused and creates no attempt — unlike a frozen collection, where the attempt is still created
+    # because the money order that caused it cannot be replayed. Nothing is waiting to be sent, so nothing is lost.
+    payouts-enabled: ${ZS_PAYOUTS_ENABLED:true}
+  # decision: D05-7 — payout runs (S05-T10).
+  payouts:
+    # M10(c). This value IS the acceptance criterion (docs/zerosum_ledger_mvp_plan.md#must-have): a run refuses when
+    # order outbox age + ledger unapplied age + instrument outbox age exceeds it. Changing it changes what M10(c)
+    # means, so PayoutFreshnessTest pins it to 5 s.
+    freshness-threshold: ${ZS_PAYOUT_FRESHNESS_THRESHOLD:5s}
+    # master §5.5 — the smallest credit balance worth a bank transfer. Also the guard that stops a zero or negative
+    # payable becoming an attempt, whose amount must be a positive magnitude.
+    minimum-payout-minor: ${ZS_MINIMUM_PAYOUT_MINOR:100}
+    # The reader APIs a run consults: order-service's outbox stats (D03-7) and the ledger's freshness and balances
+    # (D04-5, D02-7). The defaults are host ports for local runs; Compose points them at the containers, because
+    # inside the network localhost is this container itself — the same defect class as a localhost broker bootstrap.
+    order-base-url: ${ZS_ORDER_BASE_URL:http://localhost:8081}
+    ledger-base-url: ${ZS_LEDGER_BASE_URL:http://localhost:8082}
+    connect-timeout: ${ZS_PAYOUT_CONNECT_TIMEOUT:2s}
+    # Short on purpose: an operator waiting on a hung freshness read learns nothing, and the honest answer after a
+    # timeout is to refuse rather than pay against a figure nobody could produce.
+    read-timeout: ${ZS_PAYOUT_READ_TIMEOUT:2s}
   # decision: D05-6 — the instrument-policy consumer and the executor its submissions run on.
   policy:
     consumer:

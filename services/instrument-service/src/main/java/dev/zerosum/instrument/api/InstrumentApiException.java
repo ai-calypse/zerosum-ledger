@@ -134,4 +134,25 @@ class InstrumentApiException extends RuntimeException {
         return new InstrumentApiException(HttpStatus.NOT_FOUND, "reconciliation_run_not_found",
                 "no such reconciliation run: " + runId);
     }
+
+    /**
+     * decision: D05-7, M10(c) — the pipeline is further behind than the payout threshold, or a stage of it could not
+     * be measured at all.
+     *
+     * <p>One code for both, deliberately: a freshness component we could not read is not a component we may assume
+     * is healthy, and paying drivers against balances nobody checked is the failure this refusal exists to prevent.
+     * The run id is in the detail because the refusal is recorded as a run — a retry with the same key replays this
+     * same answer, so catching up and trying again needs a fresh key.
+     */
+    static InstrumentApiException ledgerStale(String runId) {
+        return new InstrumentApiException(HttpStatus.CONFLICT, "ledger_stale",
+                "the order-to-ledger pipeline is stale or could not be measured, so no payout was created; "
+                        + "run " + runId + " records the refusal");
+    }
+
+    /** decision: D05-11 — the payouts kill switch is off. No attempt is created, so nothing waits to be sent. */
+    static InstrumentApiException payoutsDisabled(String runId) {
+        return new InstrumentApiException(HttpStatus.CONFLICT, "payouts_disabled",
+                "payouts are disabled, so no payout was created; run " + runId + " records the refusal");
+    }
 }

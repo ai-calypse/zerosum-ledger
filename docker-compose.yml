@@ -259,6 +259,14 @@ services:
       # decision: D05-11 — the collections kill switch. Not a secret and not required: absent means collections run,
       # which is the state the stack should come up in. Set to false to freeze collections per the runbook.
       ZS_COLLECTIONS_ENABLED: ${ZS_COLLECTIONS_ENABLED:-true}
+      # decision: D05-11 — the payouts kill switch (S05-T10), frozen independently of collections. Set to false and
+      # every payout run is refused with `payouts_disabled`, creating no attempt and calling no bank.
+      ZS_PAYOUTS_ENABLED: ${ZS_PAYOUTS_ENABLED:-true}
+      # decision: D05-7 — the reader APIs a payout run consults for freshness and balances (D03-7, D04-5, D02-7).
+      # application.yml defaults to localhost for host runs; inside the network that would make instrument-service
+      # ask itself, so a run would refuse every time and no driver would ever be paid.
+      ZS_ORDER_BASE_URL: ${ZS_ORDER_BASE_URL:-http://order-service:8081}
+      ZS_LEDGER_BASE_URL: ${ZS_LEDGER_BASE_URL:-http://ledger-service:8082}
       # decision: D03-4 — static per-role tokens, from S05-T08 when this service gained its first authenticated
       # endpoints. Without these the container authenticates nobody: the same defect that order-service and
       # ledger-service shipped, invisible to every test because tests set the tokens themselves.
