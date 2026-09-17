@@ -21,6 +21,21 @@ class WebhookSignerTest {
     private static final String PREVIOUS = "previous-secret";
     private static final byte[] BODY = "{\"event_id\":\"evt_1\",\"amount_minor\":100}".getBytes(StandardCharsets.UTF_8);
 
+    /**
+     * The shared vector (D05-3). {@code WebhookSignatureTest} in instrument-service asserts the same hex over the
+     * same bytes with the same secret; the two implementations are deliberately separate — an adapter implements
+     * someone else's format rather than importing it — so this pair of tests is what keeps them from drifting.
+     */
+    @Test
+    @DisplayName("the shared vector signs to the hex the receiver expects")
+    void sharedVectorMatchesTheReceiver() {
+        byte[] body = "{\"event_id\":\"evt_vector\",\"provider\":\"fakecard\",\"amount_minor\":4200}"
+                .getBytes(StandardCharsets.UTF_8);
+
+        assertThat(WebhookSigner.header(Instant.ofEpochSecond(1_758_000_000L), body, "zs-test-webhook-secret"))
+                .isEqualTo("t=1758000000,v1=7b6b4a91608bea3e2a83e8ad32d98425e7e62d649195b98f925aa065d7ab33b9");
+    }
+
     @Test
     @DisplayName("a signature made with the current secret verifies")
     void verifiesWhatItSigned() {

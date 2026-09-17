@@ -14,8 +14,10 @@ import dev.zerosum.instrument.core.ProviderStatus;
 import dev.zerosum.instrument.core.SettlementReport;
 import dev.zerosum.instrument.core.SubmitResult;
 import dev.zerosum.instrument.core.WebhookRequest;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,10 +35,15 @@ public class FakeBankInstrument implements PaymentInstrument {
 
     private final ProviderHttp http;
     private final Duration quietPeriod;
+    private final List<String> webhookSecrets;
+    private final Clock clock;
 
-    public FakeBankInstrument(ProviderHttp http, Duration quietPeriod) {
+    /** @param webhookSecrets current first, then any previous one still being rotated out (D05-3). */
+    public FakeBankInstrument(ProviderHttp http, Duration quietPeriod, List<String> webhookSecrets, Clock clock) {
         this.http = http;
         this.quietPeriod = quietPeriod;
+        this.webhookSecrets = List.copyOf(webhookSecrets);
+        this.clock = clock;
     }
 
     @Override
@@ -114,8 +121,7 @@ public class FakeBankInstrument implements PaymentInstrument {
 
     @Override
     public ProviderEvent parseWebhook(WebhookRequest request) {
-        throw new UnsupportedOperationException(
-                "webhook receipt is deferred with S05-T03: no sender exists and no HMAC secret is wired");
+        return ProviderWebhooks.parse(request, PROVIDER, webhookSecrets, clock.instant());
     }
 
     @Override

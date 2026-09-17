@@ -71,6 +71,13 @@ zs:
     # ADR-0010 — a provider without idempotency keys is left alone this long before any resubmission. Must stay
     # above FakeBank's maximum processing delay, or a resubmission could still duplicate a payout.
     quiet-period: ${ZS_PROVIDER_QUIET_PERIOD:60s}
+  # decision: D05-3 — the webhook receiver's HMAC secrets (master §5.11, TB2). Same variable and same
+  # `current,previous` format as the fake-providers sender reads, because the two sides must agree on the secret
+  # exactly: the sender signs with the first, this side accepts either, and that is what lets a rotation happen
+  # without restarting both at the same instant. No default — a service started without it verifies no webhook at
+  # all, which refuses every delivery rather than accepting every delivery.
+  webhooks:
+    secrets: ${ZS_WEBHOOK_SECRETS:}
   # decision: D03-5 — the outbox library ships no defaults, so a deployment cannot silently inherit one; every value
   # is stated here. The writer was wired in S05-T07; the relay and the cleanup job started with their first producer
   # in S05-T09, which is the collection policy, and run with exactly these values.

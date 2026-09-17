@@ -94,11 +94,36 @@ class AdminSecurityIT extends FakeProvidersIT {
 
         Truth truth = truth(reference);
 
-        assertThat(truth.entity_id()).isEqualTo(reference);
+        assertThat(truth.client_reference()).isEqualTo(reference);
         assertThat(truth.charges()).hasSize(1);
         assertThat(truth.charges().getFirst().amount_minor()).isEqualTo(3_300L);
         assertThat(truth.charges().getFirst().status()).isEqualTo("SUCCEEDED");
         assertThat(truth.payouts()).isEmpty();
+    }
+
+    /**
+     * CR-S05-02: the defect a deployment found, as a test.
+     *
+     * <p>A charge is stored against the client reference the caller sent — the attempt id — because this provider is
+     * never told a ledger entity id. Querying by entity therefore matched nothing for every entity, and the empty
+     * list read as "no charge occurred" rather than "this filter cannot match". The parameter is now the reference,
+     * and the old one is refused rather than ignored: being quietly ignored is what produced the clean bill of
+     * health in the first place.
+     */
+    @Test
+    @DisplayName("ground truth is found by client reference, and entity_id is refused rather than matching nothing")
+    void groundTruthIsQueryableByClientReference() {
+        // The shape of the real thing: the attempt id is what instrument-service sends as the client reference.
+        String attemptId = UUID.randomUUID().toString();
+        post("/fakecard/v1/charges", new ChargeRequest(attemptId, MagicTokens.CARD_OK, 2_500L, "USD"), null);
+
+        Truth byReference = truth(attemptId);
+        assertThat(byReference.charges()).hasSize(1);
+        assertThat(byReference.charges().getFirst().client_reference()).isEqualTo(attemptId);
+
+        Response byEntity = get("/admin/truth?entity_id=rider:R1", ADMIN_TOKEN);
+        assertThat(byEntity.status()).isEqualTo(400);
+        assertThat(byEntity.body()).contains("client_reference");
     }
 
     @Test
@@ -123,8 +148,8 @@ class AdminSecurityIT extends FakeProvidersIT {
         assertThat(truth.faults()).extracting(FaultLog.Entry::seed).contains(5L);
     }
 
-    private Truth truth(String entityId) {
-        String path = entityId == null ? "/admin/truth" : "/admin/truth?entity_id=" + entityId;
+    private Truth truth(String clientReference) {
+        String path = clientReference == null ? "/admin/truth" : "/admin/truth?client_reference=" + clientReference;
         return get(path, ADMIN_TOKEN).as(Truth.class);
     }
 

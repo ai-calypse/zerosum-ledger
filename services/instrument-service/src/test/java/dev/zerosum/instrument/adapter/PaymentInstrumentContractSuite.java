@@ -9,9 +9,11 @@ import dev.zerosum.instrument.core.Commands.ChargeCommand;
 import dev.zerosum.instrument.core.Commands.DisburseCommand;
 import dev.zerosum.instrument.core.Commands.LookupQuery;
 import dev.zerosum.instrument.core.Commands.RefundCommand;
+import dev.zerosum.instrument.core.InstrumentExceptions.InvalidSignatureException;
 import dev.zerosum.instrument.core.InstrumentExceptions.UnsupportedCapabilityException;
 import dev.zerosum.instrument.core.LookupResult;
 import dev.zerosum.instrument.core.PaymentInstrument;
+import dev.zerosum.instrument.core.ProviderEvent;
 import dev.zerosum.instrument.core.SubmitResult;
 import dev.zerosum.instrument.core.WebhookRequest;
 import dev.zerosum.money.Money;
@@ -35,6 +37,10 @@ abstract class PaymentInstrumentContractSuite {
 
     private static final Money TEN = Money.of(1_000, "USD");
     private static final Duration READ_TIMEOUT = Duration.ofMillis(400);
+
+    /** decision: D05-3 — the secrets every adapter under this suite verifies with; never a deployed value. */
+    protected static final String WEBHOOK_SECRET = "contract-current-secret";
+    protected static final String PREVIOUS_WEBHOOK_SECRET = "contract-previous-secret";
 
     protected ProviderStub stub;
 
@@ -147,16 +153,60 @@ abstract class PaymentInstrumentContractSuite {
                 .isInstanceOf(LookupResult.Unavailable.class);
     }
 
+    /**
+     * M7(a): every adapter verifies before it parses, and refuses what does not verify (S05-T11, TB2).
+     *
+     * <p>Shared rather than written per provider, because "a third adapter needs no core change" includes the
+     * webhook path: a new provider that accepted an unsigned payload would pass every other test in this suite.
+     */
     @Test
-    @DisplayName("webhook parsing")
+    @DisplayName("a signed webhook parses, and a forged, tampered or stale one does not")
     void parsesWebhooks() {
         PaymentInstrument instrument = adapter();
-        // M7(a) names webhook parsing as part of this suite. Omitting the case would let the gap go unreported;
-        // an assumption puts it in the report as skipped, with the reason attached.
-        assumeTrue(false, "webhook receipt is deferred with S05-T03: no sender exists and no HMAC secret is wired, "
-                + "so there is no signed payload to parse");
+        Instant now = Instant.now();
+        byte[] body = webhookBody(instrument);
 
-        instrument.parseWebhook(new WebhookRequest(new byte[0], java.util.Map.of()));
+        ProviderEvent event = instrument.parseWebhook(signed(body, now, WEBHOOK_SECRET));
+
+        assertThat(event.providerEventId()).isEqualTo("evt_contract");
+        assertThat(event.provider()).isEqualTo(instrument.provider());
+        assertThat(event.clientReference()).isEqualTo("11111111-2222-3333-4444-555555555555");
+        assertThat(event.amount()).isEqualTo(Money.of(4_200, "USD"));
+        assertThat(event.status()).isNotNull();
+
+        // Rotation: the previous secret still verifies, which is what lets the two sides restart independently.
+        assertThat(instrument.parseWebhook(signed(body, now, PREVIOUS_WEBHOOK_SECRET)).providerEventId())
+                .isEqualTo("evt_contract");
+
+        // The signature is genuine and covers the ORIGINAL bytes; the amount was changed afterwards. Signing the
+        // tampered bytes instead would prove nothing — it is what an honest sender does.
+        byte[] tampered = new String(body, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("4200", "990000").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> instrument.parseWebhook(new WebhookRequest(tampered,
+                java.util.Map.of("ZS-Signature", TestWebhookSigner.header(now, body, WEBHOOK_SECRET)))))
+                .isInstanceOf(InvalidSignatureException.class);
+        assertThatThrownBy(() -> instrument.parseWebhook(signed(body, now, "someone-elses-secret")))
+                .isInstanceOf(InvalidSignatureException.class);
+        assertThatThrownBy(() -> instrument.parseWebhook(
+                signed(body, now.minus(Duration.ofSeconds(301)), WEBHOOK_SECRET)))
+                .isInstanceOf(InvalidSignatureException.class);
+        assertThatThrownBy(() -> instrument.parseWebhook(new WebhookRequest(body, java.util.Map.of())))
+                .as("an unsigned delivery is refused, not parsed").isInstanceOf(InvalidSignatureException.class);
+    }
+
+    /** One event of whatever kind this provider actually emits, so the case is genuinely shared. */
+    private static byte[] webhookBody(PaymentInstrument instrument) {
+        String eventType = instrument.capabilities().charge() ? "charge.succeeded" : "payout.settled";
+        return ("{\"event_id\":\"evt_contract\",\"provider\":\"" + instrument.provider()
+                + "\",\"event_type\":\"" + eventType + "\",\"provider_ref\":\"ref_1\","
+                + "\"client_reference\":\"11111111-2222-3333-4444-555555555555\",\"amount_minor\":4200,"
+                + "\"currency\":\"USD\",\"failure_code\":null,\"occurred_at\":\"2026-01-01T00:00:00Z\"}")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static WebhookRequest signed(byte[] body, Instant at, String secret) {
+        return new WebhookRequest(body,
+                java.util.Map.of("ZS-Signature", TestWebhookSigner.header(at, body, secret)));
     }
 
     @Test

@@ -19,7 +19,7 @@ public final class AdminApi {
      * is still waiting to be delivered. A test asserts against this rather than against its own expectations, which
      * is the only way an assertion can catch the ledger and the provider disagreeing (I7).
      */
-    public record Truth(String entity_id, List<ChargeResponse> charges, List<RefundResponse> refunds,
+    public record Truth(String client_reference, List<ChargeResponse> charges, List<RefundResponse> refunds,
             List<PayoutResponse> payouts, Map<String, Long> fault_counts, List<FaultLog.Entry> faults,
             WebhookQueue webhook_queue) {
     }

@@ -14,7 +14,9 @@ import dev.zerosum.instrument.core.ProviderStatus;
 import dev.zerosum.instrument.core.SettlementReport;
 import dev.zerosum.instrument.core.SubmitResult;
 import dev.zerosum.instrument.core.WebhookRequest;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,9 +32,17 @@ public class FakeCardInstrument implements PaymentInstrument {
     private static final ProviderId PROVIDER = new ProviderId("fakecard");
 
     private final ProviderHttp http;
+    private final List<String> webhookSecrets;
+    private final Clock clock;
 
-    public FakeCardInstrument(ProviderHttp http) {
+    /**
+     * @param webhookSecrets current first, then any previous one still being rotated out (D05-3). Empty means no
+     *                       webhook can ever verify, which fails closed.
+     */
+    public FakeCardInstrument(ProviderHttp http, List<String> webhookSecrets, Clock clock) {
         this.http = http;
+        this.webhookSecrets = List.copyOf(webhookSecrets);
+        this.clock = clock;
     }
 
     @Override
@@ -119,9 +129,7 @@ public class FakeCardInstrument implements PaymentInstrument {
 
     @Override
     public ProviderEvent parseWebhook(WebhookRequest request) {
-        throw new UnsupportedOperationException(
-                "webhook receipt is deferred with S05-T03: no sender exists and no HMAC secret is wired, so parsing "
-                        + "an unauthenticated payload here would be a security hole standing in for a feature");
+        return ProviderWebhooks.parse(request, PROVIDER, webhookSecrets, clock.instant());
     }
 
     @Override

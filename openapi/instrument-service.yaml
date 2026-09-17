@@ -1,6 +1,7 @@
 # decision: D05-13 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
-# The instrument-service API. S05-T08 starts this file with the attempt read and cancel operations; S05-T09 to T11
-# add instrument registration, payout runs and the webhook receiver to the same file, each owned by its own decision.
+# The instrument-service API. S05-T08 starts this file with the attempt read and cancel operations; S05-T09 adds
+# instrument registration and S05-T11 the webhook receiver, each owned by its own decision. Payout runs (S05-T10)
+# are not here: that task is not built.
 # Conventions follow docs/zerosum_ledger_mvp_plan.md#rest-apis: every path is under /v1, every error is
 # application/problem+json (RFC 9457) with a stable `code`, and authenticated operations return 401 without a valid
 # token and 403 for the wrong role (§0.3 C9).
@@ -111,6 +112,67 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  /v1/webhooks/{provider}:
+    post:
+      operationId: receiveProviderWebhook
+      summary: A signed provider webhook
+      description: |
+        **Authenticated by signature, not by bearer token.** A provider holds no token of ours; it holds the shared
+        secret. `ZS-Signature: t=<unix seconds>,v1=<hex>` is an HMAC-SHA256 over `<t>.<raw body>`, and the timestamp
+        must be within **300 seconds** (master §5.11, TB2). Both the current and the previous secret are accepted, so
+        a rotation does not require restarting the two sides together. A signature that does not verify is a `400`
+        and **writes nothing**.
+
+        **Recorded before applied.** The provider event is inserted first, keyed by the provider's own `event_id`,
+        and the resulting transition follows in the same transaction. A `2xx` therefore means *durably recorded*, and
+        it is returned only after the commit — so the provider's redelivery is driven by a real failure rather than
+        by our bookkeeping. A redelivered event is recorded once and applied once, because the dedupe is the table's
+        primary key rather than a check.
+
+        **`disposition` says what the event did**, and several of them are `200` on purpose:
+
+        | `disposition` | Meaning |
+        |---|---|
+        | `applied` | The transition was applied; its payment event is on the outbox. |
+        | `duplicate` | Already recorded by an earlier delivery. Nothing further happened. |
+        | `ignored_stale` | Non-advancing: the attempt is already at or past the status claimed (master §5.10). |
+        | `ahead_of_state` | The event outran our state. Recorded, then resolved by provider lookup, applying the intermediate transitions in order so each payment event is emitted exactly once (§0.3 C21). |
+        | `illegal` | The attempt's state machine has no such move. Recorded and counted rather than applied — and still `2xx`, because an event we can never apply would otherwise be redelivered for ever. |
+        | `unmatched` | No attempt has that `client_reference`. Recorded with no attempt attached, so it stays visible to reconciliation. |
+      tags: [webhooks]
+      # No bearer token: the HMAC is the authentication for this operation.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          description: The provider whose adapter verifies and parses the body, for example `fakecard`.
+          schema: { type: string, pattern: '^[a-z][a-z0-9_-]{0,31}$' }
+      requestBody:
+        required: true
+        description: The provider's own event payload, capped at 64 KB (master §5.11).
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProviderWebhook' }
+      responses:
+        '200':
+          description: Recorded, and applied if the transition table said so.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookAck' }
+        '400':
+          description: The signature or timestamp did not verify, or the body is not a payload this provider sends.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: The body is larger than the 64 KB cap.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -145,7 +207,7 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     NotFound:
-      description: No such attempt.
+      description: No such attempt, or no adapter serves that webhook path.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -301,6 +363,52 @@ components:
         entity_id: { type: string }
         provider: { type: string }
 
+    ProviderWebhook:
+      type: object
+      description: |
+        One provider event. The bytes are what the signature covers, so this document describes them rather than
+        constraining them: the service verifies the raw body first and parses it only afterwards.
+      required: [event_id, provider, event_type, provider_ref, client_reference, amount_minor, currency, occurred_at]
+      properties:
+        event_id:
+          type: string
+          description: The provider's own event id, and the dedupe key. A redelivery carries the same one.
+        provider:
+          type: string
+          description: Must match the path; a `fakecard` event on the `fakebank` path is refused.
+        event_type:
+          type: string
+          description: The provider's vocabulary, for example `charge.succeeded` or `payout.returned`.
+        provider_ref:
+          type: string
+          description: The provider's reference for the charge, refund or payout this is about.
+        client_reference:
+          type: string
+          description: Our attempt id, as the provider echoed it back.
+        amount_minor:
+          type: integer
+          format: int64
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        failure_code:
+          type: [string, 'null']
+          description: The decline, failure or return code, for example `R01`. Null for successes.
+        occurred_at:
+          type: string
+          description: RFC 3339, the provider's own timestamp for the event.
+
+    WebhookAck:
+      type: object
+      additionalProperties: false
+      required: [event_id, disposition]
+      properties:
+        event_id:
+          type: string
+          description: The provider event id this answer is about.
+        disposition:
+          type: string
+          description: What the D05-5 transition table said to do with it.
+          enum: [applied, duplicate, ignored_stale, ahead_of_state, illegal, unmatched]
+
     Problem:
       # RFC 9457, plus the stable `code` the master's conventions require.
       type: object
@@ -314,5 +422,6 @@ components:
         code:
           type: string
           enum: [invalid_attempt_id, attempt_not_found, not_cancellable, invalid_registration, unknown_provider,
+                 invalid_signature, invalid_webhook, payload_too_large,
                  unauthorized, forbidden, database_unavailable]
           description: Stable machine-readable error code; callers branch on this, never on `title`.
