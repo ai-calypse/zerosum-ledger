@@ -447,3 +447,42 @@ parameter is now **`client_reference`**, and `entity_id` is **refused with 400**
 **Regression guard.** `AdminSecurityIT.groundTruthIsQueryableByClientReference` charges against an attempt-id-shaped
 reference, finds it by `client_reference`, and asserts the `entity_id` form is a 400 — the exact query the deployment
 check ran, now failing loudly instead of returning `[]`.
+
+<a id="s06"></a>
+## S06 Reconciliation — trimmed to its spine (2026-09-17)
+
+S06 as written is five tasks: settlement reports, the reconciler, the reconciliation API with a scheduler and
+metrics, the full I1–I12 verifier CLI, and the W5/W6 scenario files. The standing direction — résumé-presentable,
+honest evidence, defer genuine complexity rather than fake it — cuts it to the part that demonstrates the actual
+engineering idea: **money is checked against an independent account of itself, and disagreements are typed.**
+
+**Kept**
+
+- **T01 settlement reports in fake-providers**, with the three discrepancy knobs wired through the §0.3 C23
+  extension point that S05 left for exactly this, and every injection recorded in the existing D05-2 fault log.
+- **`settlementReport` implemented in the FakeCard adapter**, and `Capabilities.settlementReports` flipped to true
+  for FakeCard only. This is what makes the shared contract suite **run** that case instead of skipping it: the
+  project-wide unit skip count drops from 4 to 3, and the remaining 3 are the webhook-parsing assumptions plus
+  FakeBank's settlement case, which is correctly not applicable.
+- **T02 the reconciler**: a pure matcher, nine typed breaks, additive migration, and `SETTLEMENT_RECEIVED` emitted
+  through the existing outbox path in the same transaction as the run.
+- **T03 reduced to the two endpoints** the master names, with D03-3 idempotency and role checks.
+
+**Deferred, and what each costs**
+
+- **The scheduler and the settlement-cycle grace rule.** Without them a timing break is reported `OPEN` inside its
+  own run and is never carried across cycles, so **M11(c) cannot be evaluated at all** — it is recorded "Not run",
+  not "met". This is the honest cost of the cut and the reason the scheduler is the first thing to add back.
+- **Reconciliation metrics.** S07's reconciliation alert row stays blocked, as S07 already recorded.
+- **T04, the I1–I12 verifier CLI.** The minimum cut says the verifier is never cut, and that remains true: it is
+  *unstarted*, not cancelled. `tools/verifier` still evaluates I2–I4 only, exactly as CR-S09-01 recorded. In
+  particular **I9 (clearing residual = in-flight + open breaks) and I12 (every injected discrepancy has its mapped
+  break) are not evaluated**, so the knob-to-break map in D06-2 is asserted by this step's own tests rather than by
+  an independent tool.
+- **T05, the W5/W6 scenario files.** Blocked rather than deferred: the D05-12 scenario catalog and runner do not
+  exist, having been deferred in the S05 cut.
+
+**Consequence, stated plainly.** S06 delivers **M11(a) and M11(b)** with tests behind them, and leaves **M11(c)
+unevaluated**. The settlement event is asserted as far as the outbox row and compared field by field against golden
+O6; the booking itself is order-service's mapper, which has its own golden test, and **no end-to-end run was
+observed** — S04's pipeline harness was never delivered, and this step did not build one.

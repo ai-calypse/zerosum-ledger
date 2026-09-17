@@ -1,7 +1,7 @@
 # Step 06 — Reconciliation and verifier
 
 > **Pack:** ZeroSum Ledger implementation docs · **Master:** [docs/zerosum_ledger_mvp_plan.md#step-06](zerosum_ledger_mvp_plan.md#step-06) (v1.2)
-> **Doc version:** 1.1 · **Date:** 2026-09-15 · **Step status:** Planned (no implementation exists)
+> **Doc version:** 1.2 · **Date:** 2026-09-17 · **Step status:** Partial — T01 and T02 done, T03 partial (no scheduler, grace rule or metrics), T04 not started, T05 blocked. M11 (a) and (b) met; **M11 (c) not run**. See [H.4](#validation-results-and-evidence) and [docs/scope-decisions.md](scope-decisions.md#s06).
 > **Planned effort:** 12 h (master schedule; see [docs/zerosum_ledger_mvp_plan.md#schedule-overview](zerosum_ledger_mvp_plan.md#schedule-overview)), plus 1 h pre-allocated contingency for S06-T05 ([docs/zerosum_ledger_mvp_plan.md#constraint-updates](zerosum_ledger_mvp_plan.md#constraint-updates)) · **Gate:** —
 > **Shared procedures:** [docs/README.md#change-detection](README.md#change-detection) · [docs/README.md#source-of-truth](README.md#source-of-truth) · [docs/README.md#status-legend](README.md#status-legend)
 
@@ -685,66 +685,78 @@ Examples: timing breaks appear in clean runs; the verifier exceeds the per-run b
 
 | ID | Decision | Rationale | Alternatives considered | Status | Date |
 |---|---|---|---|---|---|
-| D06-1 | — | — | — | Pending | — |
-| D06-2 | — | — | — | Pending | — |
-| D06-3 | — | — | — | Pending | — |
-| D06-4 | — | — | — | Pending | — |
-| D06-5 | — | — | — | Pending | — |
-| D06-6 | — | — | — | Pending | — |
+| D06-1 | **Settlement report format and knobs.** One report per `(provider, report_date)` with per-currency totals; `report_id = rpt_YYYY_MM_DD`; a line per successful capture (gross, fee) and per successful refund (negative gross, no fee); a day is closed once its UTC calendar date has passed, and one closed day is one settlement cycle. Generated once on first request for a closed day, then frozen: clean lines, served lines and a SHA-256 content hash are persisted together. Knobs `report_missing_line_rate`, `report_off_by_one_rate`, `report_duplicate_line_rate` added through the §0.3 C23 extension point, at most one discrepancy per line, precedence missing → off-by-one → duplicate, each injection written to the D05-2 fault log with target `<report_id>:<provider_ref>`. | Totals are recomputed from the **served** lines, so a corrupted report stays arithmetically consistent with itself and the discrepancy is findable only by matching lines against our own attempts — a reconciler that merely re-added the provider's own column would find nothing. A later knob is not drawn once an earlier one fires, so the fault log never over-reports what reached the report. | One multi-currency report per day with nested per-currency documents (rejected: the event identity is already per currency, so the flat shape maps 1:1); injecting at fetch time rather than at generation (rejected: the report would change between two runs and no break would be reproducible). | Accepted | 2026-09-17 |
+| D06-2 | **Matching rules and break taxonomy.** Pure `SettlementMatcher`: match on provider reference first, then client reference; compare kind, currency and amount as magnitudes. Nine typed breaks — `MISSING_IN_LEDGER`, `MISSING_IN_REPORT`, `AMOUNT_MISMATCH`, `DUPLICATE_LINE`, `KIND_MISMATCH`, `CURRENCY_MISMATCH`, `TIMING`, `LINE_WITHOUT_SUCCESS`, `REPORT_ARITHMETIC` — each with a default status of `OPEN` or `UNEXPLAINED`. Knob-to-break map (I12 reads the same): `report_missing_line → MISSING_IN_REPORT`, `report_off_by_one → AMOUNT_MISMATCH`, `report_duplicate_line → DUPLICATE_LINE`. Additive migration `V4__reconciliation.sql`; runs and breaks are append-only via the D02-2 `reject_mutation()` trigger. | The **type** is the deliverable. A matcher that classified everything as one generic "mismatch" passes any test that counts breaks while telling an operator nothing about what to do, so the type is a checked column and every test asserts the type rather than the count. Amounts are compared by magnitude because a report states a refund as negative gross while an attempt stores a positive magnitude with direction in `kind`. | A single `MISMATCH` type with a free-text detail (rejected: unactionable, and it makes the M11(b) assertion vacuous); enforcing report arithmetic in the `SettlementReport` type (rejected: a self-contradictory report must be a typed break, not an exception, since the report is untrusted input). | Accepted | 2026-09-17 |
+| D06-3 | **`SETTLEMENT_RECEIVED` emission.** One event per report and currency, `event_id = order_group_id = partition key = settlement:<provider>:<report_id>:<currency>` (§0.3 C6). Built key by key, validated against D01-8 **inside** `SettlementEvents.toJson` before it can reach the outbox, and appended through `libs/outbox` in the same transaction as the run, its stored lines and its breaks. Totals are booked **as reported**; a report that fails its own arithmetic is `FAILED_VALIDATION` and emits nothing; an empty closed day emits nothing, having no currency to key an event by. | Breaks never change what is booked, so the provider's clearing account keeps a residual equal to the signed sum of the open breaks, which is exactly what I9 checks (§0.3 E1). Adjusting the booked amount to match our own records would hide the discrepancy in the one account whose non-zero balance is meant to reveal it. `net + fee = gross` is checked here *and* by the mapper, because either side alone would be a single point of invention. | Emitting a zero-total event for an empty day (rejected and tested: nothing settled is a fact, not a booking); emitting only when zero breaks (rejected: it would leave real settled cash unbooked whenever a single line disagreed). | Accepted | 2026-09-17 |
+| D06-4 | **Reconciliation API.** `POST /v1/reconciliation-runs` (admin, `Idempotency-Key` required) and `GET /v1/reconciliation-runs/{id}/breaks` (reader, filterable by type and status, page cap 500). Idempotent twice over: by key per D03-3 (same key + different body → `idempotency_key_reused`), and by run identity `(provider, report_date)`, so a day is reconciled once however many callers ask. Problem codes: `idempotency_key_missing`, `idempotency_key_reused`, `invalid_report_date`, `settlement_reports_unsupported`, `report_not_ready`, `provider_unavailable`, `unsupported_currency`, `reconciliation_run_not_found`. Paths and schemas added to `openapi/instrument-service.yaml`. | The identity constraint, not a check-then-insert, is what stops two concurrent runs booking the same settlement twice; the loser's insert returns no id and replays the winner's run instead of writing a second set of breaks. Codes are distinct because the caller's next action differs: a day that is not ready is retried next cycle, an unavailable provider is retried now, and a provider without settlement reports will never succeed. | Conflict (409) for a second caller with a different key (rejected: replaying the existing run is safe, since the day is already reconciled and nothing is booked twice). | Accepted | 2026-09-17 |
+| D06-5 | **Verifier CLI (I1–I12).** Not started. `tools/verifier` still evaluates I2–I4 only, as CR-S09-01 recorded. | Out of scope for this trimmed step; recorded rather than silently skipped. | — | Not started | 2026-09-17 |
+| D06-6 | **W5–W6 scenarios.** Not started; the D05-12 scenario catalog and runner do not exist (deferred in the S05 cut). | Blocked on its dependency rather than deferred by choice. | — | Blocked on D05-12 | 2026-09-17 |
 
 ### H.2 Implementation and configuration locations
 
 | Item | Planned path | Actual path | Traced to |
 |---|---|---|---|
-| Settlement report generator and persistence | `services/fake-providers` (FakeCard module) | — | D06-1 |
-| Discrepancy knob configuration | fake-providers fault configuration per D05-2 | — | D06-1, D05-2 |
-| Injected-discrepancy record (ground-truth exposure) | `services/fake-providers` | — | D06-1 |
-| FakeCard adapter settlement mapping (if added) | `services/instrument-service` provider package | — | D05-1, D06-1 |
-| Reconciliation migrations | `services/instrument-service` Flyway migrations | — | D06-2 |
-| Matcher and break taxonomy | `services/instrument-service` reconciliation core | — | D06-2 |
-| Settlement emitter | `services/instrument-service` reconciliation core | — | D06-3 |
-| Reconciliation controller, scheduler and metrics | `services/instrument-service` | — | D06-4 |
-| Reconciliation OpenAPI paths | `openapi/instrument-service.yaml` | — | D06-4, D05-13 |
-| Grace-count and schedule configuration | instrument-service application configuration | — | D06-4, master M11 (c) |
-| Verifier CLI and checks | `tools/verifier` | — | D06-5 |
-| Verifier thresholds and quiesce defaults | `tools/verifier` configuration | — | D06-5, master #invariants |
-| Verifier environment placeholders | `.env.example` | — | D00-8 |
-| W5 and W6 scenario files | Catalog directory per D05-12 | — | D06-6 |
+| Settlement report generator and persistence | `services/fake-providers` (FakeCard module) | `services/fake-providers/src/main/java/dev/zerosum/fakeproviders/card/SettlementReports.java`; `services/fake-providers/src/main/resources/db/migration/V4__settlement_reports.sql` | D06-1 |
+| Discrepancy knob configuration | fake-providers fault configuration per D05-2 | `services/fake-providers/src/main/java/dev/zerosum/fakeproviders/faults/FaultKnobs.java`, `.../faults/Decision.java` (§0.3 C23 extension point, used as documented) | D06-1, D05-2 |
+| Injected-discrepancy record (ground-truth exposure) | `services/fake-providers` | Existing D05-2 `fault_log` via `FaultProfiles.fires`; exposed through `GET /admin/truth` | D06-1 |
+| FakeCard adapter settlement mapping | `services/instrument-service` provider package | `services/instrument-service/src/main/java/dev/zerosum/instrument/adapter/FakeCardInstrument.java`; core type `.../core/SettlementReport.java`; `Capabilities.settlementReports` now **true** for FakeCard only | D05-1, D06-1 |
+| Settlement report endpoint | fake-provider report endpoint per D05-2 | `GET /fakecard/v1/settlement-reports/{date}` in `.../card/FakeCardController.java` | D06-1 |
+| Reconciliation migrations | `services/instrument-service` Flyway migrations | `services/instrument-service/src/main/resources/db/migration/V4__reconciliation.sql` (V3 left free for concurrent webhook work) | D06-2 |
+| Matcher and break taxonomy | `services/instrument-service` reconciliation core | `services/instrument-service/src/main/java/dev/zerosum/instrument/recon/SettlementMatcher.java`, `.../recon/BreakType.java` | D06-2 |
+| Settlement emitter | `services/instrument-service` reconciliation core | `services/instrument-service/src/main/java/dev/zerosum/instrument/recon/SettlementEvents.java`, `.../recon/ReconciliationService.java` | D06-3 |
+| Reconciliation controller | `services/instrument-service` | `services/instrument-service/src/main/java/dev/zerosum/instrument/api/ReconciliationController.java`; codes in `.../api/InstrumentApiException.java` | D06-4 |
+| Reconciliation scheduler and metrics | `services/instrument-service` | **Not built** — see H.5 | D06-4 |
+| Reconciliation OpenAPI paths | `openapi/instrument-service.yaml` | `openapi/instrument-service.yaml` (two paths, `ReconciliationRun`, `ReconciliationBreak`, `BreakType`, extended `Problem.code` enum) | D06-4, D05-13 |
+| Grace-count and schedule configuration | instrument-service application configuration | **Not built** — see H.5 | D06-4, master M11 (c) |
+| Verifier CLI and checks | `tools/verifier` | Not started (still I2–I4 only, per CR-S09-01) | D06-5 |
+| Verifier thresholds and quiesce defaults | `tools/verifier` configuration | Not started | D06-5, master #invariants |
+| Verifier environment placeholders | `.env.example` | Not started; no new Compose variable was added by this step | D00-8 |
+| W5 and W6 scenario files | Catalog directory per D05-12 | Blocked: the D05-12 catalog and runner do not exist | D06-6 |
 
 ### H.3 Produced artifacts
 
 | Artifact | Planned path | Actual path | Revision/hash |
 |---|---|---|---|
-| Settlement report generator with discrepancy knobs | `services/fake-providers` | — | — |
-| Reconciler (matcher, runs, breaks, emission) | `services/instrument-service` | — | — |
-| Reconciliation API and OpenAPI extension | `services/instrument-service`, `openapi/instrument-service.yaml` | — | — |
-| Verifier CLI | `tools/verifier` | — | — |
-| Verifier output JSON Schema | `tools/verifier` resources | — | — |
-| W5 scenario file | Catalog directory per D05-12 | — | — |
-| W6 scenario files (clean and discrepancy variant) | Catalog directory per D05-12 | — | — |
+| Settlement report generator with discrepancy knobs | `services/fake-providers` | `.../fakeproviders/card/SettlementReports.java`, `db/migration/V4__settlement_reports.sql`, `faults/FaultKnobs.java`, `faults/Decision.java` | branch `worktree-agent-aafdb115b4c00c6df` |
+| Reconciler (matcher, runs, breaks, emission) | `services/instrument-service` | `.../instrument/recon/{SettlementMatcher,BreakType,SettlementEvents,ReconciliationService}.java`, `db/migration/V4__reconciliation.sql` | branch `worktree-agent-aafdb115b4c00c6df` |
+| Reconciliation API and OpenAPI extension | `services/instrument-service`, `openapi/instrument-service.yaml` | `.../instrument/api/ReconciliationController.java`, `openapi/instrument-service.yaml` | branch `worktree-agent-aafdb115b4c00c6df` |
+| Verifier CLI | `tools/verifier` | Not produced | — |
+| Verifier output JSON Schema | `tools/verifier` resources | Not produced | — |
+| W5 scenario file | Catalog directory per D05-12 | Not produced (blocked on D05-12) | — |
+| W6 scenario files (clean and discrepancy variant) | Catalog directory per D05-12 | Not produced (blocked on D05-12) | — |
 
 ### H.4 Validation results and evidence
 
+All counts below are read from `build/test-results/*/TEST-*.xml`, never from the build's exit status
+(`failOnNoDiscoveredTests = false` makes a green build no evidence that tests ran). Full note:
+[docs/results/s06/reconciliation.md](results/s06/reconciliation.md).
+
 | Check | Method | Result | Evidence path | Date |
 |---|---|---|---|---|
-| Report lines and totals match golden O6 | `FakeCardSettlementReportTest` | Not run | — | — |
-| Report determinism across regeneration and restart | `SettlementReportDeterminismIT` | Not run | — | — |
-| Each discrepancy knob injects and records exactly one discrepancy | `DiscrepancyKnobIT` | Not run | — | — |
-| Settlement-report contract coverage (FakeCard; FakeBank skipped) | D05-10 provider contract suite | Not run | — | — |
-| Matching and break classification table | `SettlementMatcherTest` | Not run | — | — |
-| Run persistence, emission, atomicity, idempotency | `ReconciliationRunIT` | Not run | — | — |
-| Settlement event drains card clearing through the pipeline | D04-6 harness pipeline check | Not run | — | — |
-| API roles, replay, reuse, filters | `ReconciliationApiIT` | Not run | — | — |
-| Grace rule for timing breaks | `TimingBreakGraceTest` | Not run | — | — |
-| Scheduler ordering and catch-up | `ReconciliationSchedulerIT` | Not run | — | — |
-| Reconciliation metrics visible | D00-6/D00-7 export path | Not run | — | — |
-| ArchUnit boundary still green | D05-10 ArchUnit rule | Not run | — | — |
-| Verifier passes on clean stack | `VerifierCleanRunIT` | Not run | — | — |
-| Verifier fails on corrupted copy per invariant | `VerifierCorruptedCopyIT` | Not run | — | — |
-| Verifier cannot write | `VerifierReadOnlyRoleIT` | Not run | — | — |
-| Quiesce and not-evaluated outcomes | `VerifierQuiesceIT` | Not run | — | — |
-| W5, W6 clean and W6 discrepancy variant (local) | D05-12 runner plus verifier | Not run | — | — |
-| W5 and W6 in nightly CI e2e | D00-5 nightly job | Not run | — | — |
+| Report lines, totals, refund handling, empty and open days | `SettlementReportIT` (5 tests, 0 failures) | Pass | [docs/results/s06/reconciliation.md](results/s06/reconciliation.md) | 2026-09-17 |
+| Report frozen once generated (same bytes, same content hash) | `SettlementReportIT.reportIsStableAcrossFetches` | Pass | as above | 2026-09-17 |
+| Report determinism across a container restart | `SettlementReportDeterminismIT` | Not run — persistence and the content hash are covered by the freeze case above; a restart was not exercised | — | — |
+| Each discrepancy knob injects and records exactly one discrepancy | `DiscrepancyKnobIT` (5 tests, 0 failures) | Pass | as above | 2026-09-17 |
+| Settlement-report contract coverage (FakeCard runs; FakeBank correctly skipped) | D05-10 provider contract suite | Pass — `FakeCardContractTest` 9 tests, 1 skip (webhook only, was 2); `FakeBankContractTest` 9 tests, 2 skips | as above | 2026-09-17 |
+| Matching and break classification table (M11(b)) | `SettlementMatcherTest` (13 tests, 0 failures) | Pass — every case asserts the break **type** | as above | 2026-09-17 |
+| Run persistence, emission, idempotency, roles (M11(a)) | `ReconciliationRunIT` (6 tests, 0 failures) | Pass — event equals golden `EV-O6` field by field | as above | 2026-09-17 |
+| Lines and totals equal golden O6 | `ReconciliationRunIT.settlementReportProducesASettlementOrder` | Pass — amounts loaded from `libs/contracts`, none hard-coded | as above | 2026-09-17 |
+| Settlement event drains card clearing through the pipeline | D04-6 harness pipeline check | **Not run** — the S04 pipeline harness was never delivered; evidence stops at the outbox row | — | — |
+| Atomicity under an injected failure after break insert | `ReconciliationRunIT` | Not run — the transaction boundary is exercised, but no failure was injected mid-transaction | — | — |
+| Grace rule for timing breaks | `TimingBreakGraceTest` | **Not run** — not built (deliberate cut) | — | — |
+| Scheduler ordering and catch-up | `ReconciliationSchedulerIT` | **Not run** — not built (deliberate cut) | — | — |
+| Reconciliation metrics visible | D00-6/D00-7 export path | **Not run** — no metrics were added | — | — |
+| ArchUnit boundary still green | D05-10 ArchUnit rule | Pass — `InstrumentBoundaryTest` green; the reconciliation core names no adapter | as above | 2026-09-17 |
+| Repo-wide regression (unit) | `./gradlew test` | Pass — 339 tests, 0 failures, 3 skipped (was 4; the settlement case now runs for FakeCard) | as above | 2026-09-17 |
+| Repo-wide regression (integration) | `./gradlew integrationTest` | Pass — 254 tests, 0 failures, 0 skipped | as above | 2026-09-17 |
+| Verifier passes on clean stack | `VerifierCleanRunIT` | Not run — S06-T04 not started | — | — |
+| Verifier fails on corrupted copy per invariant | `VerifierCorruptedCopyIT` | Not run — S06-T04 not started | — | — |
+| Verifier cannot write | `VerifierReadOnlyRoleIT` | Not run — S06-T04 not started | — | — |
+| Quiesce and not-evaluated outcomes | `VerifierQuiesceIT` | Not run — S06-T04 not started | — | — |
+| I9 (clearing residual) and I12 (injected discrepancy has its break) | `tools/verifier` | **Not run** — the verifier still evaluates I2–I4 only (CR-S09-01) | — | — |
+| M11 (c): A0 chaos, 0 unexplained breaks after 2 cycles | A0 chaos run | **Not run** — no chaos orchestration, and no scheduler to advance cycles | — | — |
+| W5, W6 clean and W6 discrepancy variant (local) | D05-12 runner plus verifier | Not run — blocked on the D05-12 catalog and runner | — | — |
+| W5 and W6 in nightly CI e2e | D00-5 nightly job | Not run — blocked on the above | — | — |
 
 ### H.5 Known limitations and blockers
 
@@ -754,16 +766,22 @@ Examples: timing breaks appear in clean runs; the verifier exceeds the per-run b
 | Reconciliation covers providers with the settlement-report capability only (FakeCard); FakeBank payouts are not statement-reconciled | Limitation | Payout clearing correctness relies on webhooks, lookups and I9 | Inherited from [docs/zerosum_ledger_mvp_plan.md#instrument-interface](zerosum_ledger_mvp_plan.md#instrument-interface); no action in the MVP |
 | Scheduler assumes a single instrument-service instance | Limitation | Multiple instances would double-trigger runs (idempotency prevents double booking) | Revisit per [docs/zerosum_ledger_mvp_plan.md#scaling-triggers](zerosum_ledger_mvp_plan.md#scaling-triggers) |
 | I7 and I12 need admin-only ground truth, which is disabled in `demo-public` | Limitation | The verifier cannot pass against the public demo profile | Inherited from TB4 ([docs/zerosum_ledger_mvp_plan.md#trust-boundaries](zerosum_ledger_mvp_plan.md#trust-boundaries)) |
+| **No reconciliation scheduler.** Runs are started through the API only | Limitation (deliberate cut) | Settlement cycles do not advance on their own, so the §0.3 E3 quiesce condition "required settlement cycles completed" cannot be satisfied without an explicit call | S06-T03 instruction 7, not built; see [docs/scope-decisions.md](scope-decisions.md#s06) |
+| **No settlement-cycle grace rule.** A timing break is `OPEN` within its run and is never carried across cycles | Limitation (deliberate cut) | `MISSING_IN_REPORT` and `TIMING` are reported `OPEN` and never promoted to `UNEXPLAINED`, so "0 unexplained breaks after 2 cycles" cannot be evaluated | S06-T03 instruction 5, not built |
+| **No reconciliation metrics.** No Micrometer counters or gauges for runs or breaks | Limitation (deliberate cut) | S07's reconciliation alert row and the Money-invariants reconciliation panel stay blocked | S06-T03 instruction 8, not built; D07-1 still has nothing to register |
+| **M11(c) not evaluated.** No A0 chaos run was performed | Not run | The third M11 criterion is unevaluated, neither met nor failed | Needs S08 chaos orchestration, which is deferred |
+| **The settlement event is not observed reaching the ledger.** Evidence stops at the outbox row | Limitation | The booking itself rests on order-service's existing mapper tests, not on an observed end-to-end run | Needs the D04-6 pipeline harness (not delivered in S04) or a Compose e2e |
+| Reconciliation covers charge and refund attempts of one provider; a run reads candidates by `created_at` window plus still-open attempts | Limitation | An attempt created long before its report and already terminal would not be a candidate | Acceptable while one closed day is one cycle; revisit if cycles lengthen |
 
 ### H.6 Completion status
 
 | Field | Value |
 |---|---|
-| Step status | Planned |
-| Gate result | Not evaluated |
-| Completed on | — |
-| Completed by | — |
-| Handoff accepted by next step | — |
+| Step status | **Partial.** S06-T01 and S06-T02 done; S06-T03 partial (endpoints yes; scheduler, grace rule and metrics not built); S06-T04 not started; S06-T05 blocked on D05-12. |
+| Gate result | No gate (§0.3 O8). **The completion checkpoint is not fully met:** M11 (a) and (b) are met with tests behind them, M11 (c) is **Not run**, and "I6–I9 checks available" is **not** satisfied — `tools/verifier` still evaluates I2–I4 only, so I9 and I12 are unevaluated. |
+| Completed on | 2026-09-17 (partial) |
+| Completed by | S06 implementation agent, branch `worktree-agent-aafdb115b4c00c6df` |
+| Handoff accepted by next step | — (S07 already closed; the reconciliation metric rows it recorded as blocked stay blocked, since no metrics were added) |
 
 <a id="execution-record"></a>
 ## I. Execution and change record
@@ -772,11 +790,11 @@ Examples: timing breaks appear in clean runs; the verifier exceeds the per-run b
 
 | Task ID | Status | Output paths | Evidence | Blockers |
 |---|---|---|---|---|
-| S06-T01 | Planned | — | — | — |
-| S06-T02 | Planned | — | — | — |
-| S06-T03 | Planned | — | — | — |
-| S06-T04 | Planned | — | — | — |
-| S06-T05 | Planned | — | — | — |
+| S06-T01 | Done | `services/fake-providers/.../card/SettlementReports.java`, `.../card/FakeCardApi.java`, `.../card/FakeCardController.java`, `.../faults/FaultKnobs.java`, `.../faults/Decision.java`, `db/migration/V4__settlement_reports.sql`; adapter in `services/instrument-service/.../adapter/FakeCardInstrument.java`, core type `.../core/SettlementReport.java` | `SettlementReportIT` 5/0, `DiscrepancyKnobIT` 5/0, contract suite skip 2→1 for FakeCard | — |
+| S06-T02 | Done | `services/instrument-service/.../recon/{SettlementMatcher,BreakType,SettlementEvents,ReconciliationService}.java`, `db/migration/V4__reconciliation.sql` | `SettlementMatcherTest` 13/0, `ReconciliationRunIT` 6/0 | Pipeline check not run (no D04-6 harness) |
+| S06-T03 | Partial | `services/instrument-service/.../api/ReconciliationController.java`, `.../api/InstrumentApiException.java`, `openapi/instrument-service.yaml` | `ReconciliationRunIT` covers creation, replay, run identity, roles, breaks listing and the unknown-run 404 | **Scheduler, grace rule and metrics not built** — deliberate cut, see H.5 |
+| S06-T04 | Not started | — | — | Out of scope for this trimmed step; `tools/verifier` still I2–I4 only |
+| S06-T05 | Blocked | — | — | The D05-12 scenario catalog and runner do not exist |
 
 <a id="change-record"></a>
 ### I.2 Consumed sources and change record

@@ -31,4 +31,26 @@ public final class InstrumentExceptions {
             super("no payment instrument registered for provider: " + providerId);
         }
     }
+
+    /**
+     * The requested settlement day has not closed yet (D06-1).
+     *
+     * <p>Distinct from an empty report on purpose: "nothing settled that day" and "that day is still open" are the
+     * same bytes but opposite facts, and booking the first for the second would settle zero against real captures.
+     */
+    public static class ReportNotReadyException extends RuntimeException {
+        public ReportNotReadyException(ProviderId provider, java.time.LocalDate reportDate) {
+            super(provider + " has not closed " + reportDate + " yet");
+        }
+    }
+
+    /**
+     * The provider could not be asked. Retryable, and never a reconciliation result: a run that could not fetch the
+     * report must not commit, or an unreachable provider would look like a day with no settlement at all.
+     */
+    public static class ProviderUnavailableException extends RuntimeException {
+        public ProviderUnavailableException(ProviderId provider, String reason) {
+            super(provider + " is unavailable: " + reason);
+        }
+    }
 }

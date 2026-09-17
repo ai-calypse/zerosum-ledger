@@ -32,4 +32,16 @@ final class ProviderWire {
     record PayoutResponse(String payout_id, String client_reference, String status, String return_code,
             long amount_minor, String currency) {
     }
+
+    record SettlementReportResponse(String report_id, String provider, String report_date,
+            java.util.List<SettlementLineResponse> lines, java.util.List<SettlementTotalsResponse> totals,
+            String content_hash) {
+    }
+
+    record SettlementLineResponse(String provider_ref, String client_reference, String kind, String currency,
+            long gross_minor, long fee_minor) {
+    }
+
+    record SettlementTotalsResponse(String currency, long gross_minor, long fee_minor, long net_minor) {
+    }
 }
