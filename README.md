@@ -30,8 +30,8 @@ proves only that nothing changed — and because this build sets `failOnNoDiscov
 
 | What | Result | Where |
 |---|---|---|
-| Unit tests, 10 modules | 309 passed, 0 failed, 4 skipped | `./gradlew test` |
-| Integration tests, 8 modules (Testcontainers) | 229 passed, 0 failed, 0 skipped | `./gradlew integrationTest` |
+| Unit tests, 10 modules | 326 passed, 0 failed, 4 skipped | `./gradlew test` |
+| Integration tests, 8 modules (Testcontainers) | 239 passed, 0 failed, 0 skipped | `./gradlew integrationTest` |
 | Ledger lock contention study (SP1) | [docs/results/sp1-lock-study.md](docs/results/sp1-lock-study.md) | measured |
 | Stack version compatibility spike (SP3) | [docs/results/sp3-stack-compat.md](docs/results/sp3-stack-compat.md) | measured |
 | Fake providers and adapters | [docs/results/s05/providers.md](docs/results/s05/providers.md) | measured |

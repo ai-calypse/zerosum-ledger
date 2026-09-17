@@ -120,8 +120,8 @@ does not promote a criterion on a stub.
 
 | Layer | Count | What it runs against |
 |---|---|---|
-| Unit | 309 (0 failed, 4 skipped) | No containers |
-| Integration | 229 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
+| Unit | 326 (0 failed, 4 skipped) | No containers |
+| Integration | 239 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
 | End-to-end | 1 (0 failed) | Re-measured on the running seven-container stack after all three merges; see [results/s05/deployment-check.md](results/s05/deployment-check.md) |
 
 Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of

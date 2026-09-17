@@ -355,3 +355,29 @@ matrix and ablations, which remain deferred. M13(b) is therefore still NOT MET, 
 run that did not happen. What *was* executed is recorded there too: the verifier against a real PostgreSQL container
 initialised by the real `infra/postgres` scripts, and the simulator CLI against a stub of the two service APIs. A
 stub run is not evidence about the money path, and it is labelled as such wherever it appears.
+
+## The outbox relay gap was recorded, not discovered
+
+**Noted:** 2026-09-17, integrating S05-T09.
+
+S05-T09's report listed as its first defect that "payment events reached Kafka never... silent at both ends". That
+framing is wrong, and the correction matters more than the detail.
+
+The gap was **deliberate and written down** when it was created. S05-T07 wired only the outbox *writer*, and
+`docs/results/s05/attempts.md` said so plainly: *"Nothing publishes these events. Only the outbox writer is wired.
+The relay and cleanup job start with their first producer in S05-T09, so payment events accumulate in the table and
+reach Kafka only once that lands."* The configuration class carried the same note. S05-T09 implemented that deferred
+work; it did not discover a hidden bug.
+
+**Why bother correcting it:** this repository's claim is that its gaps are recorded rather than found later. An
+implemented deferral re-labelled as a defect find inflates both the discovery and the risk that was actually carried,
+and it would make the record of S05-T07 look dishonest when it was the opposite.
+
+**S05-T09 did find two genuine defects**, neither recorded anywhere beforehand:
+
+1. **instrument-service was never passed a broker address.** No `ZS_KAFKA_BOOTSTRAP` in its Compose block, so inside
+   the container it would have dialled itself while reporting healthy — the same class as the missing `ZS_*_TOKEN`
+   variables found in S05-T08, and the fourth instance of this shape in the project.
+2. **One malformed record would have stopped collections permanently.** `ContractSchemas.validate` *throws* on
+   non-JSON bytes rather than returning errors; called outside a `try`, a single poison record would have paused the
+   partition and redelivered for ever. Decoding is now classified before anything is written.
