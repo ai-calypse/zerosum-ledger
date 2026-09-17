@@ -32,13 +32,15 @@ class MoneyOrderListener {
     private static final Logger log = LoggerFactory.getLogger(MoneyOrderListener.class);
 
     private final LedgerApplyEngine engine;
+    private final DlqPublisher dlq;
     private final Counter received;
     private final Counter applied;
     private final Counter duplicates;
     private final Counter quarantined;
 
-    MoneyOrderListener(LedgerApplyEngine engine, MeterRegistry meters) {
+    MoneyOrderListener(LedgerApplyEngine engine, DlqPublisher dlq, MeterRegistry meters) {
         this.engine = engine;
+        this.dlq = dlq;
         // Names follow the master's instrumentation style; S07 (D07-1) owns the permanent catalogue and may rename
         // them through the change procedure.
         this.received = meters.counter("ledger_records_received_total");
@@ -70,6 +72,11 @@ class MoneyOrderListener {
         duplicates.increment(result.countOf(ApplyOutcome.Status.DUPLICATE));
         quarantined.increment(result.countOf(ApplyOutcome.Status.QUARANTINED));
 
+        // Quarantine row first (the engine wrote it inside the batch transaction), then the DLQ copy, then the
+        // acknowledgement. A crash between the publish and the ack duplicates a DLQ record, which is tolerable; the
+        // reverse order would acknowledge a record that never reached the DLQ, leaving only a database row.
+        publishQuarantinedToDlq(records, result);
+
         // Reached only when apply() returned, which means its transaction committed. An exception propagates instead,
         // leaving the offsets where they were so the batch is redelivered.
         acknowledgment.acknowledge();
@@ -78,6 +85,23 @@ class MoneyOrderListener {
             log.info("applied batch of {} with {} retries ({} deadlock, {} lock timeout, {} connection)",
                     records.size(), result.totalRetries(), result.deadlockRetries(), result.lockTimeoutRetries(),
                     result.connectionRetries());
+        }
+    }
+
+    /**
+     * Dead-letters every record the engine quarantined. Driven from the outcomes rather than from a
+     * {@code DeadLetterPublishingRecoverer}, because the engine quarantines and <em>returns</em> instead of throwing,
+     * so no error handler ever sees a poison record.
+     */
+    private void publishQuarantinedToDlq(List<ConsumerRecord<String, String>> records, ApplyBatchResult result) {
+        for (ApplyOutcome outcome : result.outcomes()) {
+            if (outcome.status() != ApplyOutcome.Status.QUARANTINED) {
+                continue;
+            }
+            ConsumerRecord<String, String> original = records.get(outcome.index());
+            dlq.publish(original, String.valueOf(outcome.errorCode()), outcome.detail());
+            log.warn("dead-lettered {}-{}@{} as {}", original.topic(), original.partition(), original.offset(),
+                    outcome.errorCode());
         }
     }
 }

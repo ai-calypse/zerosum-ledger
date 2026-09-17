@@ -63,6 +63,7 @@ class TopicProvisioningIT {
                         .configs(d.configs()))
                 .toList());
 
+        awaitVisible(TopicDefinitions.all().stream().map(TopicDefinition::name).toList());
         var described = admin.describeTopics(TopicDefinitions.all().stream().map(TopicDefinition::name).toList())
                 .allTopicNames().get(60, TimeUnit.SECONDS);
 
@@ -98,6 +99,37 @@ class TopicProvisioningIT {
                         .allTopicNames().get(60, TimeUnit.SECONDS)
                         .get(TopicDefinitions.MONEY_ORDERS.name()).partitions().size(),
                 "a redundant declaration must not alter the topic");
+    }
+
+    /**
+     * Waits until every topic is visible to the broker answering our describes.
+     *
+     * <p>{@code createTopics(...).get()} returns once the controller has accepted the creation, which is not the same
+     * as the metadata having propagated — describing immediately afterwards can fail with
+     * {@code UnknownTopicOrPartitionException}. It passed in isolation and failed in a busy full run, which is the
+     * signature of a race rather than a broken assertion, so this waits on the condition instead of sleeping.
+     */
+    private static void awaitVisible(List<String> names) {
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos();
+        while (System.nanoTime() < deadline) {
+            try {
+                if (admin.listTopics().names().get(30, TimeUnit.SECONDS).containsAll(names)) {
+                    return;
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            } catch (Exception retryable) {
+                // Metadata still settling; fall through to the retry below.
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            }
+        }
+        throw new AssertionError("topics never became visible: " + names);
     }
 
     /** Creates topics the way a service does: an existing topic is success, anything else is a failure. */

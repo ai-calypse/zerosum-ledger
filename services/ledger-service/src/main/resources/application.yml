@@ -48,6 +48,9 @@ ledger:
   # flag works; production leaves it true.
   consumer:
     enabled: true
+    # decision: D04-4 — how often a paused listener probes its own database pool before resuming. Short enough that a
+    # brief restart costs seconds, long enough not to hammer a database that is still down.
+    resume-probe-interval: 5s
   apply:
     # decision: D02-4 — docs/step_02_ledger_core.md#decisions-and-outputs (master §5.11 timeouts)
     lock-timeout: 2s

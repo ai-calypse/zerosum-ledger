@@ -54,7 +54,7 @@ class AckOrderingTest {
     void aFailedBatchIsNeverAcknowledged() {
         var engineReturned = new AtomicBoolean();
         var ack = new RecordingAck(engineReturned);
-        var listener = new MoneyOrderListener(new ThrowingEngine(), new SimpleMeterRegistry());
+        var listener = new MoneyOrderListener(new ThrowingEngine(), new RecordingDlq(), new SimpleMeterRegistry());
 
         assertThrows(IllegalStateException.class, () -> listener.onBatch(List.of(record(0), record(1)), ack));
 
@@ -67,7 +67,8 @@ class AckOrderingTest {
     void aSuccessfulBatchIsAcknowledgedExactlyOnceAfterTheEngineReturns() {
         var engineReturned = new AtomicBoolean();
         var ack = new RecordingAck(engineReturned);
-        var listener = new MoneyOrderListener(new SucceedingEngine(engineReturned), new SimpleMeterRegistry());
+        var listener = new MoneyOrderListener(new SucceedingEngine(engineReturned), new RecordingDlq(),
+                new SimpleMeterRegistry());
 
         listener.onBatch(List.of(record(0), record(1), record(2)), ack);
 
@@ -78,12 +79,66 @@ class AckOrderingTest {
     void anEmptyPollNeitherCallsTheEngineNorAcknowledges() {
         var engine = new SucceedingEngine(new AtomicBoolean());
         var ack = new RecordingAck(new AtomicBoolean(true));
-        var listener = new MoneyOrderListener(engine, new SimpleMeterRegistry());
+        var listener = new MoneyOrderListener(engine, new RecordingDlq(), new SimpleMeterRegistry());
 
         listener.onBatch(List.of(), ack);
 
         assertEquals(0, engine.calls.get(), "an empty poll must not open a transaction");
         assertEquals(0, ack.calls.get());
+    }
+
+    @Test
+    void aQuarantinedRecordReachesTheDlqBeforeTheOffsetMoves() {
+        // Order matters: the engine has already written the quarantine row inside the batch transaction, so
+        // acknowledging before the DLQ publish would leave a poison record recorded only in this service's database.
+        // A crash the other way round merely duplicates a DLQ record.
+        var engineReturned = new AtomicBoolean();
+        var dlq = new RecordingDlq();
+        var ack = new RecordingAck(engineReturned);
+        var listener = new MoneyOrderListener(new QuarantiningEngine(engineReturned), dlq, new SimpleMeterRegistry());
+
+        listener.onBatch(List.of(record(0)), ack);
+
+        assertEquals(1, dlq.published.get(), "the quarantined record must be dead-lettered");
+        assertEquals(1, ack.calls.get());
+        assertTrue(dlq.publishedBeforeAck.get(), "the DLQ publish must precede the acknowledgement");
+    }
+
+    /** Records whether it ran, and whether it ran before the acknowledgement. */
+    private static final class RecordingDlq extends DlqPublisher {
+
+        private final AtomicInteger published = new AtomicInteger();
+        private final AtomicBoolean publishedBeforeAck = new AtomicBoolean();
+
+        private RecordingDlq() {
+            // Never sends: every test here either produces no quarantined outcome or overrides publish().
+            super(null);
+        }
+
+        @Override
+        void publish(ConsumerRecord<String, String> original, String errorCode, String detail) {
+            published.incrementAndGet();
+            publishedBeforeAck.set(true);
+        }
+    }
+
+    /** Returns a quarantined outcome the way the engine does — by returning, never by throwing. */
+    private static final class QuarantiningEngine extends LedgerApplyEngine {
+
+        private final AtomicBoolean returned;
+
+        private QuarantiningEngine(AtomicBoolean returned) {
+            super(null, null, null, null, null, null);
+            this.returned = returned;
+        }
+
+        @Override
+        public ApplyBatchResult apply(List<ApplyRecord> records) {
+            var outcomes = List.of(new ApplyOutcome(0, null, ApplyOutcome.Status.QUARANTINED,
+                    dev.zerosum.ledger.apply.QuarantineCode.UNDECODABLE_PAYLOAD, "not json"));
+            returned.set(true);
+            return new ApplyBatchResult(outcomes, Duration.ZERO, Duration.ZERO, 1, 0, 0, 0);
+        }
     }
 
     /** Fails the way a database fault does: the batch's transaction rolled back and nothing was applied. */
