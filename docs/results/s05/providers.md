@@ -38,6 +38,19 @@ than only in a single-threaded test.
 charge and refund cases are in one `FakeCardIT` here; the refund cases are
 `refundsAreCappedAtTheCapture` and `declinedChargeCannotBeRefunded`.
 
+## Project-wide verification at the end of S05
+
+Both suites were **force-executed** (`--rerun-tasks`), not reported from Gradle's up-to-date cache, because a cached
+pass proves only that nothing changed:
+
+| Layer | Tests | Failures | Skipped |
+|---|---|---|---|
+| Unit (`test`, 7 modules) | 221 | 0 | 2 |
+| Integration (`integrationTest`, 6 modules, 7m54s) | 180 | 0 | 0 |
+
+The 2 skips are the settlement-report assumption described above. Integration covers order-service (55),
+ledger-service (88), libs/outbox (14), fake-providers (16), infra/tests (6) and the SP3 stack spike (1).
+
 ## A defect the contract suite caught
 
 The shared suite's read-timeout case failed on both adapters the first time it ran, and the bug was real rather than a

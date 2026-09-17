@@ -236,3 +236,29 @@ What is missing is the *implementation*: nothing resubmits anything yet, so the 
 to document has no code to attach to.
 
 **If S05-T09 is ever built**, it takes the next free ADR number and links back to ADR-0010, rather than renumbering.
+
+## S05 scope revised mid-step: T07 and T08 are deferred too
+
+**Revised:** 2026-09-16, after S05-T06.
+
+The original S05 cut kept **T07** (payment-attempt schema, optimistic concurrency guard, outbox) and **T08** (the
+state x event transition table), and deferred T09 (the resolver that drives attempts through those states).
+
+That combination does not hold together. T07 and T08 build the tables and the transition rules for a state machine,
+and T09 is the thing that would actually move an attempt through them. Building the first two without the third
+leaves schema nothing writes to and a transition table nothing consults — the kind of half-built structure that looks
+finished in a file listing and is dead code in practice.
+
+**Delivered instead:** T04 (the abstraction), T01 and T02 (both simulated providers), T05 (both adapters) and T06
+(the shared contract suite and the ArchUnit boundary rule). That is a complete, demonstrable story: two providers
+that behave nothing alike, reached through one interface, with the boundary enforced by a rule that is shown to fire.
+
+**Consequence, stated plainly:**
+
+- **instrument-service has no persistence.** It is an adapter layer. No payment attempt is recorded anywhere, so
+  nothing survives a restart and there is no attempt id to look up after a crash.
+- **Nothing resolves an `Unknown` outcome.** The adapters produce `Unknown` correctly and `lookup` works, but no
+  scheduler calls it. The quiet-period rule is specified in ADR-0010 and implemented by nobody.
+- **M8(b), M8(c), M9 and M10 remain unmet**, as already recorded. This revision does not change that; it removes the
+  impression that the schema half of the work was going to arrive separately.
+- **Resuming S05 means starting at T07 and going through T09 together**, not picking T07 up alone.
