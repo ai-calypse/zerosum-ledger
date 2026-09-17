@@ -2,6 +2,8 @@
 package dev.zerosum.instrument.store;
 
 import dev.zerosum.contracts.kafka.TopicDefinitions;
+import dev.zerosum.instrument.store.AttemptStateMachines.Kind;
+import dev.zerosum.instrument.store.AttemptStateMachines.State;
 import dev.zerosum.outbox.OutboxWriter;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -25,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  * a webhook and a sweeper, typically — cannot both win: the loser updates zero rows, learns nothing was applied, and
  * re-reads. A read-then-write would let both believe they moved the attempt and both emit an event, which downstream
  * becomes two money orders for one movement of money.
+ *
+ * <p>Since S05-T08 the move itself must also exist in {@link AttemptStateMachines}: a status change the table does
+ * not draw is refused, logged and counted, whatever the caller believed. The guard answers "is the attempt still
+ * where you left it"; the table answers "is that a move this kind of attempt can make at all", and a service that
+ * only asked the first question would happily settle a charge that was never submitted.
  */
 @Service
 public class AttemptTransitions {
@@ -32,11 +39,13 @@ public class AttemptTransitions {
     private final JdbcClient db;
     private final OutboxWriter outbox;
     private final Clock clock;
+    private final IllegalTransitions illegal;
 
-    AttemptTransitions(JdbcClient db, OutboxWriter outbox, Clock clock) {
+    AttemptTransitions(JdbcClient db, OutboxWriter outbox, Clock clock, IllegalTransitions illegal) {
         this.db = db;
         this.outbox = outbox;
         this.clock = clock;
+        this.illegal = illegal;
     }
 
     /**
@@ -74,6 +83,20 @@ public class AttemptTransitions {
         }
     }
 
+    /**
+     * A status change {@link AttemptStateMachines} does not draw for this kind of attempt.
+     *
+     * <p>Unchecked and thrown rather than returned: callers are required to consult the table first, so reaching this
+     * is a defect in the caller, not a branch it was meant to handle. Throwing inside the transaction rolls back the
+     * guarded update, so a refused transition leaves the attempt exactly as it was.
+     */
+    public static class IllegalTransitionException extends RuntimeException {
+
+        IllegalTransitionException(UUID attemptId, Kind kind, State from, State to) {
+            super("no " + kind + " transition from " + from + " to " + to + " (attempt " + attemptId + ")");
+        }
+    }
+
     @Transactional
     public Result apply(Transition transition) {
         int updated = db.sql("""
@@ -104,6 +127,18 @@ public class AttemptTransitions {
         }
 
         PaymentEvents.Attempt attempt = read(transition.attemptId());
+        // Checked after the guard, not before, so a caller whose from-status is simply out of date still gets
+        // LostRace and re-reads — that is a normal race, not a defect. Reaching here means the attempt really was in
+        // `from`, so an absent arrow is the caller asking for a move that does not exist, and the throw rolls the
+        // update back.
+        Kind kind = Kind.of(attempt.kind());
+        State from = State.valueOf(transition.from());
+        State to = State.valueOf(transition.to());
+        if (!AttemptStateMachines.allows(kind, from, to)) {
+            illegal.record(transition.attemptId(), kind, from, "->" + to);
+            throw new IllegalTransitionException(transition.attemptId(), kind, from, to);
+        }
+
         appendHistory(transition);
 
         Optional<String> eventType = PaymentEvents.eventTypeFor(attempt.kind(), transition.from(), transition.to());

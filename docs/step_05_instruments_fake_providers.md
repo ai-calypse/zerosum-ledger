@@ -840,7 +840,7 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | D05-2 | — | — | — | Pending | — |
 | D05-3 | — | — | — | Pending | — |
 | D05-4 | — | — | — | Pending | — |
-| D05-5 | — | — | — | Pending | — |
+| D05-5 | The charge, refund and payout machines are immutable data in `AttemptStateMachines`: per machine a progression (how far along each status is), the diagram's arrows and a claim alias (`DECLINED` → `FAILED` for refunds and payouts); per event the status it claims and whether it is a command or a provider observation. Outcomes are applied, ignored-stale, illegal and ahead-of-state; `AttemptTransitions` refuses any move the tables do not draw, logging and counting it. Ahead-of-state (§0.3 C21) returns the claimed status plus `resolutionPath`, the intermediate statuses in order, so a payout that returns while still `PENDING` emits `PAYOUT_SETTLED` then `PAYOUT_RETURNED` | The 891 (kind, state, event) decisions are derived from four explicit inputs that can each be read against the master diagrams; 891 hand-written rows would be 891 chances to mistype one and find out in production. There is deliberately no `UNKNOWN` → `FAILED` arrow on the payout machine, so a failure found by lookup must pass through `PENDING` and emit acceptance first — otherwise the mapper reverses an order that was never created | A literal (state, event) → outcome map per machine (rejected: unreviewable and drift-prone); applying an ahead-of-state event directly (rejected: skips the intermediate payment events); treating an unreachable cancel as ahead-of-state (rejected: a command has nothing to look up, and `not_cancellable` is the documented answer) | Accepted | 2026-09-17 |
 | D05-6 | — | — | — | Pending | — |
 | D05-7 | — | — | — | Pending | — |
 | D05-8 | — | — | — | Pending | — |
@@ -848,7 +848,7 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | D05-10 | — | — | — | Pending | — |
 | D05-11 | — | — | — | Pending | — |
 | D05-12 | — | — | — | Pending | — |
-| D05-13 | — | — | — | Pending | — |
+| D05-13 | `openapi/instrument-service.yaml` opens with `GET /v1/payment-attempts/{attempt_id}` (reader) and `POST /v1/payment-attempts/{attempt_id}/cancel` (admin), RFC 9457 problems with the codes `invalid_attempt_id`, `attempt_not_found`, `not_cancellable`, `unauthorized`, `forbidden` and `database_unavailable`, and 401/403 on both operations (§0.3 C9). Responses are snake_case through one mapper setting and are validated against the file by `AttemptEndpointsIT`. The instrument token is never returned | Role annotations and problem codes belong in the published contract, not only in code, and `additionalProperties: false` plus a real-response test is what keeps the two from drifting. Nullable fields are documented but not `required`, because whether a null is serialized or omitted is a mapper default rather than a contract | Returning the attempt's instrument token for convenience (rejected: D00-8 — it would reach every client log); a separate response schema per operation (rejected: cancel returns the same document, so one schema is one thing to keep true) | Accepted | 2026-09-17 |
 | D05-14 | — | — | — | Pending | — |
 
 ### H.2 Implementation and configuration locations
@@ -863,13 +863,13 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | FakeCard and FakeBank adapters | `services/instrument-service/src/main/java/` (`instrument.providers.*`) | — | D05-1, D05-14 |
 | Adapter client configuration (timeouts, retry, minor-unit mapping) | `services/instrument-service/src/main/resources/application.yml` | — | D05-14 |
 | Instruments migrations | `services/instrument-service/src/main/resources/db/migration/` | — | D05-4 |
-| Transition service and state-machine tables | `services/instrument-service/src/main/java/` | — | D05-5 |
+| Transition service and state-machine tables | `services/instrument-service/src/main/java/` | `services/instrument-service/src/main/java/dev/zerosum/instrument/store/` (`AttemptTransitions`, `AttemptStateMachines`, `IllegalTransitions`, `PaymentEvents`, `AttemptQueries`) | D05-5 |
 | Collection policy consumer and token registration | `services/instrument-service/src/main/java/` | — | D05-6 |
 | Payout run and freshness client; payout policy configuration | `services/instrument-service/src/main/java/`, `services/instrument-service/src/main/resources/application.yml` | — | D05-7 |
 | Webhook receiver | `services/instrument-service/src/main/java/` | — | D05-3, D05-5 |
 | Sweeper and resolver; schedule configuration | `services/instrument-service/src/main/java/`, `services/instrument-service/src/main/resources/application.yml` | — | D05-8, D05-9 |
 | Kill switches | `services/instrument-service/src/main/resources/application.yml`, `.env.example` | — | D05-11, D00-8 |
-| `libs/auth` wiring in instrument-service | `services/instrument-service/src/main/java/`, `services/instrument-service/src/main/resources/application.yml` | — | D03-4 |
+| `libs/auth` wiring in instrument-service | `services/instrument-service/src/main/java/`, `services/instrument-service/src/main/resources/application.yml` | `services/instrument-service/src/main/java/dev/zerosum/instrument/api/` (`AuthConfiguration`, `InstrumentAuthorization`), `application.yml` (`zs.auth`), and the `ZS_*_TOKEN` variables in the instrument-service block of `docker-compose.yml` | D03-4 |
 | Provider contract suite and ArchUnit provider-boundary rules | `services/instrument-service/src/test/java/` | — | D05-10 |
 | Provisional provider and attempt metrics, including the §0.3 O9 alert-signal gauges (names owned by D07-1) | `services/instrument-service/src/main/java/` | — | D05-14, D05-8; D07-1 later |
 | Scenario runner command | build script or e2e test class per D04-6 | — | D05-12 |
@@ -878,7 +878,7 @@ Thresholds and rates are those in the linked master sections; they are not resta
 
 | Artifact | Planned path | Actual path | Revision/hash |
 |---|---|---|---|
-| Instrument-service OpenAPI | `openapi/instrument-service.yaml` | — | — |
+| Instrument-service OpenAPI | `openapi/instrument-service.yaml` | `openapi/instrument-service.yaml` (attempt read and cancel; S05-T09 to T11 add their operations) | 1.0.0 |
 | ADR-0010 FakeBank quiet period | `docs/adr/0010-*.md` | — | — |
 | Scenario catalog format description | `scenarios/` (format file per D05-12) | — | — |
 | W1–W4 scenario files | `scenarios/` | — | — |
@@ -900,8 +900,8 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | M7(b) provider boundary | ArchUnit rules plus deliberate violation (S05-T06) | Not run | — | — |
 | Append-only, one in-flight payout, transition concurrency, event schema | `InstrumentsSchemaIT`, `OneInflightPayoutIT`, `TransitionConcurrencyIT`, `PaymentEventSchemaTest` (S05-T07) | Not run | — | — |
 | Payout event emission and attempt uniqueness | `PayoutEventEmissionTest`, `AttemptUniquenessIT` (S05-T07) | Not run | — | — |
-| M8(a) transition table | `TransitionTableTest` (S05-T08) | Not run | — | — |
-| Attempt endpoints, 401/403 and OpenAPI conformance | `AttemptEndpointsIT`, OpenAPI validation test (S05-T08, S05-T11) | Not run | — | — |
+| M8(a) transition table | `TransitionTableTest` (S05-T08) | Pass — 46 tests, 0 failures: 33 generated cases covering the 891 (kind, state, event) pairs, plus the product and constant-coverage checks and 11 nested rule cases. A deliberately altered diagram arrow failed 3 of them | `docs/results/s05/transitions.md` | 2026-09-17 |
+| Attempt endpoints, 401/403 and OpenAPI conformance | `AttemptEndpointsIT`, OpenAPI validation test (S05-T08, S05-T11) | Pass for the two S05-T08 operations — 9 tests, 0 failures (6 endpoint cases, 2 table-enforcement cases, 1 OpenAPI conformance case). The webhook operation is S05-T11 | `docs/results/s05/transitions.md` | 2026-09-17 |
 | Collection policy and kill switch | `CollectionPolicyTest`, `CollectionPolicyIT` (S05-T09) | Not run | — | — |
 | Policy quarantine | `PolicyQuarantineIT` (S05-T09) | Not run | — | — |
 | M10(a), M10(c) payout run | `PayoutRunIT`, `PayoutRunIdempotencyIT`, `PayoutFreshnessIT`, `ConcurrentPayoutRunIT` (S05-T10) | Not run | — | — |
@@ -953,7 +953,7 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | S05-T05 | Planned | — | — | — |
 | S05-T06 | Planned | — | — | — |
 | S05-T07 | Planned | — | — | — |
-| S05-T08 | Planned | — | — | — |
+| S05-T08 | Complete | `services/instrument-service/src/main/java/dev/zerosum/instrument/store/` (`AttemptStateMachines`, `IllegalTransitions`, `AttemptQueries`), `.../instrument/api/`, `openapi/instrument-service.yaml`, `docker-compose.yml`, `services/instrument-service/src/main/resources/application.yml` | `docs/results/s05/transitions.md` | — |
 | S05-T09 | Planned | — | — | — |
 | S05-T10 | Planned | — | — | — |
 | S05-T11 | Planned | — | — | — |
