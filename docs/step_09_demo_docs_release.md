@@ -757,8 +757,9 @@ Participant time is external waiting time ([docs/zerosum_ledger_mvp_plan.md#wait
 | Check | Method | Result | Evidence path | Date |
 |---|---|---|---|---|
 | M14(a) fresh-clone to W1 | S09-T01 timing script on the reference laptop | Not run | — | — |
-| README numbers linked to results | Digit-to-link grep | Not run | — | — |
-| Traceability table complete (M1–M14) | Row count and path-existence check | Not run | — | — |
+| README numbers linked to results | Digit-to-link grep | **Not run** — the README was written so every number cites an executed run, but no automated check enforces it | — | — |
+| Traceability table complete (M1–M14) | Compiled from `docs/results/**`, scope-decisions and test sources; plan text never treated as evidence | **Passed** — 44 lettered sub-criteria: 20 MET, 7 PARTIAL, 16 NOT MET, 1 UNKNOWN | [docs/architecture.md](architecture.md) | 2026-09-16 |
+| End-to-end money path against the running stack | `./gradlew :infra:tests:e2eTest --rerun-tasks` on the Compose stack | **Passed** — 1 test, 0 failures, 0.718 s | [docs/results/s09/e2e-money-path.md](results/s09/e2e-money-path.md) | 2026-09-17 |
 | Runbook covers every alert | Alert annotations versus runbook anchors | Not run | — | — |
 | Docs link check | Markdown relative-link check | Not run | — | — |
 | Explorer serving and headers | ledger-service integration test | Not run | — | — |
@@ -795,9 +796,9 @@ Participant time is external waiting time ([docs/zerosum_ledger_mvp_plan.md#wait
 
 | Field | Value |
 |---|---|
-| Step status | Planned |
-| Gate result | Not evaluated |
-| Completed on | — |
+| Step status | **Partially delivered.** S09-T01 (README) and S09-T02 (`docs/architecture.md` with the M1–M14 traceability table) are done, plus the first `@Tag("e2e")` test, which was not a named S09 task but closed CI's hollow e2e job. S09-T03 (explorer), T04 and T05 (human-subject studies), T06 (video), T07 (release tag), C01 and C02 are **not started**. |
+| Gate result | **Not evaluated.** G5 requires the hard gates in the release checklist, which has not been walked. |
+| Completed on | — (step not complete) |
 | Completed by | — |
 | Handoff accepted by next step | — |
 
