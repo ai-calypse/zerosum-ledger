@@ -67,11 +67,10 @@ to remember which exception type to catch.
 
 ## Not delivered, and what that costs
 
-- **S05-T03 (fault knobs, webhook sender) — deferred.** There is no `PUT /admin/faults/{provider}`, no
-  `GET /admin/truth`, and **nothing delivers webhooks**. The `provider_events` table is written on every terminal
-  outcome, so enabling delivery later needs no schema change, but today an adapter would learn a payout's fate only
-  by lookup. Consequence: the fault matrix F6–F8 cannot be exercised, and tests read ground truth from the database
-  directly instead of through an admin endpoint.
+- **S05-T03 (fault knobs, webhook sender) — deferred at the time of writing; delivered on 2026-09-17.** See
+  [S05-T03 below](#s05-t03) for what now exists and what is still missing. The paragraph that followed here said
+  there was no `PUT /admin/faults/{provider}`, no `GET /admin/truth` and nothing delivering webhooks; all three now
+  exist, and the fault matrix F6–F8 has the knobs it needs.
 - **M7 is not claimed, despite both adapters existing and passing the shared suite.** The suite drives them against a
   JDK `HttpServer` stub, never against the running fake-providers service. Nothing here proves that
   `FakeCardInstrument` and the real FakeCard agree on a single field name: the stub's payloads were written by the
@@ -93,3 +92,74 @@ to remember which exception type to catch.
 - The lifecycle tests run with `banking-day=0s`, so they prove the transitions and the scheduler wiring, **not** any
   real timing behaviour. A payout's real-world delay is simulated, and the simulation is not evidence about
   production latency.
+
+<a id="s05-t03"></a>
+
+## S05-T03 — fault knobs, seeded randomness, signed webhooks, ground truth
+
+Date: 2026-09-17. Branch: `worktree-agent-ad00029d875b5be44`.
+
+### Measured
+
+Force-executed (`--rerun-tasks`), counts read from `services/fake-providers/build/test-results/*/TEST-*.xml`, not
+from the build's exit status — this build sets `failOnNoDiscoveredTests = false`, so a green build proves nothing
+about whether tests ran.
+
+| Task | Suite | Tests | Failures | Skipped |
+|---|---|---|---|---|
+| S05-T03 | `WebhookSignerTest` (unit) | 6 | 0 | 0 |
+| S05-T03 | `AdminSecurityIT` (integration) | 8 | 0 | 0 |
+| S05-T03 | `FaultKnobDeterminismIT` (integration) | 6 | 0 | 0 |
+| S05-T03 | `WebhookSenderIT` (integration) | 5 | 0 | 0 |
+| S05-T03 | `DemoPublicAdminIT` (integration) | 2 | 0 | 0 |
+| S05-T01/T02 (regression) | `FakeCardIT`, `FakeCardIdempotencyIT`, `FakeBankIT`, `FakeBankLifecycleIT` | 16 | 0 | 0 |
+
+fake-providers integration total: **37 tests, 0 failures, 0 skipped**. The 16 tests from S05-T01/T02 are unchanged
+and still pass. Project-wide unit layer, force-executed: **240 tests, 0 failures, 4 skipped** (the same four
+settlement-report and webhook-parsing assumptions described above).
+
+### What now exists
+
+- **`PUT /admin/faults/{provider}`** replaces a provider's knob profile whole and persists it in `fault_profiles`:
+  `latency_p50_ms`, `latency_p95_ms`, `http_500_rate`, `reset_before_commit_rate`, `timeout_after_commit_rate`,
+  `webhook_duplicate_rate`, `webhook_reorder_rate`, `webhook_drop_rate`, `return_rate`,
+  `simulated_banking_day_seconds`, `max_processing_delay_ms`, `seed`. Rates outside [0, 1], negative delays, unknown
+  field names and a `max_processing_delay_ms` at or above the ADR-0010 quiet period are refused with 400 naming the
+  field, and the previous profile stays active.
+- **Seeded randomness**: one `L64X128MixRandom` stream per provider *and decision*, re-derived on every activation.
+  Same seed plus same request order gives identical outcomes; that is asserted, not asserted-by-inspection.
+- **Signed webhook sender** draining `provider_events`: `ZS-Signature: t=…,v1=…`, HMAC-SHA256 over `<t>.<raw body>`,
+  duplicate/drop/reorder simulation, redelivery on 1s/5s/30s/2min/10min, `delivered_at` set only after a 2xx.
+- **`GET /admin/truth?entity_id=`** returns charges, refunds and payouts, the injected-fault log (§0.3 E2) and the
+  webhook redelivery queue (§0.3 E3). Admin token only, and the whole controller is absent under `demo-public` (TB4).
+
+**Knob → test.** `http_500_rate`, `timeout_after_commit_rate`, `reset_before_commit_rate`, `latency_p50_ms`/`p95`,
+`return_rate`, `simulated_banking_day_seconds` and `seed` in `FaultKnobDeterminismIT`; `webhook_duplicate_rate`,
+`webhook_drop_rate` and `webhook_reorder_rate` in `WebhookSenderIT`; `max_processing_delay_ms` is exercised in
+`FaultKnobDeterminismIT.bankKnobsDriveTheLifecycle` and its ADR-0010 bound is asserted in `AdminSecurityIT`.
+
+### Two defects the tests caught
+
+- **A rejected knob payload did not say what was wrong.** Boot's default error body carries the status and path but
+  not the reason, so `PUT /admin/faults/{provider}` answered a bare 400 — the spec's edge case is 400 *with the
+  offending field*. `server.error.include-message` changed nothing under Boot 4.1. Fixed with an
+  `AdminExceptionHandler` scoped to the admin package, so the provider APIs' error shapes are untouched.
+- **A "reset" the client noticed a minute later, and a latency fault that was never logged.** Aborting by promising
+  a body and returning normally left the connection open until a socket timeout: measured at **60.4 s**, against
+  0.041 s now that the filter throws once the headers are out. Promising a single byte was also not enough — the
+  container truncated its own error page to exactly that byte and the client read a valid response. Separately,
+  latency was routed through the rate-comparison path, which has no rate for it, so every injected delay was missing
+  from the fault log; `FaultProfiles.record` now logs sampled faults directly.
+
+### Not delivered
+
+- **Restart mid-redelivery is not tested.** The schedule is in `provider_events` rather than in a timer, so it is
+  persisted by construction, but no test stops and restarts the context to prove it.
+- **No packet-level reset.** A servlet filter cannot send an RST; the fault is a premature end of stream, which the
+  adapters classify identically. A real reset needs the `chaos` profile's toxiproxy (S08).
+- **Nothing receives the webhooks yet.** `ZS_WEBHOOK_RECEIVER_URL` is deliberately unset in Compose: the receiver is
+  S05-T11. The sender is inert until it exists, and events accumulate undelivered.
+- **Settlement-report discrepancy knobs** (`report_missing_line_rate`, …) are S06-T01; `FaultKnobs` documents the
+  extension point they are added through (§0.3 C23).
+- **Reproducibility covers request order, not concurrent interleaving.** Two requests racing draw from a stream in
+  whatever order they reach it.

@@ -33,6 +33,10 @@ public abstract class FakeProvidersIT {
             "fakeproviders", "services/fake-providers/src/main/resources/db/migration");
     protected static final JsonMapper JSON = JsonMapper.builder().build();
 
+    /** decision: D03-4 — test tokens for the admin endpoints (S05-T03); never a value any deployment would use. */
+    protected static final String ADMIN_TOKEN = "test-admin-token";
+    protected static final String READER_TOKEN = "test-reader-token";
+
     @LocalServerPort
     private int port;
 
@@ -46,6 +50,12 @@ public abstract class FakeProvidersIT {
         registry.add("spring.datasource.password", () -> DB.password(DB.app()));
         // The fixture already migrated as the owner; the application role has no DDL rights, by design.
         registry.add("spring.flyway.enabled", () -> "false");
+        registry.add("zs.auth.admin-token", () -> ADMIN_TOKEN);
+        registry.add("zs.auth.reader-token", () -> READER_TOKEN);
+    }
+
+    protected int port() {
+        return port;
     }
 
     /** One HTTP exchange, kept whole so a test can assert on the status as easily as on the body. */
@@ -69,7 +79,28 @@ public abstract class FakeProvidersIT {
     }
 
     protected Response get(String path) {
-        return http().get().uri(path).exchange((request, response) -> capture(response));
+        return get(path, null);
+    }
+
+    /** @param token a bearer token, or null to send the request unauthenticated (which the 401 cases need). */
+    protected Response get(String path, String token) {
+        return http().get().uri(path)
+                .headers(headers -> bearer(headers, token))
+                .exchange((request, response) -> capture(response));
+    }
+
+    protected Response put(String path, Object body, String token) {
+        return http().put().uri(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> bearer(headers, token))
+                .body(JSON.writeValueAsString(body))
+                .exchange((request, response) -> capture(response));
+    }
+
+    private static void bearer(org.springframework.http.HttpHeaders headers, String token) {
+        if (token != null) {
+            headers.add("Authorization", "Bearer " + token);
+        }
     }
 
     private static Response capture(org.springframework.http.client.ClientHttpResponse response) {

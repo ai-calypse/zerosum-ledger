@@ -837,8 +837,8 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | ID | Decision | Rationale | Alternatives considered | Status | Date |
 |---|---|---|---|---|---|
 | D05-1 | — | — | — | Pending | — |
-| D05-2 | — | — | — | Pending | — |
-| D05-3 | — | — | — | Pending | — |
+| D05-2 | Fault-knob schema per provider (`latency_p50_ms`, `latency_p95_ms`, `http_500_rate`, `reset_before_commit_rate`, `timeout_after_commit_rate`, `webhook_duplicate_rate`, `webhook_reorder_rate`, `webhook_drop_rate`, `return_rate`, `simulated_banking_day_seconds`, `max_processing_delay_ms`, `seed`), replaced whole through `PUT /admin/faults/{provider}` and persisted in `fault_profiles`; one seeded `L64X128MixRandom` stream per provider and decision (`Decision` enum); injected faults in `fault_log` (§0.3 E2); redelivery-queue status and ground truth in `GET /admin/truth` (§0.3 E3) | Absent knobs take a no-fault default and unknown knobs are refused by name, so a typo cannot become a chaos run that injects nothing; one stream per decision means S06-T01 can add the `report_*` knobs (§0.3 C23) without shifting any existing outcome; the fault log is written by the same call that draws the decision, so a fault cannot be injected invisibly | Merging partial profiles (rejected: a knob would survive a replacement); a single RNG stream (rejected: adding a knob would invalidate every recorded run); in-memory-only profiles (rejected: a restart would silently stop the faults a run was measuring) | Accepted | 2026-09-17 |
+| D05-3 | `ZS-Signature: t=<unix seconds>,v1=<hex>`, HMAC-SHA256 over `<t>.<raw body>`, 300 s tolerance (master §5.11); `ZS_WEBHOOK_SECRETS=current,previous`, sender signs with the first and a verifier accepts any; delivery state on `provider_events` (`delivery_attempts`, `next_attempt_at`, `reorder_held`), redelivery 1s/5s/30s/2min/10min with the last interval repeating, `delivered_at` set only after a 2xx | The timestamp is inside the signed string, so a captured delivery cannot be replayed by rewriting the header; the raw bytes are signed because a re-serialised body would reject honest deliveries; the schedule lives in the row so a restart resumes it rather than stranding the event | A separate `webhook_deliveries` table (rejected: one delivery per event, so the join bought nothing); giving up after the last interval (rejected: it would mark an outcome undeliverable when the receiver is merely down longer than ten minutes) | Accepted | 2026-09-17 |
 | D05-4 | — | — | — | Pending | — |
 | D05-5 | — | — | — | Pending | — |
 | D05-6 | — | — | — | Pending | — |
@@ -855,10 +855,10 @@ Thresholds and rates are those in the linked master sections; they are not resta
 
 | Item | Planned path | Actual path | Traced to |
 |---|---|---|---|
-| fake-providers FakeCard, FakeBank, faults (with fault log), webhooks (with redelivery-queue status), truth packages | `services/fake-providers/src/main/java/` | — | D05-2, D05-3 |
-| fake-providers migrations | `services/fake-providers/src/main/resources/db/migration/` | — | D05-2 |
-| Fault-knob defaults, fee simulation parameters, banking-day length, processing-delay bound, redelivery schedule | `services/fake-providers/src/main/resources/application.yml` | — | D05-2, D05-9 |
-| Webhook signing configuration (both services) and secret placeholders | `services/fake-providers/src/main/resources/application.yml`, `services/instrument-service/src/main/resources/application.yml`, `.env.example` | — | D05-3, D00-8 |
+| fake-providers FakeCard, FakeBank, faults (with fault log), webhooks (with redelivery-queue status), truth packages | `services/fake-providers/src/main/java/` | `services/fake-providers/src/main/java/dev/zerosum/fakeproviders/{card,bank,shared,faults,webhooks,admin}/` | D05-2, D05-3 |
+| fake-providers migrations | `services/fake-providers/src/main/resources/db/migration/` | `V1__baseline.sql`, `V2__fake_providers.sql`, `V3__fault_knobs_and_webhooks.sql` | D05-2 |
+| Fault-knob defaults, fee simulation parameters, banking-day length, processing-delay bound, redelivery schedule | `services/fake-providers/src/main/resources/application.yml` | `services/fake-providers/src/main/resources/application.yml` (`zs.fakebank`, `zs.faults`, `zs.webhooks`) | D05-2, D05-9 |
+| Webhook signing configuration (both services) and secret placeholders | `services/fake-providers/src/main/resources/application.yml`, `services/instrument-service/src/main/resources/application.yml`, `.env.example` | `services/fake-providers/src/main/resources/application.yml` (`zs.webhooks`), `.env.example` (`ZS_WEBHOOK_SECRETS`), `docker-compose.yml` (fake-providers). The instrument-service side is the receiver, deferred with S05-T11 | D05-3, D00-8 |
 | `instrument.core` (interface, capabilities, results, registry) | `services/instrument-service/src/main/java/` | — | D05-1 |
 | FakeCard and FakeBank adapters | `services/instrument-service/src/main/java/` (`instrument.providers.*`) | — | D05-1, D05-14 |
 | Adapter client configuration (timeouts, retry, minor-unit mapping) | `services/instrument-service/src/main/resources/application.yml` | — | D05-14 |
@@ -892,8 +892,8 @@ Thresholds and rates are those in the linked master sections; they are not resta
 | FakeCard charges, idempotency, refunds | `FakeCardChargeIT`, `FakeCardIdempotencyIT`, `FakeCardRefundIT` (S05-T01) | Not run | — | — |
 | FakeBank payouts and lifecycle, restart | `FakeBankPayoutIT`, `FakeBankLifecycleIT` (S05-T02) | Not run | — | — |
 | Processing delay below quiet period | Configuration test (S05-T02, ADR-0010) | Not run | — | — |
-| Fault determinism, timeout-after-commit, webhook sender, admin security | `FaultKnobDeterminismIT`, `TimeoutAfterCommitIT`, `WebhookSenderIT`, `AdminSecurityIT` (S05-T03) | Not run | — | — |
-| Fault log and redelivery-queue status | `FaultLogIT`, `RedeliveryStatusIT` (S05-T03) | Not run | — | — |
+| Fault determinism, timeout-after-commit, webhook sender, admin security | `FaultKnobDeterminismIT` (6), `WebhookSenderIT` (5), `AdminSecurityIT` (8), `DemoPublicAdminIT` (2), `WebhookSignerTest` (6, unit) — the timeout-after-commit case is inside `FaultKnobDeterminismIT` | Pass: 37 integration tests, 0 failures, 0 skipped (the 16 from S05-T01/T02 included and still green); 6 unit tests, 0 failures | [docs/results/s05/providers.md](results/s05/providers.md#s05-t03) | 2026-09-17 |
+| Fault log and redelivery-queue status | Covered by `AdminSecurityIT.faultLogMatchesTheCounters` and `WebhookSenderIT.dropIsRetriedUntilItLands` / `receiverDownDrainsAfterRecovery`, not by separate `FaultLogIT` / `RedeliveryStatusIT` classes | Pass (inside the counts above) | [docs/results/s05/providers.md](results/s05/providers.md#s05-t03) | 2026-09-17 |
 | Knob coverage list (knob → test) | Review of D05-2 knob list against test sources | Not run | — | — |
 | Adapter classification, retry bound, minor units, webhook parsing, redaction | Adapter unit tests (S05-T05) | Not run | — | — |
 | M7(a) contract suite | Contract test report (S05-T06) | Not run | — | — |
@@ -948,7 +948,7 @@ Thresholds and rates are those in the linked master sections; they are not resta
 |---|---|---|---|---|
 | S05-T01 | Planned | — | — | — |
 | S05-T02 | Planned | — | — | — |
-| S05-T03 | Planned | — | — | — |
+| S05-T03 | Done | `services/fake-providers/src/main/java/dev/zerosum/fakeproviders/{faults,webhooks,admin}/`, `V3__fault_knobs_and_webhooks.sql`, `application.yml`, `docker-compose.yml`, `.env.example` | 37 integration + 6 unit tests, 0 failures ([docs/results/s05/providers.md](results/s05/providers.md#s05-t03)) | Restart-mid-schedule redelivery is not covered by a test; the webhook receiver (S05-T11) does not exist, so delivery is unwired in Compose |
 | S05-T04 | Planned | — | — | — |
 | S05-T05 | Planned | — | — | — |
 | S05-T06 | Planned | — | — | — |
