@@ -1,0 +1,20 @@
+# Demo overlay — publishes the simulated providers so they can be driven from the host.
+#
+# The default docker-compose.yml deliberately keeps fake-providers on the internal network with no published port
+# (master §4.6): it simulates an external payment provider, and an external provider is not something the host should
+# be able to reach directly. That posture stays the default. This overlay makes it opt-in, for a live walkthrough:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build --wait
+#
+# Then, from the host:
+#   curl -s localhost:8090/fakecard/v1/charges -H 'Content-Type: application/json' \
+#     -d '{"client_reference":"demo-1","instrument_token":"tok_card_ok","amount_minor":10000,"currency":"USD"}'
+#   curl -s localhost:8090/fakebank/v1/payouts -H 'Content-Type: application/json' \
+#     -d '{"client_reference":"demo-2","destination_token":"tok_bank_return_R01","amount_minor":25000,"currency":"USD"}'
+#   curl -s 'localhost:8090/fakebank/v1/payouts?client_reference=demo-2'   # watch PENDING -> SETTLED -> RETURNED
+#
+# Bound to 127.0.0.1, like every other published port here, so nothing is exposed beyond this machine.
+services:
+  fake-providers:
+    ports:
+      - "127.0.0.1:8090:8090"
