@@ -77,6 +77,45 @@ class ExplorerServingIT extends LedgerApiTestBase {
         // The reader token is typed by the operator and held in a JS variable. A token baked into the page would be
         // readable by anyone who could load it.
         assertFalse(page.body().contains("Bearer test-reader-token"), "no token is embedded in the page");
-        assertTrue(page.body().contains("type=\"password\""), "the token input is a password field");
+        // Both credential inputs are password fields: the reader token, and the admin token the provider panel needs.
+        assertEquals(2, occurrences(page.body(), "type=\"password\""), "both token inputs are password fields");
+    }
+
+    @Test
+    @DisplayName("the page keeps its safety contract: no unsafe sink, no third-party subresource")
+    void pageCarriesNoUnsafeSinkOrThirdPartyResource() {
+        String body = fetchExplorer().body();
+
+        Matcher matcher = SCRIPT.matcher(body);
+        assertTrue(matcher.find(), "the page carries an inline script");
+        // Scoped to the script rather than the whole file on purpose: the header comment names these sinks in prose
+        // to explain why they are absent, and a test that failed on its own documentation would be deleted.
+        String script = matcher.group(1);
+
+        // Every value is written with textContent (D09-4). One innerHTML would turn an idempotency key containing
+        // an <img onerror> back into markup, and no CSP hash would notice: the script's own hash still matches.
+        assertFalse(script.contains("innerHTML"), "values are rendered with textContent, never innerHTML");
+        assertFalse(script.contains("outerHTML"), "values are rendered with textContent, never outerHTML");
+        assertFalse(script.contains("insertAdjacentHTML"), "no markup is parsed from a string");
+        assertFalse(script.contains("document.write"), "nothing is written into the parser");
+        assertFalse(script.contains("eval("), "nothing is evaluated from a string");
+
+        // The CSP names hashes rather than origins, so a third-party script, stylesheet or font would simply be
+        // blocked — silently, in someone else's browser. Staying self-contained is what makes that policy honest.
+        assertFalse(body.contains("<script src"), "no third-party script");
+        assertFalse(body.contains("<link"), "no third-party stylesheet or font");
+
+        // Exactly one of each, because every additional block needs its own hash in the policy and the test above
+        // only recomputes the first.
+        assertEquals(1, occurrences(body, "<script"), "one inline script");
+        assertEquals(1, occurrences(body, "<style"), "one inline style");
+    }
+
+    private static int occurrences(String body, String needle) {
+        int count = 0;
+        for (int at = body.indexOf(needle); at >= 0; at = body.indexOf(needle, at + needle.length())) {
+            count++;
+        }
+        return count;
     }
 }

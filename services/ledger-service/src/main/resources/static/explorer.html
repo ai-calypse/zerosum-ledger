@@ -11,6 +11,18 @@
       <img src=x onerror=...> renders as the characters a user typed, not as markup.
     * Signs are never recomputed. The API already reports each balance on its account's normal side (ADR-0003);
       a second opinion in JavaScript is how a UI ends up disagreeing with the ledger it displays.
+
+  Three more this page inherits:
+    * Amounts past Number.MAX_SAFE_INTEGER are shown as exact digits with a flag, never rounded. Long integer
+      literals are quoted before JSON.parse so they survive as strings.
+    * Tokens live in JS variables for the lifetime of the page. Never storage, never the URL, never a cookie, and
+      dropped the moment a service answers 401.
+    * Nothing polls. /v1/invariants takes a repeatable-read snapshot that delays vacuum on a busy database, so it
+      refreshes when an operator asks and not on a timer.
+
+  Panels are grouped by the token they need and the origin they need. Ledger panels work on ledger-service's own
+  port; instrument and provider panels need the one-origin reverse proxy (docker-compose.demo.yml), because
+  connect-src 'self' is the right policy and is deliberately not widened to reach another port.
 -->
 <html lang="en">
 <head>
@@ -19,102 +31,201 @@
 <title>ZeroSum Explorer</title>
 <style>
 :root {
-  --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e6e8ee; --muted: #8b93a7;
-  --good: #3fb950; --bad: #f85149; --warn: #d29922; --accent: #58a6ff;
+  --bg: #0f1115; --panel: #171a21; --raised: #1d212a; --line: #262b36;
+  --text: #e6e8ee; --muted: #8b93a7; --faint: #5d6478;
+  --good: #3fb950; --bad: #f85149; --warn: #d29922; --accent: #58a6ff; --on-accent: #06111f;
 }
 @media (prefers-color-scheme: light) {
-  :root { --bg: #f6f7f9; --panel: #fff; --line: #e1e4ea; --text: #1c2027; --muted: #5b6474; }
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --raised: #f2f4f7; --line: #e1e4ea;
+    --text: #1c2027; --muted: #5b6474; --faint: #79818f;
+    --good: #18794e; --bad: #c9252d; --warn: #9a6700; --accent: #0a66c2; --on-accent: #fff;
+  }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
-  font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-header { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 16px;
-  align-items: center; flex-wrap: wrap; }
-h1 { font-size: 16px; margin: 0; letter-spacing: .04em; }
-h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-main { padding: 20px; display: grid; gap: 16px; max-width: 1100px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-input { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
-  padding: 7px 10px; font: inherit; min-width: 240px; }
-button { background: var(--accent); color: #06111f; border: 0; border-radius: 6px; padding: 7px 14px;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+header { padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+  display: flex; gap: 12px 16px; align-items: center; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 2; }
+h1 { font-size: 15px; margin: 0; letter-spacing: .04em; white-space: nowrap; }
+h2 { font-size: 12px; margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.spacer { flex: 1 1 auto; }
+.creds { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cred { display: flex; gap: 6px; align-items: center; }
+.cred label { color: var(--muted); font-size: 12px; }
+.cred input { min-width: 150px; }
+
+main { padding: 16px 20px 40px; display: grid; gap: 14px; max-width: 1240px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.panel > header { all: unset; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  margin-bottom: 10px; }
+.panel-note { color: var(--faint); font-size: 12px; }
+
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 9px; font: inherit; min-width: 220px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent);
+  outline-offset: 1px; }
+select { min-width: 140px; }
+button { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 6px; padding: 6px 13px;
   font: inherit; font-weight: 600; cursor: pointer; }
-button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
-button:disabled { opacity: .5; cursor: not-allowed; }
-table { border-collapse: collapse; width: 100%; margin-top: 4px; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { color: var(--muted); font-weight: 500; font-size: 12px; }
+button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+button.link { background: none; border: 0; color: var(--accent); padding: 0 2px; font-weight: 400;
+  text-decoration: underline; cursor: pointer; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  position: sticky; top: 0; background: var(--panel); }
+tbody tr:hover td { background: var(--raised); }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.pos { color: var(--good); } .neg { color: var(--bad); }
-.muted { color: var(--muted); }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); }
+td.wrap { white-space: normal; max-width: 34ch; }
+.scroll { overflow-x: auto; }
+
+.pos { color: var(--good); } .neg { color: var(--bad); } .muted { color: var(--muted); }
+.err { color: var(--bad); }
+.stale { opacity: .5; }
+.pill { display: inline-block; padding: 0 7px; border-radius: 99px; font-size: 11px; border: 1px solid var(--line);
+  color: var(--muted); line-height: 17px; }
 .pill.ok { color: var(--good); border-color: var(--good); }
 .pill.bad { color: var(--bad); border-color: var(--bad); }
 .pill.warn { color: var(--warn); border-color: var(--warn); }
-.stale { opacity: .55; }
-.err { color: var(--bad); }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.stat { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
-.stat .k { color: var(--muted); font-size: 12px; }
-.stat .v { font-size: 18px; margin-top: 2px; }
-code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
-  display: block; overflow-x: auto; white-space: pre; margin-top: 6px; }
-@media (max-width: 640px) { main { padding: 12px; } th, td { padding: 5px 6px; } }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; background: var(--bg); }
+.tile .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.tile .v { font-size: 17px; margin-top: 3px; }
+.tile .sub { color: var(--faint); font-size: 11px; margin-top: 3px; white-space: normal; }
+.tile.bad { border-color: var(--bad); }
+.tile.warn { border-color: var(--warn); }
+
+.findings { margin-top: 10px; display: grid; gap: 6px; }
+.finding { border-left: 2px solid var(--bad); padding: 3px 0 3px 10px; white-space: normal; }
+.finding.warn { border-left-color: var(--warn); }
+.finding .what { color: var(--text); }
+.finding .detail { color: var(--muted); font-size: 12px; }
+
+.empty { color: var(--faint); padding: 10px 0; }
+code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px;
+  display: block; overflow-x: auto; white-space: pre; margin-top: 6px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 8px 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  main { padding: 12px; } th, td { padding: 5px 7px; }
+  .cred input { min-width: 120px; } input, select { min-width: 0; width: 100%; }
+}
 </style>
 </head>
 <body>
 <header>
   <h1>ZeroSum Explorer</h1>
   <span class="muted" id="origin-note"></span>
-  <span style="flex:1"></span>
-  <label class="muted" for="token">reader token</label>
-  <input id="token" type="password" autocomplete="off" placeholder="ZS_READER_TOKEN">
+  <span class="spacer"></span>
+  <div class="creds">
+    <span class="cred">
+      <label for="token">reader</label>
+      <input id="token" type="password" autocomplete="off" placeholder="ZS_READER_TOKEN">
+    </span>
+    <span class="cred">
+      <label for="admin-token">admin</label>
+      <input id="admin-token" type="password" autocomplete="off" placeholder="ZS_ADMIN_TOKEN">
+    </span>
+  </div>
 </header>
 
 <main>
-  <section class="panel" id="system-panel">
-    <h2>System</h2>
-    <div class="row">
-      <button id="refresh-system" class="secondary">Refresh</button>
-      <span id="system-error" class="err"></span>
-    </div>
-    <div class="grid2" id="system-stats" style="margin-top:12px"></div>
+  <section class="panel" id="overview-panel">
+    <header>
+      <h2>System overview</h2>
+      <span class="panel-note">ledger-service · reader token · refreshed on demand, never polled</span>
+      <span class="spacer"></span>
+      <span id="overview-at" class="panel-note"></span>
+      <button id="refresh-overview" class="secondary">Refresh</button>
+    </header>
+    <div class="tiles" id="overview-tiles"></div>
+    <div class="findings" id="overview-findings"></div>
+    <div id="overview-error" class="err"></div>
   </section>
 
   <section class="panel">
-    <h2>Entity</h2>
+    <header>
+      <h2>Entity</h2>
+      <span class="panel-note">balances, changelog and the money order behind each row (M6 a)</span>
+    </header>
     <div class="row">
       <input id="entity" placeholder="rider:R1" autocomplete="off" spellcheck="false">
       <button id="lookup">Look up</button>
-      <button id="verify" class="secondary">Verify</button>
+      <button id="verify" class="secondary">Verify chain</button>
       <span id="entity-error" class="err"></span>
     </div>
-    <div id="verify-result" style="margin-top:12px"></div>
+    <div id="verify-result"></div>
+    <div id="balances"></div>
+    <div id="changelog"></div>
+    <div class="row" id="changelog-controls" hidden>
+      <button id="next-page" class="secondary">Next page</button>
+      <span id="changelog-note" class="muted"></span>
+    </div>
+    <div id="order-detail"></div>
   </section>
 
   <section class="panel">
-    <h2>Payment attempt</h2>
+    <header>
+      <h2>Payment attempt</h2>
+      <span class="panel-note">instrument-service · reader token · <span class="pill">needs proxy origin</span></span>
+    </header>
     <div class="row">
       <input id="attempt" placeholder="attempt id (uuid)" autocomplete="off" spellcheck="false">
       <button id="lookup-attempt" class="secondary">Look up</button>
       <span id="attempt-error" class="err"></span>
     </div>
-    <div id="attempt-result" style="margin-top:12px"></div>
+    <div id="attempt-result"></div>
   </section>
 
-  <section class="panel" id="balances-panel" hidden>
-    <h2>Balances</h2>
-    <div id="balances"></div>
-  </section>
-
-  <section class="panel" id="changelog-panel" hidden>
-    <h2>Changelog</h2>
-    <div id="changelog"></div>
-    <div class="row" style="margin-top:10px">
-      <button id="next-page" class="secondary">Next page</button>
-      <span id="changelog-note" class="muted"></span>
+  <section class="panel">
+    <header>
+      <h2>Reconciliation breaks</h2>
+      <span class="panel-note">instrument-service · reader token · <span class="pill">needs proxy origin</span></span>
+    </header>
+    <div class="row">
+      <input id="run-id" placeholder="reconciliation run id (uuid)" autocomplete="off" spellcheck="false">
+      <select id="break-type" aria-label="break type">
+        <option value="">any type</option>
+        <option value="MISSING_IN_LEDGER">MISSING_IN_LEDGER</option>
+        <option value="MISSING_IN_REPORT">MISSING_IN_REPORT</option>
+        <option value="AMOUNT_MISMATCH">AMOUNT_MISMATCH</option>
+        <option value="DUPLICATE_LINE">DUPLICATE_LINE</option>
+        <option value="KIND_MISMATCH">KIND_MISMATCH</option>
+        <option value="CURRENCY_MISMATCH">CURRENCY_MISMATCH</option>
+        <option value="TIMING">TIMING</option>
+        <option value="LINE_WITHOUT_SUCCESS">LINE_WITHOUT_SUCCESS</option>
+        <option value="REPORT_ARITHMETIC">REPORT_ARITHMETIC</option>
+      </select>
+      <select id="break-status" aria-label="break status">
+        <option value="">any status</option>
+        <option value="OPEN">OPEN</option>
+        <option value="UNEXPLAINED">UNEXPLAINED</option>
+      </select>
+      <button id="lookup-breaks" class="secondary">Look up</button>
+      <span id="breaks-error" class="err"></span>
     </div>
-    <div id="order-detail"></div>
+    <div id="breaks-result"></div>
+  </section>
+
+  <section class="panel">
+    <header>
+      <h2>Provider ground truth</h2>
+      <span class="panel-note">fake-providers · admin token · <span class="pill">needs proxy origin</span></span>
+    </header>
+    <div class="row">
+      <input id="truth-ref" placeholder="client_reference (an attempt id)" autocomplete="off" spellcheck="false">
+      <button id="lookup-truth" class="secondary">Look up</button>
+      <span id="truth-error" class="err"></span>
+    </div>
+    <div id="truth-result"></div>
   </section>
 </main>
 
@@ -122,7 +233,13 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
 (function () {
   "use strict";
 
-  var state = { token: "", entity: "", cursor: null, busy: false };
+  /*
+   * Tokens are held here and nowhere else: not localStorage, not sessionStorage, not the URL, not a cookie. A token
+   * in any of those outlives the tab it was typed into. Each is dropped the moment the service holding it answers
+   * 401 or 403, so a stale credential cannot be replayed by the next click.
+   */
+  var creds = { reader: "", admin: "" };
+  var state = { entity: "", cursor: null, verifying: false };
 
   function $(id) { return document.getElementById(id); }
 
@@ -135,6 +252,48 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
     return node;
   }
 
+  /** Appends children and returns the parent, so a row reads as one expression. */
+  function fill(parent, children) {
+    children.forEach(function (child) {
+      if (child !== null && child !== undefined) { parent.appendChild(child); }
+    });
+    return parent;
+  }
+
+  function rowOf(tag, cells) {
+    return fill(el("tr"), cells);
+  }
+
+  /** A table with a sticky header row, wrapped so a wide one scrolls rather than stretching the panel. */
+  function table(headings) {
+    var wrap = el("div", null, "scroll");
+    var node = el("table");
+    var head = el("thead");
+    head.appendChild(fill(el("tr"), headings.map(function (h) { return el("th", h); })));
+    node.appendChild(head);
+    var body = el("tbody");
+    node.appendChild(body);
+    wrap.appendChild(node);
+    return { wrap: wrap, body: body };
+  }
+
+  function dl(pairs) {
+    var list = el("dl", null, "kv");
+    pairs.forEach(function (pair) {
+      if (pair[1] === undefined || pair[1] === null || pair[1] === "") { return; }
+      list.appendChild(el("dt", pair[0]));
+      var dd = el("dd");
+      dd.appendChild(typeof pair[1] === "object" ? pair[1] : el("span", pair[1]));
+      list.appendChild(dd);
+    });
+    return list;
+  }
+
+  function empty(host, message) {
+    clear(host);
+    host.appendChild(el("p", message, "empty"));
+  }
+
   /*
    * Amounts can exceed Number.MAX_SAFE_INTEGER once balances aggregate, and JSON.parse would silently round them.
    * Long integer literals are quoted before parsing so they survive as exact digit strings; anything quoted this way
@@ -144,29 +303,51 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
     return JSON.parse(text.replace(/:\s*(-?\d{16,})(?=\s*[,}\]])/g, ': "$1"'));
   }
 
-  function amountCell(value, currency) {
-    var cell = el("td", null, "num");
+  /*
+   * The value exactly as the API reported it. The server decides the sign convention (ADR-0003) and this page only
+   * colours what it was given: a string here means the number was too large for JavaScript to hold safely, so it is
+   * printed digit for digit and flagged instead of being coerced into a Number.
+   */
+  function amount(value, currency) {
+    var span = el("span");
+    var suffix = currency ? " " + currency : "";
     if (typeof value === "string") {
-      cell.appendChild(el("span", value + " " + currency));
-      cell.appendChild(document.createTextNode(" "));
+      span.appendChild(el("span", value + suffix));
+      span.appendChild(document.createTextNode(" "));
       var flag = el("span", "exact", "pill warn");
       flag.title = "Beyond JavaScript's safe integer range; shown as raw digits, never rounded.";
-      cell.appendChild(flag);
-      return cell;
+      span.appendChild(flag);
+      return span;
     }
-    var span = el("span", value + " " + currency, value < 0 ? "neg" : value > 0 ? "pos" : "muted");
-    cell.appendChild(span);
-    return cell;
+    if (value === null || value === undefined) {
+      return el("span", "—", "muted");
+    }
+    span.appendChild(el("span", value + suffix, value < 0 ? "neg" : value > 0 ? "pos" : "muted"));
+    return span;
   }
 
-  function api(path, options) {
+  function amountCell(value, currency) {
+    return fill(el("td", null, "num"), [amount(value, currency)]);
+  }
+
+  /* ---- transport -------------------------------------------------------------------------------------------- */
+
+  /*
+   * Every call carries exactly one token, and a 401/403 drops that token rather than all of them: an expired admin
+   * token should not log an operator out of the ledger panels they were reading.
+   */
+  function api(path, options, which) {
+    var role = which || "reader";
     var opts = options || {};
-    opts.headers = { "Authorization": "Bearer " + state.token };
+    if (!creds[role]) {
+      return Promise.reject(new Error("enter the " + role + " token"));
+    }
+    opts.headers = { "Authorization": "Bearer " + creds[role] };
     return fetch(path, opts).then(function (response) {
       if (response.status === 401 || response.status === 403) {
-        state.token = "";
-        $("token").value = "";
-        throw new Error("not authorised — enter the reader token again");
+        creds[role] = "";
+        $(role === "admin" ? "admin-token" : "token").value = "";
+        throw new Error("not authorised — enter the " + role + " token again");
       }
       return response.text().then(function (text) {
         if (!response.ok) {
@@ -177,63 +358,179 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
     });
   }
 
-  /* ---- system panel ---------------------------------------------------------------------------------------- */
+  /*
+   * instrument-service and fake-providers are different origins from ledger-service, and this page's CSP is
+   * connect-src 'self' — which is the right policy and deliberately not widened. The reverse proxy in
+   * docker-compose.demo.yml puts every service under one origin, where these prefixed paths resolve. Opened directly
+   * on ledger-service's own port they 404, and the panels say so rather than failing mysteriously.
+   */
+  var INSTRUMENTS = "/instruments";
+  var PROVIDERS = "/providers";
 
-  function stat(key, value, className) {
-    var box = el("div", null, "stat");
+  var PROXY_HINT = "not found here. ledger-service answers 404 for this path too, so this may be the wrong origin "
+    + "rather than a missing record: open the Explorer through the proxy (make up-proxy, then "
+    + "127.0.0.1:8080/explorer.html).";
+
+  function report(node, error, hint) {
+    node.textContent = hint && error.message.indexOf("404") >= 0 ? hint : error.message;
+  }
+
+  var UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+  /* ---- system overview -------------------------------------------------------------------------------------- */
+
+  function tile(key, value, className, sub) {
+    var box = el("div", null, "tile" + (className === "bad" ? " bad" : className === "warn" ? " warn" : ""));
     box.appendChild(el("div", key, "k"));
-    var v = el("div", null, "v");
-    v.appendChild(el("span", value, className));
-    box.appendChild(v);
+    box.appendChild(fill(el("div", null, "v"), [el("span", value, className ? "pill " + className : null)]));
+    if (sub) { box.appendChild(el("div", sub, "sub")); }
     return box;
   }
 
-  function loadSystem() {
-    $("system-error").textContent = "";
-    var stats = $("system-stats");
-    stats.classList.add("stale");
+  function finding(what, detail, level) {
+    var box = el("div", null, "finding" + (level === "warn" ? " warn" : ""));
+    box.appendChild(el("div", what, "what"));
+    if (detail) { box.appendChild(el("div", detail, "detail")); }
+    return box;
+  }
 
+  /** Names the invariants that actually failed. "VIOLATED" alone sends an operator to the logs to find out which. */
+  function brokenInvariants(invariants) {
+    var broken = [];
+    if ((invariants.i2_non_zero_currencies || []).length > 0) {
+      broken.push(["I2 — global sum is not zero",
+        "currencies: " + invariants.i2_non_zero_currencies.join(", ")]);
+    }
+    if ((invariants.i3_violations || []).length > 0) {
+      broken.push(["I3 — balances disagree with the sum of their deltas",
+        invariants.i3_violations.slice(0, 8).join(" · ")
+          + (invariants.i3_violations.length > 8 ? " … " + invariants.i3_violations.length + " total" : "")]);
+    }
+    if ((invariants.i4_violations || []).length > 0) {
+      broken.push(["I4 — changelog sequence has a gap",
+        invariants.i4_violations.slice(0, 8).join(" · ")
+          + (invariants.i4_violations.length > 8 ? " … " + invariants.i4_violations.length + " total" : "")]);
+    }
+    return broken;
+  }
+
+  function loadOverview() {
+    $("overview-error").textContent = "";
+    var tiles = $("overview-tiles");
+    tiles.classList.add("stale");
+
+    // Both reads are wanted together: a consistent ledger that stopped applying an hour ago is not a healthy one.
     Promise.all([api("/v1/invariants"), api("/v1/freshness")]).then(function (results) {
-      var invariants = results[0];
-      var freshness = results[1];
-      clear(stats);
-      stats.classList.remove("stale");
-
-      stats.appendChild(stat("invariants",
-        invariants.consistent ? "consistent" : "VIOLATED",
-        invariants.consistent ? "pill ok" : "pill bad"));
-      stats.appendChild(stat("quarantined", invariants.unresolved_quarantined_count,
-        invariants.unresolved_quarantined_count > 0 ? "pill bad" : "pill ok"));
-      stats.appendChild(stat("clearing accounts non-zero",
-        (invariants.non_zero_clearing_balances || []).length,
-        (invariants.non_zero_clearing_balances || []).length > 0 ? "pill warn" : "pill ok"));
-
-      if (freshness.status === "ok") {
-        stats.appendChild(stat("consumer lag", freshness.total_lag_records + " records", "pill ok"));
-        stats.appendChild(stat("oldest unapplied",
-          freshness.oldest_unapplied_age_seconds === null
-            ? "nothing pending" : freshness.oldest_unapplied_age_seconds + "s", "pill ok"));
-      } else {
-        // Fail closed, exactly as the endpoint does: no number at all beats a reassuring zero.
-        stats.appendChild(stat("consumer lag", "unmeasurable", "pill bad"));
-      }
-      stats.appendChild(stat("listener", freshness.listener_paused ? "PAUSED" : "running",
-        freshness.listener_paused ? "pill bad" : "pill ok"));
+      renderOverview(results[0], results[1]);
     }).catch(function (error) {
-      stats.classList.remove("stale");
-      $("system-error").textContent = error.message;
+      tiles.classList.remove("stale");
+      $("overview-error").textContent = error.message;
     });
   }
 
-  /* ---- entity ---------------------------------------------------------------------------------------------- */
+  function renderOverview(invariants, freshness) {
+    var tiles = $("overview-tiles");
+    var findings = $("overview-findings");
+    clear(tiles);
+    clear(findings);
+    tiles.classList.remove("stale");
 
-  var ENTITY_PATTERN = /^[a-z][a-z0-9_]*:[A-Za-z0-9._:-]+$/;
+    var broken = brokenInvariants(invariants);
+    tiles.appendChild(tile("invariants",
+      invariants.consistent ? "consistent" : "VIOLATED",
+      invariants.consistent ? "ok" : "bad",
+      invariants.consistent ? "I2, I3 and I4 hold" : broken.length + " failing"));
+
+    var quarantined = invariants.unresolved_quarantined_count;
+    tiles.appendChild(tile("quarantined", quarantined, quarantined > 0 ? "bad" : "ok",
+      quarantined > 0 ? "orders an operator has not resolved" : "nothing held back"));
+
+    var clearing = invariants.non_zero_clearing_balances || [];
+    tiles.appendChild(tile("clearing non-zero", clearing.length, clearing.length > 0 ? "warn" : "ok",
+      clearing.length > 0 ? "money in flight or a stuck settlement" : "every clearing account is flat"));
+
+    if (freshness.status === "ok") {
+      var lag = freshness.total_lag_records;
+      tiles.appendChild(tile("consumer lag", lag + " records", lag > 0 ? "warn" : "ok", "behind across all partitions"));
+      tiles.appendChild(tile("oldest unapplied",
+        freshness.oldest_unapplied_age_seconds === null || freshness.oldest_unapplied_age_seconds === undefined
+          ? "nothing pending" : freshness.oldest_unapplied_age_seconds + "s",
+        "ok", "age of the oldest record not yet applied"));
+    } else {
+      // Fail closed, exactly as the endpoint does: no number at all beats a reassuring zero.
+      tiles.appendChild(tile("consumer lag", "unmeasurable", "bad", freshness.error || "the measurement failed"));
+    }
+
+    tiles.appendChild(tile("apply listener", freshness.listener_paused ? "PAUSED" : "running",
+      freshness.listener_paused ? "bad" : "ok",
+      freshness.listener_paused ? "stopped after an exhausted or unclassified failure" : "consuming money orders"));
+
+    broken.forEach(function (entry) {
+      findings.appendChild(finding(entry[0], entry[1]));
+    });
+
+    if (freshness.listener_paused) {
+      findings.appendChild(finding("The apply listener is paused",
+        "Nothing is being applied. Balances are correct as far as they go and then simply stop."));
+    }
+
+    if (quarantined > 0) {
+      findings.appendChild(finding(quarantined + " quarantined money order(s) unresolved",
+        "Held back rather than applied; each needs an operator decision.", "warn"));
+    }
+
+    // One stuck partition is the failure this surfaces: a total hides it behind the partitions that are keeping up.
+    var partitions = Object.keys(freshness.partition_lag || {}).filter(function (key) {
+      return freshness.partition_lag[key] > 0;
+    });
+    if (partitions.length > 0) {
+      findings.appendChild(finding("Lag is not evenly spread",
+        partitions.map(function (key) { return "p" + key + ": " + freshness.partition_lag[key]; }).join(" · "),
+        "warn"));
+    }
+
+    if (clearing.length > 0) {
+      var clearingTable = table(["entity", "account", "currency", "signed"]);
+      clearing.forEach(function (balance) {
+        clearingTable.body.appendChild(rowOf("tr", [
+          el("td", balance.entity_id),
+          el("td", balance.account),
+          el("td", balance.currency),
+          amountCell(balance.signed_minor, "")
+        ]));
+      });
+      var section = el("div");
+      section.appendChild(el("div", "Clearing accounts that have not returned to zero", "what"));
+      section.appendChild(clearingTable.wrap);
+      findings.appendChild(section);
+    }
+
+    // I5 is never claimed here: rehashing every changelog cannot meet the audit-read budget, so the endpoint says
+    // so and this page repeats it rather than letting a green row imply a check nobody ran.
+    if (invariants.i5 && !invariants.i5.evaluated) {
+      findings.appendChild(finding("I5 (hash chain) is not evaluated by this endpoint",
+        invariants.i5.reason + " Use Verify chain on an entity below.", "warn"));
+    }
+
+    $("overview-at").textContent = freshness.computed_at ? "as of " + freshness.computed_at : "";
+  }
+
+  /* ---- entity ----------------------------------------------------------------------------------------------- */
+
+  var ENTITY_PATTERN = /^(rider|driver|platform|provider):[A-Za-z0-9_-]{1,64}$/;
+
+  function resetEntity() {
+    clear($("verify-result"));
+    clear($("balances"));
+    clear($("changelog"));
+    clear($("order-detail"));
+    $("changelog-controls").hidden = true;
+  }
 
   function lookup() {
     var id = $("entity").value.trim();
     $("entity-error").textContent = "";
-    clear($("verify-result"));
-    clear($("order-detail"));
+    resetEntity();
 
     if (!ENTITY_PATTERN.test(id)) {
       // Exact-id lookup only; search is deferred (§0.3 C15). The server's own 404 is still shown as "not found".
@@ -245,13 +542,8 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
 
     api("/v1/entities/" + encodeURIComponent(id) + "/balances").then(function (balances) {
       renderBalances(balances);
-      $("balances-panel").hidden = false;
-      $("changelog-panel").hidden = false;
-      clear($("changelog"));
       loadChangelog();
     }).catch(function (error) {
-      $("balances-panel").hidden = true;
-      $("changelog-panel").hidden = true;
       $("entity-error").textContent =
         error.message.indexOf("404") >= 0 ? "not found: " + id : error.message;
     });
@@ -261,131 +553,126 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
     var host = $("balances");
     clear(host);
 
-    var caption = el("div", "as of sequence " + balances.as_of_seq + " · kind " + balances.kind, "muted");
-    host.appendChild(caption);
+    host.appendChild(fill(el("header"), [
+      el("h2", "Balances"),
+      el("span", balances.kind + " · as of sequence " + balances.as_of_seq, "panel-note")
+    ]));
 
     if (!balances.accounts || balances.accounts.length === 0) {
-      host.appendChild(el("p", "no balances", "muted"));
+      host.appendChild(el("p", "no balances — this entity holds no accounts yet", "empty"));
       return;
     }
 
-    var table = el("table");
-    var head = el("tr");
-    ["account", "currency", "normal side", "balance (normal side)", "stored (signed)"].forEach(function (h) {
-      head.appendChild(el("th", h));
-    });
-    table.appendChild(head);
-
+    var view = table(["account", "currency", "normal side", "balance (normal side)", "stored (signed)"]);
     balances.accounts.forEach(function (account) {
-      var tr = el("tr");
-      tr.appendChild(el("td", account.account));
-      tr.appendChild(el("td", account.currency));
-      tr.appendChild(el("td", account.normal_side.toLowerCase(), "muted"));
-      // Shown exactly as returned. The server decides the sign convention (ADR-0003); this page only displays it.
-      tr.appendChild(amountCell(account.presented_minor, account.currency));
-      tr.appendChild(amountCell(account.signed_minor, account.currency));
-      table.appendChild(tr);
+      view.body.appendChild(rowOf("tr", [
+        el("td", account.account),
+        el("td", account.currency),
+        el("td", account.normal_side.toLowerCase(), "muted"),
+        // Shown exactly as returned. The server decides the sign convention (ADR-0003); this page only displays it.
+        amountCell(account.presented_minor, account.currency),
+        amountCell(account.signed_minor, account.currency)
+      ]));
     });
-    host.appendChild(table);
+    host.appendChild(view.wrap);
   }
 
-  /* ---- changelog ------------------------------------------------------------------------------------------- */
+  /* ---- changelog -------------------------------------------------------------------------------------------- */
 
   function loadChangelog() {
     var path = "/v1/entities/" + encodeURIComponent(state.entity) + "/changelog"
       + (state.cursor === null ? "" : "?after_seq=" + state.cursor);
 
+    $("changelog-controls").hidden = false;
     $("changelog-note").textContent = "loading…";
+    $("next-page").disabled = true;
+
     api(path).then(function (page) {
       renderChangelogPage(page);
-      state.cursor = page.next_after_seq === undefined ? null : page.next_after_seq;
+      state.cursor = page.next_after_seq === undefined || page.next_after_seq === null ? null : page.next_after_seq;
       $("next-page").disabled = state.cursor === null;
       $("changelog-note").textContent = state.cursor === null ? "end of changelog" : "";
     }).catch(function (error) {
       $("changelog-note").textContent = "";
-      $("changelog").classList.add("stale");
       var retry = el("button", "Retry", "secondary");
-      retry.addEventListener("click", function () {
-        $("changelog").classList.remove("stale");
-        loadChangelog();
-      });
-      var note = el("div", null);
-      note.appendChild(el("span", error.message + " ", "err"));
-      note.appendChild(retry);
-      $("changelog").appendChild(note);
+      retry.addEventListener("click", loadChangelog);
+      $("changelog").appendChild(fill(el("div", null, "row"), [el("span", error.message, "err"), retry]));
     });
   }
 
   function renderChangelogPage(page) {
     var host = $("changelog");
-    var table = host.querySelector("table");
+    var body = host.querySelector("tbody");
 
-    if (!table) {
+    if (!body) {
       clear(host);
+      host.appendChild(fill(el("header"), [
+        el("h2", "Changelog"),
+        el("span", "every row carries the money order that caused it", "panel-note")
+      ]));
       if (!page.rows || page.rows.length === 0) {
-        host.appendChild(el("p", "no entries — this entity has no ledger activity", "muted"));
+        host.appendChild(el("p", "no entries — this entity has no ledger activity", "empty"));
+        $("changelog-controls").hidden = true;
         return;
       }
-      table = el("table");
-      var head = el("tr");
-      ["seq", "account", "currency", "delta", "balance after", "recorded", "source key", ""].forEach(function (h) {
-        head.appendChild(el("th", h));
-      });
-      table.appendChild(head);
-      host.appendChild(table);
+      var view = table(["seq", "account", "currency", "delta", "balance after", "recorded", "source key", ""]);
+      host.appendChild(view.wrap);
+      body = view.body;
     }
 
     (page.rows || []).forEach(function (row) {
-      var tr = el("tr");
-      tr.appendChild(el("td", row.seq));
-      tr.appendChild(el("td", row.account));
-      tr.appendChild(el("td", row.currency));
-      tr.appendChild(amountCell(row.delta_minor, row.currency));
-      tr.appendChild(amountCell(row.balance_after_minor, row.currency));
-      tr.appendChild(el("td", row.recorded_at, "muted"));
-      // M6 (a): the link back to the source. textContent means an idempotency key full of markup stays text.
-      tr.appendChild(el("td", row.source ? row.source.idempotency_key : ""));
+      var open = el("button", "order", "link");
+      open.addEventListener("click", function () { showOrder(row); });
 
-      var actions = el("td");
-      var button = el("button", "order", "secondary");
-      button.addEventListener("click", function () { showOrder(row); });
-      actions.appendChild(button);
-      tr.appendChild(actions);
-
-      table.appendChild(tr);
+      body.appendChild(rowOf("tr", [
+        el("td", row.seq),
+        el("td", row.account),
+        el("td", row.currency),
+        amountCell(row.delta_minor, row.currency),
+        amountCell(row.balance_after_minor, row.currency),
+        el("td", row.recorded_at, "muted"),
+        // M6 (a): the link back to the source. textContent means an idempotency key full of markup stays text.
+        el("td", row.source ? row.source.idempotency_key : "", "wrap"),
+        fill(el("td"), [open])
+      ]));
     });
   }
 
   /*
-   * Option (b) of D09-4: show the order id and a copyable request, with no cross-origin call. order-service is a
-   * different origin and no CORS allowance exists for this page; inventing one would widen a trust boundary (TB1)
-   * to save a click.
+   * Option (b) of D09-4: show the order id and a copyable request, with no cross-origin call. Through the proxy the
+   * order is one hop away, but the page still does not fetch it: order-service is reachable there only because the
+   * demo overlay is opt-in, and a panel that works only under an overlay is worse than a command that always works.
    */
   function showOrder(row) {
     var host = $("order-detail");
     clear(host);
 
-    host.appendChild(el("h2", "Money order"));
-    host.appendChild(el("div", row.order_id));
-    host.appendChild(el("div", "source: " + (row.source ? row.source.system : "?")
-      + " · idempotency key: " + (row.source ? row.source.idempotency_key : "?"), "muted"));
+    host.appendChild(fill(el("header"), [
+      el("h2", "Money order"),
+      el("span", "seq " + row.seq + " · " + row.account, "panel-note")
+    ]));
+    host.appendChild(dl([
+      ["order id", row.order_id],
+      ["source system", row.source ? row.source.system : "—"],
+      ["idempotency key", row.source ? row.source.idempotency_key : "—"]
+    ]));
     host.appendChild(el("code",
       "curl -s localhost:8081/v1/money-orders/" + row.order_id + " \\\n"
       + "  -H 'Authorization: Bearer $ZS_READER_TOKEN'"));
     host.appendChild(el("div",
-      "order-service is a separate origin, so this page does not call it directly.", "muted"));
+      "order-service is a separate service; this page shows the reference rather than calling it.", "panel-note"));
   }
 
-  /* ---- verify ---------------------------------------------------------------------------------------------- */
+  /* ---- verify ----------------------------------------------------------------------------------------------- */
 
   function verify() {
-    if (state.busy) { return; }
+    if (state.verifying) { return; }
     var id = $("entity").value.trim();
     if (!ENTITY_PATTERN.test(id)) {
       $("entity-error").textContent = "enter an exact entity id first";
       return;
     }
-    state.busy = true;
+    state.verifying = true;
     $("verify").disabled = true;
 
     var host = $("verify-result");
@@ -397,13 +684,14 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
       .then(function (result) {
         var elapsed = Date.now() - started;
         clear(host);
-        host.appendChild(el("span", result.consistent ? "consistent" : "INCONSISTENT",
-          result.consistent ? "pill ok" : "pill bad"));
-        host.appendChild(document.createTextNode(" "));
-        host.appendChild(el("span", result.rows_checked + " rows checked · " + elapsed + " ms", "muted"));
+        host.appendChild(fill(el("div", null, "row"), [
+          el("span", result.consistent ? "chain consistent" : "INCONSISTENT",
+            result.consistent ? "pill ok" : "pill bad"),
+          el("span", result.rows_checked + " rows checked · " + elapsed + " ms", "muted")
+        ]));
         if (!result.consistent) {
-          host.appendChild(el("div", "first bad sequence: " + result.first_bad_seq, "err"));
-          host.appendChild(el("div", (result.failure || "") + " " + (result.detail || ""), "err"));
+          host.appendChild(finding((result.failure || "check failed") + " at sequence " + result.first_bad_seq,
+            result.detail || ""));
         }
       })
       .catch(function (error) {
@@ -411,103 +699,304 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
         host.appendChild(el("span", error.message, "err"));
       })
       .then(function () {
-        state.busy = false;
+        state.verifying = false;
         $("verify").disabled = false;
       });
   }
 
-  /* ---- wiring ---------------------------------------------------------------------------------------------- */
+  /* ---- payment attempt -------------------------------------------------------------------------------------- */
 
-  /*
-   * instrument-service is a different origin from ledger-service, and this page's CSP is connect-src 'self' — which
-   * is the right policy and deliberately not widened. The reverse proxy in docker-compose.demo.yml puts every
-   * service under one origin, where this prefixed path resolves. Opened directly on ledger-service's own port it
-   * will 404, and the panel says so rather than failing mysteriously.
-   */
-  var INSTRUMENTS = "/instruments";
+  function statusClass(status) {
+    if (status === "SUCCEEDED" || status === "SETTLED") { return "pill ok"; }
+    if (status === "DECLINED" || status === "FAILED" || status === "RETURNED") { return "pill bad"; }
+    if (status === "NEEDS_REVIEW" || status === "UNKNOWN") { return "pill warn"; }
+    return "pill";
+  }
 
   function lookupAttempt() {
     var id = $("attempt").value.trim();
     $("attempt-error").textContent = "";
     clear($("attempt-result"));
 
-    if (!/^[0-9a-fA-F-]{36}$/.test(id)) {
+    if (!UUID.test(id)) {
       $("attempt-error").textContent = "enter an attempt id (uuid)";
       return;
     }
 
-    api(INSTRUMENTS + "/v1/payment-attempts/" + encodeURIComponent(id)).then(function (attempt) {
-      renderAttempt(attempt);
-    }).catch(function (error) {
-      if (error.message.indexOf("404") >= 0) {
-        // Ambiguous on purpose: ledger-service answers 404 for this path too, so say what to check.
-        $("attempt-error").textContent =
-          "not found here. If the Explorer is open on port 8082, instrument-service is a different origin — "
-          + "open it through the proxy (make up-proxy, then 127.0.0.1:8080/explorer.html).";
-        return;
-      }
-      $("attempt-error").textContent = error.message;
+    api(INSTRUMENTS + "/v1/payment-attempts/" + encodeURIComponent(id)).then(renderAttempt).catch(function (error) {
+      report($("attempt-error"), error, PROXY_HINT);
     });
   }
 
-  function renderAttempt(attempt) {
+  /** The contract is AttemptDetail: the attempt and its transitions, which are the audit trail rather than a log. */
+  function renderAttempt(detail) {
     var host = $("attempt-result");
+    var attempt = detail.attempt;
     clear(host);
 
-    var summary = el("div", null);
-    summary.appendChild(el("span", attempt.kind + " ", "muted"));
-    summary.appendChild(el("span", attempt.status,
-      attempt.status === "SUCCEEDED" || attempt.status === "SETTLED" ? "pill ok"
-        : attempt.status === "NEEDS_REVIEW" || attempt.status === "UNKNOWN" ? "pill warn" : "pill"));
-    host.appendChild(summary);
+    host.appendChild(fill(el("div", null, "row"), [
+      el("span", attempt.kind, "pill"),
+      el("span", attempt.status, statusClass(attempt.status)),
+      attempt.blocked_on_capture ? el("span", "blocked on capture", "pill warn") : null,
+      fill(el("span"), [amount(attempt.amount_minor, attempt.currency)])
+    ]));
 
-    host.appendChild(el("div", attempt.entity_id + " · " + attempt.provider
-      + " · provider_ref " + (attempt.provider_ref || "none"), "muted"));
+    host.appendChild(dl([
+      ["entity", attempt.entity_id],
+      ["provider", attempt.provider],
+      ["provider ref", attempt.provider_ref || "none yet"],
+      ["failure code", attempt.failure_code],
+      ["order group", attempt.order_group_id],
+      ["source order", attempt.source_order_id],
+      ["payout run", attempt.payout_run_id],
+      ["version", attempt.version],
+      ["created", attempt.created_at],
+      ["updated", attempt.updated_at]
+    ]));
 
-    if (attempt.money) {
-      var amount = el("div", null);
-      amount.appendChild(amountCell(attempt.money.amount_minor, attempt.money.currency).firstChild);
-      host.appendChild(amount);
-    }
-
-    var rows = attempt.transitions || attempt.history || [];
+    var rows = detail.transitions || [];
     if (rows.length === 0) {
-      host.appendChild(el("p", "no transitions recorded", "muted"));
+      host.appendChild(el("p", "no transitions recorded", "empty"));
       return;
     }
 
-    var table = el("table");
-    var head = el("tr");
-    ["seq", "from", "to", "cause", "at"].forEach(function (h) { head.appendChild(el("th", h)); });
-    table.appendChild(head);
+    var view = table(["seq", "from", "to", "cause", "at"]);
     rows.forEach(function (row) {
-      var tr = el("tr");
-      tr.appendChild(el("td", row.seq));
-      tr.appendChild(el("td", row.from_status === null ? "—" : row.from_status, "muted"));
-      tr.appendChild(el("td", row.to_status));
-      tr.appendChild(el("td", row.cause));
-      tr.appendChild(el("td", row.at, "muted"));
-      table.appendChild(tr);
+      view.body.appendChild(rowOf("tr", [
+        el("td", row.seq),
+        el("td", row.from_status === null || row.from_status === undefined ? "—" : row.from_status, "muted"),
+        fill(el("td"), [el("span", row.to_status, statusClass(row.to_status))]),
+        el("td", row.cause, "wrap"),
+        el("td", row.at, "muted")
+      ]));
     });
-    host.appendChild(table);
+    host.appendChild(view.wrap);
   }
 
-  $("lookup-attempt").addEventListener("click", lookupAttempt);
-  $("attempt").addEventListener("keydown", function (event) {
-    if (event.key === "Enter") { lookupAttempt(); }
-  });
+  /* ---- reconciliation breaks -------------------------------------------------------------------------------- */
+
+  function lookupBreaks() {
+    var id = $("run-id").value.trim();
+    $("breaks-error").textContent = "";
+    clear($("breaks-result"));
+
+    if (!UUID.test(id)) {
+      // There is no list-runs endpoint, so the run id comes from whoever started the run.
+      $("breaks-error").textContent = "enter a reconciliation run id (uuid)";
+      return;
+    }
+
+    var query = [];
+    if ($("break-type").value) { query.push("type=" + encodeURIComponent($("break-type").value)); }
+    if ($("break-status").value) { query.push("status=" + encodeURIComponent($("break-status").value)); }
+    var path = INSTRUMENTS + "/v1/reconciliation-runs/" + encodeURIComponent(id) + "/breaks"
+      + (query.length > 0 ? "?" + query.join("&") : "");
+
+    api(path).then(renderBreaks).catch(function (error) {
+      report($("breaks-error"), error, PROXY_HINT);
+    });
+  }
+
+  function renderBreaks(breaks) {
+    var host = $("breaks-result");
+    clear(host);
+
+    if (!breaks || breaks.length === 0) {
+      // A run with no breaks is the good outcome, and is worth saying plainly rather than as a blank panel.
+      empty(host, "no breaks for this run and filter — the report and the ledger agreed");
+      return;
+    }
+
+    // The type is the point: a missing line is chased with the provider, an amount mismatch is a fee or rounding
+    // question, a duplicate line is money claimed twice. Counting breaks tells an operator none of that.
+    var counts = {};
+    breaks.forEach(function (row) { counts[row.break_type] = (counts[row.break_type] || 0) + 1; });
+    var summary = el("div", null, "row");
+    Object.keys(counts).sort().forEach(function (type) {
+      summary.appendChild(el("span", type + " × " + counts[type], "pill warn"));
+    });
+    host.appendChild(summary);
+
+    var view = table(["id", "type", "status", "currency", "reported", "ledger", "client reference",
+      "provider ref", "detail"]);
+    breaks.forEach(function (row) {
+      view.body.appendChild(rowOf("tr", [
+        el("td", row.break_id),
+        el("td", row.break_type),
+        fill(el("td"), [el("span", row.status, row.status === "UNEXPLAINED" ? "pill bad" : "pill warn")]),
+        el("td", row.currency || "—"),
+        amountCell(row.report_gross_minor, ""),
+        amountCell(row.ledger_gross_minor, ""),
+        el("td", row.client_reference || "—", "wrap"),
+        el("td", row.provider_ref || "—", "wrap"),
+        el("td", row.detail || "", "wrap")
+      ]));
+    });
+    host.appendChild(view.wrap);
+    host.appendChild(el("div",
+      "OPEN may still be resolved by a later settlement cycle; UNEXPLAINED will not. A break is left as a residual "
+      + "on the provider's clearing account, never adjusted away.", "panel-note"));
+  }
+
+  /* ---- provider ground truth -------------------------------------------------------------------------------- */
+
+  function lookupTruth() {
+    var reference = $("truth-ref").value.trim();
+    $("truth-error").textContent = "";
+    clear($("truth-result"));
+
+    if (!reference) {
+      // Queryable by client reference only: the provider is never told an entity id (CR-S05-02).
+      $("truth-error").textContent = "enter a client_reference — ground truth is not queryable by entity";
+      return;
+    }
+
+    api(PROVIDERS + "/admin/truth?client_reference=" + encodeURIComponent(reference), null, "admin")
+      .then(renderTruth)
+      .catch(function (error) {
+        report($("truth-error"), error, PROXY_HINT + " The admin surface is also absent entirely under the "
+          + "demo-public profile, where a 404 is the intended answer.");
+      });
+  }
+
+  function renderTruth(truth) {
+    var host = $("truth-result");
+    clear(host);
+
+    var charges = truth.charges || [];
+    var refunds = truth.refunds || [];
+    var payouts = truth.payouts || [];
+
+    if (charges.length === 0 && refunds.length === 0 && payouts.length === 0) {
+      empty(host, "the provider holds nothing under this client reference — nothing was ever submitted to it, "
+        + "or it was submitted under a different reference");
+    }
+
+    if (charges.length > 0) {
+      var chargeView = table(["charge", "status", "amount", "fee", "refunded", "decline"]);
+      charges.forEach(function (row) {
+        chargeView.body.appendChild(rowOf("tr", [
+          el("td", row.charge_id),
+          fill(el("td"), [el("span", row.status, statusClass(row.status))]),
+          amountCell(row.amount_minor, row.currency),
+          amountCell(row.fee_minor, row.currency),
+          amountCell(row.refunded_minor, row.currency),
+          el("td", row.decline_code || "—", "muted")
+        ]));
+      });
+      host.appendChild(el("h2", "Charges"));
+      host.appendChild(chargeView.wrap);
+    }
+
+    if (refunds.length > 0) {
+      var refundView = table(["refund", "charge", "status", "amount", "failure"]);
+      refunds.forEach(function (row) {
+        refundView.body.appendChild(rowOf("tr", [
+          el("td", row.refund_id),
+          el("td", row.charge_id),
+          fill(el("td"), [el("span", row.status, statusClass(row.status))]),
+          amountCell(row.amount_minor, ""),
+          el("td", row.failure_code || "—", "muted")
+        ]));
+      });
+      host.appendChild(el("h2", "Refunds"));
+      host.appendChild(refundView.wrap);
+    }
+
+    if (payouts.length > 0) {
+      var payoutView = table(["payout", "status", "amount", "accepted", "settled", "returned", "return code"]);
+      payouts.forEach(function (row) {
+        payoutView.body.appendChild(rowOf("tr", [
+          el("td", row.payout_id),
+          fill(el("td"), [el("span", row.status, statusClass(row.status))]),
+          amountCell(row.amount_minor, row.currency),
+          el("td", row.accepted_at || "—", "muted"),
+          el("td", row.settled_at || "—", "muted"),
+          el("td", row.returned_at || "—", "muted"),
+          el("td", row.return_code || "—", "muted")
+        ]));
+      });
+      host.appendChild(el("h2", "Payouts"));
+      host.appendChild(payoutView.wrap);
+    }
+
+    var queue = truth.webhook_queue;
+    if (queue) {
+      host.appendChild(fill(el("header"), [
+        el("h2", "Webhook queue"),
+        el("span", queue.pending + " pending delivery", "panel-note")
+      ]));
+      var deliveries = queue.deliveries || [];
+      if (deliveries.length === 0) {
+        host.appendChild(el("p", "nothing waiting to be delivered", "empty"));
+      } else {
+        var queueView = table(["event", "type", "provider ref", "attempts", "last status", "held", "next attempt"]);
+        deliveries.forEach(function (row) {
+          queueView.body.appendChild(rowOf("tr", [
+            el("td", row.event_id),
+            el("td", row.event_type),
+            el("td", row.provider_ref || "—"),
+            el("td", row.attempts, "num"),
+            el("td", row.last_status === null || row.last_status === undefined ? "—" : row.last_status),
+            fill(el("td"), [row.held ? el("span", "held", "pill warn") : el("span", "no", "muted")]),
+            el("td", row.next_attempt_at || "—", "muted")
+          ]));
+        });
+        host.appendChild(queueView.wrap);
+      }
+    }
+
+    // Injected faults explain an attempt that looks wrong: an UNKNOWN outcome usually means the provider committed
+    // and the answer was lost, which is visible here and nowhere else.
+    var faultCounts = truth.fault_counts || {};
+    var faultTypes = Object.keys(faultCounts);
+    if (faultTypes.length > 0) {
+      host.appendChild(el("h2", "Faults injected"));
+      var faultRow = el("div", null, "row");
+      faultTypes.sort().forEach(function (type) {
+        faultRow.appendChild(el("span", type + " × " + faultCounts[type], "pill warn"));
+      });
+      host.appendChild(faultRow);
+    }
+
+    host.appendChild(el("div",
+      "This is the provider's own record, not ours. Where it disagrees with the attempt above, the disagreement is "
+      + "the finding (I7).", "panel-note"));
+  }
+
+  /* ---- wiring ----------------------------------------------------------------------------------------------- */
+
+  function onEnter(id, handler) {
+    $(id).addEventListener("keydown", function (event) {
+      if (event.key === "Enter") { handler(); }
+    });
+  }
 
   $("token").addEventListener("input", function (event) {
     // Kept in a variable for the lifetime of the page only: never storage, never the URL, never a cookie.
-    state.token = event.target.value;
+    creds.reader = event.target.value;
   });
+  $("admin-token").addEventListener("input", function (event) {
+    creds.admin = event.target.value;
+  });
+  // The overview is what an operator wants first, so a typed token loads it without a second click — on Enter or on
+  // leaving the field, never per keystroke, because /v1/invariants takes a snapshot that is costly to repeat.
+  $("token").addEventListener("change", function () { if (creds.reader) { loadOverview(); } });
+  onEnter("token", loadOverview);
+
+  $("refresh-overview").addEventListener("click", loadOverview);
   $("lookup").addEventListener("click", lookup);
-  $("entity").addEventListener("keydown", function (event) {
-    if (event.key === "Enter") { lookup(); }
-  });
+  onEnter("entity", lookup);
   $("verify").addEventListener("click", verify);
   $("next-page").addEventListener("click", loadChangelog);
-  $("refresh-system").addEventListener("click", loadSystem);
+  $("lookup-attempt").addEventListener("click", lookupAttempt);
+  onEnter("attempt", lookupAttempt);
+  $("lookup-breaks").addEventListener("click", lookupBreaks);
+  onEnter("run-id", lookupBreaks);
+  $("lookup-truth").addEventListener("click", lookupTruth);
+  onEnter("truth-ref", lookupTruth);
+
+  empty($("overview-tiles"), "enter a reader token to load the ledger's state");
 
   if (location.protocol === "file:") {
     $("origin-note").textContent =
