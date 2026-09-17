@@ -2682,6 +2682,7 @@ None of these affect the recommendations.
 
 | Version | Date | Change | Impact on downstream steps |
 |---|---|---|---|
+| 1.3 | 2026-09-16 | **Minimum cut invoked** ([docs/scope-decisions.md](scope-decisions.md)). The build is a résumé portfolio piece, so §9.5's cut is applied as written, plus the human-evaluation study, the hosted demo VM, the SP4 spike and the Explorer page are deferred. Nothing already built is removed, and no acceptance criterion recorded as met is weakened. |
 | 1.0 | 2026-09-15 | Initial report (Prompt 01) | Source document for Prompt 02 decomposition |
 | 1.2 | 2026-09-15 | §0.3 decomposition review clarifications (contracts C1–C25, evidence E1–E11, schedule and operations O1–O13), edited in place with v1.2 markers | Step documents updated through their registers and change records; S09-T07 pre-allocation grows to 2 h (unallocated contingency 25 h). No change to scope, architecture direction or acceptance thresholds. |
 | 1.1 | 2026-09-15 | Added the document-pack provenance note and §0.2 constraint updates (cost not a driver; 4 h of contingency pre-allocated for the scenario catalog and release execution) | README and all step documents reference v1.1. No change to scope, architecture, acceptance targets or step hours. |

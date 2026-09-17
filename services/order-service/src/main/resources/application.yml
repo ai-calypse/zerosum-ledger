@@ -15,6 +15,76 @@ spring:
     password: ${ZS_ORDERS_OWNER_DB_PASSWORD}
     # Tolerate a slow database instead of relying only on Compose start ordering.
     connect-retries: 10
+  # decision: D03-5 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+  # Provisional until S04-T01 records D04-2. Master platform-limits requires these to be explicit rather than
+  # inherited: acks=all so a send is acknowledged only once every in-sync replica holds the record, and idempotence so
+  # a producer retry cannot duplicate within its own session. The relay marks rows published on acknowledgement, so a
+  # weaker acks setting would mark money delivered that a broker failover could still lose.
+  kafka:
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+    # decision: D03-6 — provisional until S04-T01/S04-T03 record D04-1 and D04-4. Offsets are committed by the
+    # listener after the transaction commits, never automatically: an auto-commit could advance past an event whose
+    # order was never written.
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      # MANUAL, because the listener takes an Acknowledgment and commits only after its transaction. Without this the
+      # container refuses to populate the argument and every record fails.
+      ack-mode: manual
+      # One record at a time (D03-6 instruction 9): mapper throughput is not a gate, and per-record handling keeps
+      # quarantine attribution exact.
+      type: single
+  # decision: D03-2 — TB1 request parsing. Unknown fields are rejected rather than ignored, so a body carrying a
+  # server-assigned field (order_id, source, created_at) fails instead of appearing to have set it. Duplicate keys are
+  # rejected so the hashed request cannot be ambiguous, and a float or string is never coerced into an integer amount.
+  jackson:
+    deserialization:
+      # Unknown fields are rejected rather than ignored, so a body carrying a server-assigned order_id, source or
+      # created_at fails instead of appearing to have set it.
+      fail-on-unknown-properties: true
+    read:
+      # Boot 4.1 binds StreamReadFeature under spring.jackson.read, not spring.jackson.parser. Note that this block,
+      # and the kafka block above, previously sat at indent 2 *after* the top-level `orders:` key, so they bound to
+      # orders.jackson.* and orders.kafka.* and were read by nothing. Blank lines and comments do not close a YAML
+      # mapping, so the misplacement was invisible. StrictJsonConfiguration enforces the same parsing rules from code,
+      # which is why request parsing was correct despite this being dead.
+      strict-duplicate-detection: true
+
+orders:
+  store:
+    # decision: D03-3 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+    # Bound on waiting for a concurrent transaction that holds the same idempotency key. The master's cross-cutting
+    # lock_timeout is 2s; exceeding it returns 409 idempotency_key_in_progress rather than holding the request open.
+    lock-timeout: 2s
+
+zs:
+  # decision: D03-6 — topic and group are provisional until S04-T01 records D04-1.
+  consumer:
+    payment-events-topic: payments.payment-events.v1
+    group-id: order-service-mapper
+    # Lets tests that have no broker run without a listener dialling one; production leaves it true.
+    enabled: true
+  outbox:
+    batch-size: 500
+    poll-interval: 50ms
+    send-timeout: 10s
+    backoff-min: 100ms
+    backoff-max: 5s
+    retention: 1h
+    cleanup-interval: 10m
+    cleanup-batch-size: 1000
+  # decision: D03-4 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+  # Static bearer tokens per role (master §5.11). No defaults: a service started without them authenticates nobody.
+  auth:
+    writer-tokens: ${ZS_WRITER_TOKENS:}
+    reader-token: ${ZS_READER_TOKEN:}
+    admin-token: ${ZS_ADMIN_TOKEN:}
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

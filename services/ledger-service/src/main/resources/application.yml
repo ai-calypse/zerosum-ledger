@@ -46,6 +46,14 @@ ledger:
     # never materialized in full.
     verify-fetch-size: 500
 
+# decision: D03-4 — docs/step_03_order_service_outbox.md#decisions-and-outputs
+# Static bearer tokens per role (master §5.11). No defaults: a service started without them authenticates nobody.
+zs:
+  auth:
+    writer-tokens: ${ZS_WRITER_TOKENS:}
+    reader-token: ${ZS_READER_TOKEN:}
+    admin-token: ${ZS_ADMIN_TOKEN:}
+
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8082

@@ -1,0 +1,37 @@
+# S03-T04 order-service OpenAPI specification and drift test  2026-09-16
+
+RESULT
+  OpenApiSpecConsistencyTest  5 tests, 0 failures  (integration; needs a Spring context to read the handler map)
+
+APPROACH (recorded in D03-2)
+  (a) hand-written openapi/order-service.yaml plus a drift test, NOT (b) generated from annotations.
+  Generation needs a new dependency and therefore a D00-1 change request first, to produce the same committed artefact.
+  This is a considered divergence from the minimum cut's "OpenAPI generated only" wording: the cut exists to reduce
+  effort, and generating would add machinery rather than remove it. Recorded rather than applied silently.
+
+WHAT THE TEST ACTUALLY CHECKS
+  Handlers <-> operations, BOTH directions. Spring's registered handler map under /v1 is compared with the paths and
+    methods in the file as sets, so an endpoint added without documentation fails, and a documented operation with no
+    handler fails too. Actuator and error handling are excluded: they are not part of this contract.
+  Problem codes. ApiException.Code is now the single home for the code set: the advice builds every response from it
+    and the test compares it with the Problem.code enum in the file. Adding a code in one place and forgetting the
+    other fails. Before this task the codes were string literals scattered across the exception factories, which is
+    what would have made a drift test circular.
+  Parsing and completeness. The file parses as OpenAPI 3.1 and declares the bearer scheme, the Idempotency-Key request
+    header with its 255-character cap, and the Idempotent-Replayed response header.
+  Refs. Every $ref is internal and resolves, so the file stands alone without repository-relative resolution.
+
+A DELIBERATE FAILING GUARD
+  theStatsOperationIsNotYetDocumented asserts GET /v1/outbox/stats is ABSENT. S03-T06 adds that endpoint; when it does,
+  this assertion fails until the specification is updated in the same change. That is the forcing function instruction
+  3 asks for, rather than a comment hoping someone remembers.
+
+TWO DEFECTS OF MINE, FIXED HERE
+  The list operation was first written as /v1/money-orders{?group_id}, which is RFC 6570 URI-template syntax and not
+    OpenAPI. A query parameter belongs under the same path as the collection, so it is now a `get` beside the `post`.
+    Left alone it would have been wrong for any reader and would have made the handler comparison meaningless.
+  The test injected RequestMappingHandlerMapping by type, but actuator contributes a second one, so the context failed
+    to load. It is now qualified by name.
+
+REPRODUCE
+  ./gradlew :services:order-service:integrationTest --tests '*OpenApiSpecConsistencyTest' --rerun

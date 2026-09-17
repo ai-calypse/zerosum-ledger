@@ -52,6 +52,7 @@ class VerifyApiIT {
         registry.add("spring.datasource.username", () -> LedgerTestDatabase.APP);
         registry.add("spring.datasource.password", () -> DB.password(LedgerTestDatabase.APP));
         registry.add("spring.flyway.enabled", () -> "false");
+        registry.add("zs.auth.reader-token", () -> "test-reader-token");
     }
 
     @BeforeAll
@@ -132,7 +133,8 @@ class VerifyApiIT {
 
     @Test
     void anUnknownEntityIsNotFound() {
-        String code = RestClient.create("http://localhost:" + port).post()
+        String code = RestClient.builder().baseUrl("http://localhost:" + port)
+                .defaultHeader("Authorization", "Bearer test-reader-token").build().post()
                 .uri("/v1/entities/rider:NOBODY/verify")
                 .exchange((request, response) ->
                         JSON.readTree(new String(response.getBody().readAllBytes())).get("code").asString(), false);
@@ -140,7 +142,8 @@ class VerifyApiIT {
     }
 
     private JsonNode verify(String entityId) {
-        return JSON.readTree(RestClient.create("http://localhost:" + port)
+        return JSON.readTree(RestClient.builder().baseUrl("http://localhost:" + port)
+                .defaultHeader("Authorization", "Bearer test-reader-token").build()
                 .post().uri("/v1/entities/{id}/verify", entityId).retrieve().body(String.class));
     }
 

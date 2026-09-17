@@ -1,0 +1,62 @@
+# S03-T07 payment-event mapper and order-mapper consumer  2026-09-16
+
+RESULT
+  PaymentEventMapperTest   13 tests, 0 failures (unit)
+  PaymentEventConsumerIT    5 tests, 0 failures (integration; PostgreSQL + Kafka Testcontainers)
+  Full project            312 tests, 0 failures across all modules
+
+MAPPER
+  Pure function: no clock, no I/O, no Spring. effective_at is the event's occurred_at, so replaying an event later
+  produces the identical order - which is what makes redelivery safe rather than merely tolerable.
+  Checked against the D01-9 goldens, not against my reading of the mapping table: each of EV-O2, EV-O4, EV-O5, EV-O6,
+  EV-O7, EV-O8 must reproduce its paired golden order's type, reason, group, entries (in order), metadata and
+  idempotency key exactly. The ledger's expected balances were computed from those goldens.
+  No-order rows: CHARGE_DECLINED, REFUND_FAILED, PAYOUT_REJECTED. Each leaves the receivable or payable owed, so an
+  order would invent a movement. Each increments its own counter.
+  PAYOUT_FAILED has NO golden order (the manifest records it as unpaired), so its test asserts the master row
+  directly and its metadata key (failure_code) is a choice of mine, recorded in D03-6 rather than dictated by a golden.
+  Settlement: net + fee = gross is checked before mapping; a mismatch is poison. Totals are booked as reported, so a
+  residual on provider clearing stays an I9 reconciliation break instead of being adjusted away here.
+
+CONSUMER
+  Real broker, real database, real listener. A mocked listener could not prove the claim that matters, because the
+  uniqueness that makes it true lives in the database.
+  Three deliveries of one event -> exactly one order and exactly one outbox row, held stable rather than sampled once.
+  The order is attributed to the internal mapper principal (instrument-service), never to a caller.
+  The published payload is validated against the D01-8 money-order schema, so the "published orders validate" gate
+  rests on the mapper path too and not on the API path alone.
+  Poison is quarantined in order-service's own table and the partition keeps moving; a good event behind a poison one
+  is still processed.
+
+DLQ DEFERRED - STATED, NOT HIDDEN
+  No dead-letter publishing. Spring's DeadLetterPublishingRecoverer must be constructed with a KafkaTemplate, and doing
+  that in the consumer package would name a producer type and trip the M4(b) publish-path rule enforced in S03-T05.
+  Dead-letter naming is S04-T03's decision (D04-4) in any case. The quarantine row holds the payload, so nothing is
+  lost by deferring it.
+
+NOT IMPLEMENTED: THE SEEDED GENERATIVE MAPPER TEST
+  The task asks for a seeded generative test (D01-10) over random valid events printing its seed. It is not written.
+  What exists instead: every golden draft, plus PAYOUT_FAILED, is put through the same ZeroSumValidator an API order
+  goes through. That covers the rows that exist but not randomised inputs, so this is a real gap, not a substitution.
+
+FOUR DEFECTS FOUND, ALL MINE
+  1. Misplaced YAML. The kafka block - and, it turned out, the pre-existing jackson block - sat at indent 2 AFTER the
+     top-level `orders:` key, so they bound to orders.kafka.* and orders.jackson.* and were read by nothing. Blank
+     lines and comments do not close a YAML mapping, so nothing looked wrong. Consequence: ack-mode never applied, the
+     listener could not be given an Acknowledgment, every record threw, and DefaultErrorHandler skipped it after 10
+     attempts - so the consumer silently consumed nothing for two full test runs. My own verification had been
+     worthless: I counted that one `spring:` key existed instead of checking where `kafka:` landed. Now verified by
+     parsing the file. It also means spring.jackson.* has been dead since S03-T03 and StrictJsonConfiguration is what
+     actually enforced strict parsing; D03-2 is corrected accordingly.
+  2. Test cleanup used DELETE on quarantined_events as orders_app, which the V5 grants deliberately withhold.
+     PostgreSQL raises 42501, and Spring maps SQLSTATE class 42 to BadSqlGrammarException, so a permission denial
+     arrived wearing a syntax-error costume. The grant is correct; the test was wrong. Cleanup now runs as the owner,
+     and a test asserts the runtime role CANNOT delete the evidence.
+  3. A test named "...QuarantinedOnce..." asserted two rows. Two deliveries sit at two offsets and the ON CONFLICT key
+     is the Kafka coordinates, so two rows is right and the name was wrong - and the conflict path it claimed to cover
+     was never exercised at all. Renamed, and a separate test now drives the same coordinates twice.
+  4. effective_at was compared as text. Instant.toString() drops trailing zero milliseconds, so the golden's
+     "...00.000Z" and the mapper's "...00Z" differ as strings while being the same instant. The mapper was right.
+
+REPRODUCE
+  ./gradlew :services:order-service:test :services:order-service:integrationTest

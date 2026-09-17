@@ -1,0 +1,53 @@
+# S03-T03 REST API, token auth and problem details  2026-09-16
+
+RESULTS
+  MoneyOrderApiIT      15 tests, 0 failures   (integration, PostgreSQL Testcontainers)
+  TokenAuthTest        16 tests, 0 failures   (libs/auth unit)
+  LedgerAuthWiringIT    4 tests, 0 failures   (ledger-service, §0.3 C9)
+  LogRedactionTest      2 tests, 0 failures   (order-service unit)
+
+M3 THROUGH HTTP
+  (a) same key and body    201 then 200 with Idempotent-Replayed: true and a byte-identical body; one row.
+      A body differing only in whitespace and key order also replays, because the hash is over the parsed request.
+  (b) same key, new body   422 idempotency_key_reused.
+  (c) 20 concurrent        exactly one 201; every other caller got 200 or 409; one row in the group.
+  (d) missing key          400 idempotency_key_missing.
+  Corrected retry          a 422 validation failure does not consume the key: the corrected retry returns 201.
+  Goldens                  the D01-9 COMMERCE goldens are accepted with a writer token, and each fetched order
+                           validates against the D01-8 money-order schema.
+
+AUTH (D03-4)
+  No token -> 401 unauthorized. Reader token on create -> 403 forbidden. Writer token on reads -> 200, the recorded
+  hierarchy. Ledger read endpoints: 401 without a token, 401 with an unknown token, 200 with reader, writer or admin.
+  Tokens are compared with MessageDigest.isEqual against every configured token, so timing cannot reveal match position.
+
+STRICT REQUEST PARSING - THREE FAILED ATTEMPTS BEFORE IT WORKED, RECORDED BECAUSE THE FAILURE MODE MATTERS
+  The requirement is that unknown fields, duplicate keys and a float where an integer amount belongs are all REJECTED.
+  Attempt 1: spring.jackson.parser.strict-duplicate-detection. Boot 4.1 has no `parser` map, so the key bound to
+             nothing and the service silently accepted duplicate keys. Tests: 3 bodies accepted with 201.
+  Attempt 2: corrected to spring.jackson.read.* (StreamReadFeature does bind there). Still 3 bodies accepted: the
+             properties were not reaching the HTTP message converter's mapper.
+  Attempt 3: a JsonMapperBuilderCustomizer bean, which IS the hook Boot builds its JsonMapper from. Correct, but I put
+             the @PostConstruct self-check in the same class, so the class injected the mapper built from its own
+             customizer. Spring rejected the circular reference and the context failed to load - all 15 tests failed.
+  Final:     the customizer and the self-check are separate beans. 15/15 green, including all three rejection cases.
+
+  A startup self-check now asserts the mapper genuinely refuses those three inputs. Silent misconfiguration is the
+  real hazard here: for two attempts the service looked correctly configured and accepted malformed money orders. If a
+  future Boot upgrade moves the hook again, the service fails at boot with a named reason instead.
+
+ONE API GAP FOUND BY THE SCHEMA CHECK
+  Fetched orders omitted `metadata`, which the D01-8 contract requires (and additionalProperties: false means nothing
+  else can stand in for it). The response now carries it as an object, parsed back from the canonical text the store
+  holds.
+
+LOG REDACTION
+  Instruction 11 says to "extend the D00-8 redaction test to order-service". No such test existed anywhere in the
+  repository, so this is written fresh rather than extended. It asserts TokenRegistry and Principal keep tokens out of
+  toString(), and that a rejected token is not echoed into the logs. It cannot prove future code will not log one.
+
+NOT DONE HERE
+  ProblemMappingTest as a separate unit test: the outcome-to-code mapping is asserted through HTTP in MoneyOrderApiIT
+  (seven malformed bodies, each its own parameterised case naming the expected code), which exercises the advice as
+  wired rather than in isolation. Recorded as a deviation rather than claimed as done.
+  The D01-11 ArchUnit rules are not yet applied to order-service packages.

@@ -4,8 +4,10 @@ import dev.zerosum.ledger.api.LedgerReadResponses.ClearingBalance;
 import dev.zerosum.ledger.api.LedgerReadResponses.I5Status;
 import dev.zerosum.ledger.api.LedgerReadResponses.Invariants;
 import dev.zerosum.ledger.api.LedgerReadResponses.Verification;
+import dev.zerosum.auth.Role;
 import dev.zerosum.ledger.invariants.InvariantsService;
 import dev.zerosum.ledger.invariants.VerifyService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,7 +38,8 @@ class LedgerVerificationController {
     }
 
     @GetMapping("/v1/invariants")
-    Invariants invariants() {
+    Invariants invariants(HttpServletRequest request) {
+        LedgerAuthorization.requireReader(request);
         InvariantsService.Report report = invariants.report();
         return new Invariants(report.consistent(), report.i2Currencies(), report.i3Accounts(), report.i4Entities(),
                 I5_NOT_EVALUATED, report.unresolvedQuarantinedCount(),
@@ -46,7 +49,8 @@ class LedgerVerificationController {
     }
 
     @PostMapping("/v1/entities/{entityId}/verify")
-    Verification verify(@PathVariable String entityId) {
+    Verification verify(HttpServletRequest request, @PathVariable String entityId) {
+        LedgerAuthorization.requireReader(request);
         String id = EntityIds.validated(entityId);
         VerifyService.Result result = verify.verify(id).orElseThrow(() -> LedgerApiException.entityNotFound(id));
         return new Verification(result.entityId(), result.consistent(), result.rowsChecked(), result.firstBadSeq(),

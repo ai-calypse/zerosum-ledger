@@ -37,6 +37,14 @@ class LedgerApiException extends RuntimeException {
                 "limit must be between 1 and " + maxPageSize + ", was " + limit);
     }
 
+    static LedgerApiException unauthorized() {
+        return new LedgerApiException(HttpStatus.UNAUTHORIZED, "unauthorized", "a valid bearer token is required");
+    }
+
+    static LedgerApiException forbidden(String detail) {
+        return new LedgerApiException(HttpStatus.FORBIDDEN, "forbidden", detail);
+    }
+
     static LedgerApiException entityNotFound(String entityId) {
         return new LedgerApiException(HttpStatus.NOT_FOUND, "entity_not_found", "no such entity: " + entityId);
     }
