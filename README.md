@@ -34,6 +34,7 @@ Every number here comes from an executed run, not from reading the code. Test co
 | Stack version compatibility spike (SP3) | [docs/results/sp3-stack-compat.md](docs/results/sp3-stack-compat.md) | measured |
 | Fake providers and adapters | [docs/results/s05/providers.md](docs/results/s05/providers.md) | measured |
 | Trace across API → outbox → Kafka → apply | [docs/results/s04-trace-propagation.md](docs/results/s04-trace-propagation.md) | measured |
+| End-to-end money path, live stack | 1 test, 0 failed | `./gradlew e2eTest` (needs the stack up) |
 
 The four skipped tests are deliberate. The shared adapter contract suite runs against **both** providers, and on
 each one its settlement-report and webhook-parsing cases abort on a JUnit assumption naming the capability that is
@@ -44,8 +45,9 @@ the whole reason the cases exist instead of being omitted.
 
 Kept explicit on purpose — see [docs/scope-decisions.md](docs/scope-decisions.md) for each decision and its cost.
 
-- **No end-to-end test exists.** CI's e2e job starts the full stack and runs a tag that selects zero tests. It proves
-  every image builds and every container reports healthy; it asserts nothing about behaviour.
+- **End-to-end coverage is one test, the money path only.** It asserts that an accepted order reaches the ledger,
+  that its entries sum to zero, that the changelog links back to the order, and that the ledger's invariants hold.
+  Nothing else is covered end to end: no provider path, no crash or restart, no fault injection, and no reconciliation.
 - **instrument-service has no persistence and no API.** It is an adapter layer. Nothing records a payment attempt, so
   nothing resolves an `UNKNOWN` outcome yet, and the quiet-period rule is specified but unimplemented.
 - **No reconciliation, no webhook delivery, no fault injection.** Settlement reports are declared in the interface and
@@ -89,7 +91,7 @@ docker compose ps
 ```sh
 ./gradlew build            # compile + fast untagged tests, no containers
 ./gradlew integrationTest  # @Tag("integration"), Testcontainers (needs Docker)
-./gradlew e2eTest          # @Tag("e2e") — currently selects 0 tests; see "What is not built"
+./gradlew e2eTest          # @Tag("e2e") — needs the Compose stack running (step 3)
 ```
 
 ### 5. Observability

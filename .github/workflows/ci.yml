@@ -91,7 +91,10 @@ jobs:
       - name: Start stack
         run: docker compose up -d --build --wait
       - name: Run e2e tests
-        # Until S05 adds scenarios the tag selects no tests (reported by the build); the health wait above is the check.
+        # MoneyPathE2ETest drives the money path against this stack: order API -> outbox -> Kafka -> ledger apply,
+        # asserting balances, the zero-sum property, the changelog link back to the order and the ledger invariants.
+        # It reads credentials from the .env generated above rather than from the environment, because nothing here
+        # exports .env into the Gradle JVM.
         run: ./gradlew e2eTest
       - name: Dump logs
         if: failure()

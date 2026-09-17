@@ -9,6 +9,10 @@ dependencies {
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.database.postgresql)
     testRuntimeOnly(libs.postgresql)
+
+    // decision: S09 — the e2e tests speak to the running Compose stack over HTTP. The JDK's own HttpClient does the
+    // talking, so the only thing added here is a JSON reader for the responses.
+    testImplementation(libs.jackson.databind)
 }
 
 tasks.withType<Test>().configureEach {
