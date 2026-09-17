@@ -499,3 +499,89 @@ engineering idea: **money is checked against an independent account of itself, a
 unevaluated**. The settlement event is asserted as far as the outbox row and compared field by field against golden
 O6; the booking itself is order-service's mapper, which has its own golden test, and **no end-to-end run was
 observed** — S04's pipeline harness was never delivered, and this step did not build one.
+
+## Testcontainers runs leak into a running Compose stack
+
+**Found:** 2026-09-17, verifying S06 reconciliation live.
+
+`docker-compose.yml` publishes Kafka on `127.0.0.1:9092`, and test contexts that do not pin a bootstrap address fall
+back to that default. So while the stack was up, **agents' Testcontainers runs published to the real broker**, and
+order-service's mapper consumed their events into the real `orders` database.
+
+The evidence was three `SETTLEMENT` money orders with idempotency keys `settlement:fakecard:rpt_test_*`, written by
+`instrument-service` at 20:45–20:48. They looked exactly like proof that M11(a) was met — a reconciliation run
+producing a SETTLEMENT order. They were not: `reconciliation_runs` held **0 rows** and the instruments outbox held
+**0** `SETTLEMENT_RECEIVED` events. The orders came from test runs, through a shared broker.
+
+**Two costs, one nearly paid.** `LedgerOpenApiContractIT.theFreshnessResponseValidatesEvenWhenItCannotBeComputed`
+asserts the fail-closed path on the premise, stated in its own comment, that there is *"nothing at localhost:9092"* —
+false for anyone with the stack running, which is how S05-T10's agent saw it fail. And an acceptance criterion was
+one step from being promoted on contaminated rows.
+
+**Fixed** by pinning `spring.kafka.bootstrap-servers` to `127.0.0.1:1` in `LedgerApiTestBase`, so the fail-closed
+path is deterministic instead of contingent on a port being free.
+
+**Still open:** any test context that neither disables its consumer nor pins a bootstrap address will do this again.
+The general rule is that a test must not be able to reach a developer's running infrastructure by default.
+
+## CR-S05-03 — the payout submission path is restated rather than shared
+
+**Raised:** 2026-09-17, integrating S05-T12.
+
+`PayoutSubmitter` (S05-T10) is package-private, and its own javadoc anticipates the S05-T12 sweeper calling it. T12
+was scoped away from `payouts/**` to avoid a merge collision, so it restated the submission call in
+`recovery/PayoutResubmission` instead of sharing one.
+
+**This is not a duplicate-pay risk, and the reason matters.** The once-only guarantee does not live in either class:
+it is the guarded `CREATED → SUBMITTING` transition in `AttemptTransitions`, which is shared, plus the
+`one_inflight_payout` partial unique index. Both paths also read the same `payouts-enabled` switch. What is
+duplicated is the *call sequence*, not the safety property.
+
+**The cost** is ordinary drift: a change to phasing or to the kill-switch read must now be made in two places, with
+nothing enforcing it — the same shape as CR-S05-01's fixture duplication.
+
+**Fix:** make `PayoutSubmitter`'s submission method public, or extract one port both callers use, and delete
+`PayoutResubmission`. Not done here because it edits a module another agent owned during the same wave.
+
+## CR-S05-04 — FakeCard lookup cannot resolve a refund
+
+**Raised:** 2026-09-17, from S05-T12's review.
+
+`FakeCardInstrument.lookup` queries only `/fakecard/v1/charges?client_reference=`. A **refund** attempt therefore
+resolves as `NotFound`, because refunds live at a different resource.
+
+**Harmless today, and precisely why it is worth recording.** FakeCard declares idempotency keys, so the resolver
+retries with the same key rather than looking up — the broken branch is never taken. It becomes real the moment
+anything resolves a refund by lookup: the ahead-of-state path would report a refund unresolvable, and `NotFound` is
+the one answer that *permits a resubmission* (ADR-0010). A lookup that cannot see refunds must never be allowed to
+say "it never happened" about one.
+
+**Fix:** query refunds as well and merge the results, or return `Unavailable` for refund lookups until it does —
+`Unavailable` is safe where `NotFound` is not.
+
+## Agent worktrees are cut from a stale HEAD
+
+**Found:** 2026-09-17, across the parallel-agent waves. **My process failure, not the agents'.**
+
+Worktrees created with `isolation: "worktree"` did **not** branch from the `main` I had just merged. Every agent in
+the final wave — performance, chaos, dashboard — branched from `98f33603`, while `main` was at `4d0406b`. Neither
+S05-T10 (payout runs) nor S05-T12 (sweepers) existed in their trees.
+
+**What it cost, concretely:**
+
+- The dashboard agent skipped a payout-runs panel, reporting that "`payout-runs` appears nowhere in any Java source".
+  That was true *of its tree* and false of `main`, where `PayoutRunController` and `POST /v1/payout-runs` exist and
+  had already been driven live. A useful panel was dropped for a reason that looked like diligence.
+- The S05-T12 agent noticed its own base was stale, fast-forwarded itself, and said so in its report. That it caught
+  this and another agent did not is luck, not process.
+- The chaos agent was measuring crash recovery, a volume run and ablations against a system **older than `main`**, so
+  its numbers describe a tree missing two merged features.
+
+**Why it is easy to miss:** the divergence looks identical to the ordinary phantom-deletion diff. `git diff
+main..branch` shows everything merged after the base as deletions, which is normal and safe, so the genuinely
+important signal — that the agent could not see a feature — is buried in noise that is usually benign.
+
+**The rule:** check `git merge-base main <worktree-branch>` at launch, not at merge. If it is behind, either
+fast-forward the worktree before the agent starts or state in the brief which commits it will not see. A brief that
+says "S05-T10 is merged, use it" against a tree where it does not exist wastes the agent's judgement on a false
+premise — which is exactly what happened here.

@@ -33,6 +33,12 @@ abstract class LedgerApiTestBase {
         registry.add("spring.flyway.enabled", () -> "false");
         // No broker in this test, so the money-order listener stays stopped rather than dialling one.
         registry.add("ledger.consumer.enabled", () -> "false");
+        // Pin the broker address to something that cannot answer, rather than relying on nothing listening on the
+        // default localhost:9092. docker-compose.yml publishes Kafka on exactly that port, so with the stack running
+        // the freshness endpoint reached a REAL broker, computed real lag and answered "ok" — failing the test that
+        // asserts the fail-closed path. Worse, agents' Testcontainers runs published to that same broker and their
+        // settlement events were consumed into the live orders database, where they looked like evidence.
+        registry.add("spring.kafka.bootstrap-servers", () -> "127.0.0.1:1");
         registry.add("zs.auth.reader-token", () -> "test-reader-token");
     }
 
