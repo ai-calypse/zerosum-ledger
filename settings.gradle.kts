@@ -20,6 +20,8 @@ rootProject.name = "zerosum-ledger"
 include(
     "libs:money",
     "libs:testsupport",
+    // decision: CR-S09-01 — docs/scope-decisions.md#m13-evidence-harness (M13 (c) provenance, shared by both tools)
+    "libs:evidence",
     "libs:contracts",
     "libs:outbox",
     "libs:auth",

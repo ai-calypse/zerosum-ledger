@@ -24,17 +24,21 @@ It is a learning and portfolio project. No real money, cards or bank accounts ar
 ## Measured evidence
 
 Every number here comes from an executed run, not from reading the code. Test counts below were force-executed with
-`--rerun-tasks` on 2026-09-16, because a Gradle up-to-date pass proves only that nothing changed.
+`--rerun-tasks` on 2026-09-17 and read out of `build/test-results/*/TEST-*.xml`, because a Gradle up-to-date pass
+proves only that nothing changed — and because this build sets `failOnNoDiscoveredTests = false`, which means
+`BUILD SUCCESSFUL` on its own does not prove a single test ran.
 
 | What | Result | Where |
 |---|---|---|
-| Unit tests, 7 modules | 223 passed, 0 failed, 4 skipped | `./gradlew test` |
-| Integration tests, 6 modules (Testcontainers) | 180 passed, 0 failed, 7m54s | `./gradlew integrationTest` |
+| Unit tests, 9 modules | 254 passed, 0 failed, 4 skipped | `./gradlew test` |
+| Integration tests, 7 modules (Testcontainers) | 198 passed, 0 failed, 0 skipped | `./gradlew integrationTest` |
 | Ledger lock contention study (SP1) | [docs/results/sp1-lock-study.md](docs/results/sp1-lock-study.md) | measured |
 | Stack version compatibility spike (SP3) | [docs/results/sp3-stack-compat.md](docs/results/sp3-stack-compat.md) | measured |
 | Fake providers and adapters | [docs/results/s05/providers.md](docs/results/s05/providers.md) | measured |
 | Trace across API → outbox → Kafka → apply | [docs/results/s04-trace-propagation.md](docs/results/s04-trace-propagation.md) | measured |
 | End-to-end money path, live stack | 1 test, 0 failed | `./gradlew e2eTest` (needs the stack up) |
+| Ledger invariant verifier (I2, I3, I4) | 6 tests, 0 failed — fails a corrupted ledger and names the invariant | [docs/results/m13/verifier.md](docs/results/m13/verifier.md) |
+| Seeded W1 scenario runner | 12 tests, 0 failed — **not run against the live stack** | [docs/results/m13/simulator.md](docs/results/m13/simulator.md) |
 
 The four skipped tests are deliberate. The shared adapter contract suite runs against **both** providers, and on
 each one its settlement-report and webhook-parsing cases abort on a JUnit assumption naming the capability that is
@@ -52,8 +56,9 @@ Kept explicit on purpose — see [docs/scope-decisions.md](docs/scope-decisions.
   nothing resolves an `UNKNOWN` outcome yet, and the quiet-period rule is specified but unimplemented.
 - **No reconciliation, no webhook delivery, no fault injection.** Settlement reports are declared in the interface and
   implemented by nobody.
-- **Acceptance criteria M8–M11, M13 and M14 are unmet.** M7 is not claimed: both adapters pass one shared contract
-  suite, but only against a stub, never against the running fake-providers service.
+- **Acceptance criteria M8–M11 and M14 are unmet.** M13 is partial: the evidence harness is real and tested, but no
+  scenario has been run against the live stack, and the ablations (M13(b)) do not exist. M7 is not claimed: both
+  adapters pass one shared contract suite, but only against a stub, never against the running fake-providers service.
 
 ## Quickstart
 
@@ -105,6 +110,23 @@ docker compose ps
 ./gradlew integrationTest  # @Tag("integration"), Testcontainers (needs Docker)
 ./gradlew e2eTest          # @Tag("e2e") — needs the Compose stack running (step 3)
 ```
+
+### 4b. Run the evidence harness
+
+Each of these is a single command, and each writes a JSON file *and* a Markdown report to `docs/results/`, carrying a
+provenance block: hardware, pinned versions, the git SHA and whether the working tree was dirty, and every seed.
+
+```sh
+# a named scenario, N seeded runs, through the real order API (needs the stack up)
+./gradlew :tools:simulator:run --args="--scenario w1-trip-completed --runs 5 --seed 4242"
+
+# the ledger's invariants, read as the read-only `verifier` role
+./gradlew :tools:verifier:run --args="--jdbc-url jdbc:postgresql://127.0.0.1:5432/ledger --out docs/results/m13"
+```
+
+The same seed produces byte-identical orders, so re-running one is a replay rather than a duplicate. The verifier
+**exits non-zero and names the invariant** (I2, I3 or I4) when the books do not balance, and reports separately when
+it could not connect at all — "could not connect" is not evidence that the books balance.
 
 ### 5. Observability
 

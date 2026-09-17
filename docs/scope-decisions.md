@@ -312,3 +312,46 @@ failed in CI — the same hollowness in a new form.
 **What is still not covered end to end:** the provider path (instrument-service has no API), crash and restart
 (M4(a)), fault injection, and reconciliation. One test is not a suite, and the e2e job still runs only on a schedule
 or a manual dispatch, never on a pull request.
+
+<a id="m13-evidence-harness"></a>
+## M13 evidence harness — the simulator and verifier are real (CR-S09-01, 2026-09-17)
+
+**The problem.** `tools/simulator` and `tools/verifier` were eight-line stubs that printed `not implemented yet`.
+M13(a) was therefore recorded **NOT MET** in [docs/architecture.md](architecture.md), and every invariant claim in
+this repository came from a test rather than from a tool anyone could point at a database. The minimum cut
+([§1](#1-minimum-cut-invoked-as-written)) says the verifier is the one S06 deliverable that is *never* cut, precisely
+because it is what generates invariant evidence — so leaving it a stub contradicted the cut this project already made.
+
+**Decided.** Both tools are implemented as runnable Gradle applications, with tests that fail when the tools are
+wrong. Three of the decisions behind them are worth recording, because none is what the step documents proposed.
+
+**1. `libs/evidence` is a new module.** M13(c) requires the same provenance block — hardware, versions, git SHA and
+whether the tree was clean, and seeds — from *both* tools. Two hand-maintained copies of that block are one change
+away from drifting, and the provenance block is the single thing in a results file that must not. This is the
+argument CR-S05-01 already accepted for `libs/testsupport`, applied again. The block is captured by the tool that
+writes the result, never typed in afterwards, because a hand-copied SHA is the field that goes stale first.
+
+**2. The verifier copies ledger-service's invariant SQL instead of importing it.** `InvariantQueries` (D02-8) is a
+Spring `@Component`; importing it would put a whole service behind a command-line tool and make the verifier depend
+on the service whose books it exists to audit independently. D02-8 anticipated exactly this and wrote each check as a
+standalone `SELECT` needing only `SELECT` privileges, "so the S06 verifier can reuse them unchanged". **The cost is
+real and is not hidden: the two copies must be changed together.** What it buys is a verifier that can audit a
+database whose service is not running, which is the situation it exists for.
+
+**3. The simulator reuses `TripSequenceGenerator` from `libs/money`'s test fixtures**, which means a main source set
+depending on test fixtures. That is unusual and deliberate: S08-T01 is explicit that the simulator reuses the D01-10
+generators and that two generators are never maintained, and the W1 trip shape is exactly what that generator already
+produces. The price is that the fixtures' test-scoped dependencies land on the tool's runtime classpath. The
+alternative was a second, silently diverging copy of the randomness every seeded claim in this repository rests on.
+
+**Scope: three invariants and one scenario.** The verifier evaluates **I2, I3 and I4** only. I1 and I6–I12 are
+cross-store checks against the orders and instruments databases, which S06 owns and which is not built; I5 is the
+hash chain, which ledger-service's own `verify` endpoint evaluates. The simulator ships **one** scenario, W1
+(trip completed), with no adjustments, refunds, payouts, provider path or injected faults — those are S08's fault
+matrix and ablations, which remain deferred. M13(b) is therefore still NOT MET, and is not claimed.
+
+**Not run: the live stack.** Neither tool has been executed against the running Compose stack. The evidence files in
+[docs/results/m13/](results/m13/) record that as **Not run**, with the reason, rather than reporting a number from a
+run that did not happen. What *was* executed is recorded there too: the verifier against a real PostgreSQL container
+initialised by the real `infra/postgres` scripts, and the simulator CLI against a stub of the two service APIs. A
+stub run is not evidence about the money path, and it is labelled as such wherever it appears.
