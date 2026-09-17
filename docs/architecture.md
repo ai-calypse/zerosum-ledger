@@ -122,7 +122,7 @@ does not promote a criterion on a stub.
 |---|---|---|
 | Unit | 309 (0 failed, 4 skipped) | No containers |
 | Integration | 229 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
-| End-to-end | 1 (0 failed) — **not re-run in this pass** | The running seven-container Compose stack; this figure is from the earlier run recorded in [results/s09/e2e-money-path.md](results/s09/e2e-money-path.md) |
+| End-to-end | 1 (0 failed) | Re-measured on the running seven-container stack after all three merges; see [results/s05/deployment-check.md](results/s05/deployment-check.md) |
 
 Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of
 `build/test-results/*/TEST-*.xml` rather than from `BUILD SUCCESSFUL` — this build sets
