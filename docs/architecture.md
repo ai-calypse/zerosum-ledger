@@ -58,7 +58,7 @@ All ten ADRs are Accepted. See [docs/adr/](adr/).
 Compiled from `docs/results/**`, `docs/scope-decisions.md` and test sources. **Plan text is never evidence.** A
 criterion is MET only where a named test or recorded run demonstrates it.
 
-**20 MET · 8 PARTIAL · 15 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
+**21 MET · 8 PARTIAL · 14 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
 
 M13(a) moved from NOT MET to PARTIAL when the simulator and verifier stopped being stubs (CR-S09-01). It is
 deliberately **not** MET: the command exists and is exercised, but never against the running system, and this table
@@ -90,7 +90,7 @@ does not promote a criterion on a stub.
 | M6(c) Audit walk ≤ 3 calls | MET (manual) | Executed by hand against the live stack. **Not a test**, and not reproducible without re-running it |
 | M7(a) Both adapters pass one shared suite | PARTIAL | `PaymentInstrumentContractSuite` passes for both — but against a stub, never the real service. Webhook parsing is an explicit skip |
 | M7(b) Provider-boundary ArchUnit rule | MET | `InstrumentBoundaryTest`; fires on a canary |
-| M8(a) State × event table test | **NOT MET** | Deferred with T08; no such test exists |
+| M8(a) State × event table test | MET | `TransitionTableTest` (S05-T08): the state×event product is **generated, not hand-listed**, so adding a state or event without a table decision fails the build. Illegal transitions are logged and counted, asserted with a captured appender and a meter registry |
 | M8(b) 10,000 charges at 0.2 timeout rate | **NOT MET** | Fault knobs (T03) deferred |
 | M8(c) Nothing stuck in UNKNOWN > 5 min | **NOT MET** | instrument-service has no persistence; nothing resolves an Unknown |
 | M9(a) Bad signature / stale timestamp → 400 | **NOT MET** | No webhook receiver exists |
@@ -120,15 +120,18 @@ does not promote a criterion on a stub.
 
 | Layer | Count | What it runs against |
 |---|---|---|
-| Unit | 254 (0 failed, 4 skipped) | No containers |
-| Integration | 198 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
-| End-to-end | 1 (0 failed) | The running seven-container Compose stack |
+| Unit | 309 (0 failed, 4 skipped) | No containers |
+| Integration | 229 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
+| End-to-end | 1 (0 failed) — **not re-run in this pass** | The running seven-container Compose stack; this figure is from the earlier run recorded in [results/s09/e2e-money-path.md](results/s09/e2e-money-path.md) |
 
 Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of
 `build/test-results/*/TEST-*.xml` rather than from `BUILD SUCCESSFUL` — this build sets
 `failOnNoDiscoveredTests = false`, so a green build is not by itself evidence that anything ran. The previous figures
-here (223 / 180) were stale: they predate both S05-T07 and the M13 harness. Of the current totals, the evidence
-harness contributes 20 tests — `libs/evidence` 8 unit, `tools/simulator` 12 unit, `tools/verifier` 6 integration.
+here have been stale twice over. 223 / 180 predated S05-T07. The 254 / 198 that briefly replaced them were
+measured in a worktree holding neither the S05-T08 transition tables nor the S05-T03 fault knobs, so they were stale
+on arrival — parallel work makes a count true only for the tree it was taken on. 309 / 229 were measured on this
+tree, after all three merges. Of them, the evidence harness contributes 20 tests — `libs/evidence` 8 unit,
+`tools/simulator` 12 unit, `tools/verifier` 6 integration.
 
 The four skips are deliberate: the adapter contract suite aborts its settlement-report and webhook-parsing cases on
 assumptions naming the missing capability, once per provider, so a gap is reported rather than omitted.
