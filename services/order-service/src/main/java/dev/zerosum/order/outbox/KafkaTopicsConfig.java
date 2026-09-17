@@ -2,7 +2,6 @@ package dev.zerosum.order.outbox;
 
 import dev.zerosum.contracts.kafka.TopicDefinitions;
 import dev.zerosum.contracts.kafka.TopicDefinitions.TopicDefinition;
-import java.util.List;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,11 +16,24 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 class KafkaTopicsConfig {
 
+    /**
+     * Individual {@link NewTopic} beans: {@code KafkaAdmin} collects beans of that type, and a
+     * {@code List<NewTopic>} bean is of type {@code List}, so it is never seen. Declared as a list, no topic was
+     * provisioned by the running service.
+     */
     @Bean
-    List<NewTopic> orderTopics() {
-        return List.of(newTopic(TopicDefinitions.MONEY_ORDERS),
-                newTopic(TopicDefinitions.PAYMENT_EVENTS),
-                newTopic(TopicDefinitions.dlqFor(TopicDefinitions.PAYMENT_EVENTS)));
+    NewTopic orderMoneyOrdersTopic() {
+        return newTopic(TopicDefinitions.MONEY_ORDERS);
+    }
+
+    @Bean
+    NewTopic orderPaymentEventsTopic() {
+        return newTopic(TopicDefinitions.PAYMENT_EVENTS);
+    }
+
+    @Bean
+    NewTopic orderPaymentEventsDlqTopic() {
+        return newTopic(TopicDefinitions.dlqFor(TopicDefinitions.PAYMENT_EVENTS));
     }
 
     private static NewTopic newTopic(TopicDefinition definition) {

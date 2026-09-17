@@ -2,7 +2,6 @@ package dev.zerosum.ledger.kafka;
 
 import dev.zerosum.contracts.kafka.TopicDefinitions;
 import dev.zerosum.contracts.kafka.TopicDefinitions.TopicDefinition;
-import java.util.List;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,10 +16,23 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 class KafkaTopicsConfig {
 
+    /**
+     * Declared as individual {@link NewTopic} beans, not as a {@code List<NewTopic>}.
+     *
+     * <p>Spring's {@code KafkaAdmin} looks up beans <em>of type</em> {@code NewTopic}; a bean whose type is
+     * {@code List} is invisible to it. Declared as a list, these topics were never provisioned by the running
+     * services at all — the consumer sat on {@code UNKNOWN_TOPIC_OR_PARTITION} while the outbox backed up, and
+     * {@code TopicProvisioningIT} did not catch it because that test creates topics through the admin client
+     * directly and so never exercised this path.
+     */
     @Bean
-    List<NewTopic> ledgerTopics() {
-        return List.of(newTopic(TopicDefinitions.MONEY_ORDERS),
-                newTopic(TopicDefinitions.dlqFor(TopicDefinitions.MONEY_ORDERS)));
+    NewTopic moneyOrdersTopic() {
+        return newTopic(TopicDefinitions.MONEY_ORDERS);
+    }
+
+    @Bean
+    NewTopic moneyOrdersDlqTopic() {
+        return newTopic(TopicDefinitions.dlqFor(TopicDefinitions.MONEY_ORDERS));
     }
 
     /**
