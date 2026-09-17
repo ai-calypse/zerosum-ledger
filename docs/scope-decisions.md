@@ -221,6 +221,18 @@ itself. The duplication is cheap to carry and expensive to get wrong right now.
 `infra/postgres/init.sh` handling, the pinned image lookup, or the role list must be applied in three places, and
 nothing enforces that. If a fourth service needs it, extract first and add the service second.
 
+**Discharged, 2026-09-17 (S05-T07).** instrument-service was the fourth service to need it, so the extraction was
+done first, as this entry required. `libs/testsupport` now holds `ZsTestDatabase`, parameterised by database name,
+migration path and durability; instrument-service uses it, and **fake-providers was migrated onto it and its suite
+re-run green (16 tests, 0 failures)**, so the shared class is proven on two services rather than being a fourth copy.
+
+Two deliberate omissions: `pooledDataSource` is not included (only ledger-service uses it), and the driver's
+`PGSimpleDataSource` is used rather than Spring's, so the module needs no Spring dependency.
+
+**Still true:** order-service and ledger-service keep their own copies. That is two implementations, not one, and a
+change to the init-script wiring or the image lookup still has to be made in both places. Migrating them is follow-up
+work and is not done.
+
 ## ADR-0010 was taken by the provider abstraction, not the quiet period
 
 **Noted:** 2026-09-16, during S05-T04.

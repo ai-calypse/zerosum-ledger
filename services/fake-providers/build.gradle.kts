@@ -6,7 +6,8 @@ dependencies {
     // decision: D05-2 — fake-providers deliberately depends on NO domain library. It simulates an external system,
     // so it speaks minor units and currency codes over HTTP. Sharing Money with it would let a change in our domain
     // silently change what the "provider" does, and the simulation would stop being independent evidence.
-    testImplementation(libs.testcontainers.postgresql)
+    // decision: CR-S05-01 — the shared container fixture, replacing this service's own copy.
+    testImplementation(project(":libs:testsupport"))
 }
 
 tasks.withType<Test>().configureEach {
