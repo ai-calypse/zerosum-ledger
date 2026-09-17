@@ -58,7 +58,11 @@ All ten ADRs are Accepted. See [docs/adr/](adr/).
 Compiled from `docs/results/**`, `docs/scope-decisions.md` and test sources. **Plan text is never evidence.** A
 criterion is MET only where a named test or recorded run demonstrates it.
 
-**20 MET · 7 PARTIAL · 16 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
+**20 MET · 8 PARTIAL · 15 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
+
+M13(a) moved from NOT MET to PARTIAL when the simulator and verifier stopped being stubs (CR-S09-01). It is
+deliberately **not** MET: the command exists and is exercised, but never against the running system, and this table
+does not promote a criterion on a stub.
 
 | Criterion | Status | Evidence |
 |---|---|---|
@@ -96,9 +100,9 @@ criterion is MET only where a named test or recorded run demonstrates it.
 | M12(a) One trace across the pipeline | PARTIAL | `s04-trace-propagation.md`: connected **by links**, deliberately not claimed as one parent-child trace |
 | M12(b) Dashboards for flow, invariants, providers | PARTIAL | Flow and invariants load from the repository; the providers dashboard is blocked on S05 |
 | M12(c) Alert rules fire in a test | PARTIAL | 6 rules provisioned; **1 of 5 conditions observed firing** (outbox backlog, t+212 s under a real Kafka outage) |
-| M13(a) One command runs a named scenario | **NOT MET** | `SimulatorMain` and `VerifierMain` are stubs printing "not implemented yet" |
+| M13(a) One command runs a named scenario | PARTIAL | Both tools are real CLIs (CR-S09-01). `./gradlew :tools:simulator:run` runs the W1 scenario for N seeded runs and writes JSON + Markdown; `:tools:verifier:run` checks I2–I4 as the read-only role. Proven by `VerifierIT` (6 tests, against a real database) and `SimulatorStubRunTest` (6 tests, against a **stub**). **Never run against the live stack**, so the money-path half is [Not run](results/m13/simulator.md#2-status) |
 | M13(b) Ablations A1–A4 | **NOT MET** | S08 not started |
-| M13(c) Results record hardware, versions, SHA, seeds | PARTIAL | The convention exists and SP1/SP3 comply; there are few results for it to govern |
+| M13(c) Results record hardware, versions, SHA, seeds | PARTIAL | The convention exists; SP1/SP3 and both M13 results comply. It is now *enforced by code*: `libs/evidence` captures the block — including whether the tree was dirty — and both tools write it, so it cannot be typed in stale. Still a convention, not a check: nothing fails a build for omitting it |
 | M14(a) Fresh clone → W1 in ≤ 10 min | **NOT MET** | Never timed; no timing is claimed anywhere |
 | M14(b) Architecture doc, ADRs, OpenAPI | PARTIAL | This document, 10 ADRs, and two OpenAPI specs with drift tests. `openapi/instrument-service.yaml` is absent |
 | M14(c) Demo video | **NOT MET** | Not recorded |
@@ -116,9 +120,15 @@ criterion is MET only where a named test or recorded run demonstrates it.
 
 | Layer | Count | What it runs against |
 |---|---|---|
-| Unit | 223 (0 failed, 4 skipped) | No containers |
-| Integration | 180 (0 failed) | Real PostgreSQL and Kafka via Testcontainers |
+| Unit | 254 (0 failed, 4 skipped) | No containers |
+| Integration | 198 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
 | End-to-end | 1 (0 failed) | The running seven-container Compose stack |
+
+Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of
+`build/test-results/*/TEST-*.xml` rather than from `BUILD SUCCESSFUL` — this build sets
+`failOnNoDiscoveredTests = false`, so a green build is not by itself evidence that anything ran. The previous figures
+here (223 / 180) were stale: they predate both S05-T07 and the M13 harness. Of the current totals, the evidence
+harness contributes 20 tests — `libs/evidence` 8 unit, `tools/simulator` 12 unit, `tools/verifier` 6 integration.
 
 The four skips are deliberate: the adapter contract suite aborts its settlement-report and webhook-parsing cases on
 assumptions naming the missing capability, once per provider, so a gap is reported rather than omitted.
