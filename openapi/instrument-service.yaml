@@ -1,0 +1,257 @@
+# decision: D05-13 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
+# The instrument-service API. S05-T08 starts this file with the attempt read and cancel operations; S05-T09 to T11
+# add instrument registration, payout runs and the webhook receiver to the same file, each owned by its own decision.
+# Conventions follow docs/zerosum_ledger_mvp_plan.md#rest-apis: every path is under /v1, every error is
+# application/problem+json (RFC 9457) with a stable `code`, and authenticated operations return 401 without a valid
+# token and 403 for the wrong role (§0.3 C9).
+openapi: 3.1.0
+info:
+  title: ZeroSum instrument-service API
+  version: "1.0.0"
+  description: |
+    Payment attempts and the providers behind them.
+
+    **Attempt history is the audit trail.** A status is never overwritten in place: every change appends a row to the
+    attempt's transition history with the cause that produced it, so "why is this attempt in `NEEDS_REVIEW`" is
+    answered by reading rows rather than by correlating logs. The read operation returns that history in sequence
+    order.
+
+    **What is not here.** The instrument token is never returned: it is the one field on an attempt that identifies a
+    payment instrument, and an endpoint that returned it would put it in every client log (D00-8).
+servers:
+  - url: http://localhost:8083
+    description: Local Compose topology
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/payment-attempts/{attempt_id}:
+    get:
+      operationId: getPaymentAttempt
+      summary: One attempt with its transition history
+      description: |
+        Requires the **reader** role, which writer and admin tokens also satisfy.
+
+        Returns the attempt as it stands plus every status it has been through, in `seq` order. History is
+        append-only and numbered per attempt, so the sequence is the order the statuses actually happened in.
+      tags: [payment-attempts]
+      parameters:
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200':
+          description: The attempt and its history.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttemptDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /v1/payment-attempts/{attempt_id}/cancel:
+    post:
+      operationId: cancelPaymentAttempt
+      summary: Cancel an attempt that has not been submitted
+      description: |
+        Requires the **admin** role: a cancellation changes money state, so it is not a reader operation.
+
+        Cancellation is allowed **only from `CREATED`** (master §5.11). Anything else is a `not_cancellable` conflict
+        whose detail names the status the attempt is actually in — the caller's next step differs, since an attempt
+        already `SUBMITTING` may still decline on its own, while one already `SUCCEEDED` has moved money and needs a
+        refund rather than a cancellation.
+
+        A cancel racing a submit is settled by the optimistic version guard rather than by the status check above:
+        exactly one of them wins, and the loser gets the same conflict with the current status.
+      tags: [payment-attempts]
+      parameters:
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200':
+          description: Cancelled. The body is the attempt, now `CANCELLED`, with the cancellation in its history.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttemptDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Static per-role bearer token (master §5.11), verified by the shared `libs/auth` module. Reading an attempt
+        needs the reader role; cancelling one needs admin.
+
+  parameters:
+    AttemptId:
+      name: attempt_id
+      in: path
+      required: true
+      description: The attempt's UUID, which is also the client reference sent to the provider.
+      schema: { $ref: '#/components/schemas/Uuid' }
+
+  responses:
+    BadRequest:
+      description: The attempt id is not a UUID.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing or invalid token.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Valid token for the wrong role.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: No such attempt.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: The attempt is past `CREATED` and can no longer be cancelled.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unavailable:
+      description: The instruments database is unreachable.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Uuid:
+      type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    NullableUuid:
+      type: [string, 'null']
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    CurrencyCode:
+      type: string
+      pattern: '^[A-Z]{3}$'
+
+    AttemptStatus:
+      type: string
+      description: |
+        The attempt's status. The legal moves between these are the D05-5 transition tables, derived from the master's
+        state-machine diagrams; nothing changes a status except the transition service, and only along an arrow those
+        tables draw.
+      enum: [CREATED, SUBMITTING, PENDING, UNKNOWN, SUCCEEDED, DECLINED, FAILED, SETTLED, RETURNED, CANCELLED, NEEDS_REVIEW]
+
+    AttemptDetail:
+      type: object
+      additionalProperties: false
+      required: [attempt, transitions]
+      properties:
+        attempt: { $ref: '#/components/schemas/Attempt' }
+        transitions:
+          type: array
+          description: Every status change, in `seq` order.
+          items: { $ref: '#/components/schemas/AttemptTransition' }
+
+    Attempt:
+      type: object
+      additionalProperties: false
+      # Nullable fields are not required: whether a null is serialized or omitted is a mapper setting, and pinning
+      # the contract to it would break on a Jackson default rather than on a real change. additionalProperties still
+      # catches a misnamed or invented field, and the schemas below still constrain these when present.
+      required: [attempt_id, kind, status, order_group_id, entity_id, provider, currency, amount_minor,
+                 blocked_on_capture, version, created_at, updated_at]
+      properties:
+        attempt_id: { $ref: '#/components/schemas/Uuid' }
+        kind:
+          type: string
+          enum: [CHARGE, REFUND, PAYOUT]
+        status: { $ref: '#/components/schemas/AttemptStatus' }
+        order_group_id:
+          type: string
+          description: The trip or group this attempt belongs to; also the partition key of its payment events.
+        source_order_id:
+          allOf:
+            - $ref: '#/components/schemas/NullableUuid'
+          description: The COMMERCE order that triggered a charge or refund. Null for payouts, which come from a run.
+        payout_run_id:
+          allOf:
+            - $ref: '#/components/schemas/NullableUuid'
+          description: The payout run that created this attempt. Null for charges and refunds.
+        entity_id:
+          type: string
+          description: The rider or driver whose money this moves, for example `rider:R1`.
+        provider:
+          type: string
+          description: The provider this attempt is submitted to, for example `fakecard`.
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: A positive magnitude; the direction is carried by `kind`.
+        provider_ref:
+          type: [string, 'null']
+          description: The provider's own reference, once it has given one.
+        failure_code:
+          type: [string, 'null']
+          description: Why it was declined, failed or returned. Null while the attempt has not failed.
+        blocked_on_capture:
+          type: boolean
+          description: A refund waiting for its original charge to resolve before it can be submitted.
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The optimistic guard. Every status change requires the version read with the attempt.
+        created_at:
+          type: string
+          description: RFC 3339 with a Z offset.
+        updated_at:
+          type: string
+          description: RFC 3339 with a Z offset.
+
+    AttemptTransition:
+      type: object
+      additionalProperties: false
+      required: [seq, to_status, cause, at]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+          description: Gapless per attempt, starting at 1.
+        from_status:
+          oneOf:
+            - $ref: '#/components/schemas/AttemptStatus'
+            - type: 'null'
+          description: Null only for a row written without a prior status.
+        to_status: { $ref: '#/components/schemas/AttemptStatus' }
+        cause:
+          type: string
+          description: What produced the change, for example a webhook, a sweeper or the cancel endpoint.
+        at:
+          type: string
+          description: RFC 3339 with a Z offset.
+
+    Problem:
+      # RFC 9457, plus the stable `code` the master's conventions require.
+      type: object
+      required: [status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          enum: [invalid_attempt_id, attempt_not_found, not_cancellable, unauthorized, forbidden, database_unavailable]
+          description: Stable machine-readable error code; callers branch on this, never on `title`.

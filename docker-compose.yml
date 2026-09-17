@@ -251,6 +251,12 @@ services:
       # the same class of defect as a localhost broker bootstrap: invisible to every test, fatal in the stack.
       ZS_FAKECARD_BASE_URL: http://fake-providers:8090
       ZS_FAKEBANK_BASE_URL: http://fake-providers:8090
+      # decision: D03-4 — static per-role tokens, from S05-T08 when this service gained its first authenticated
+      # endpoints. Without these the container authenticates nobody: the same defect that order-service and
+      # ledger-service shipped, invisible to every test because tests set the tokens themselves.
+      ZS_WRITER_TOKENS: ${ZS_WRITER_TOKENS:?set ZS_WRITER_TOKENS in .env}
+      ZS_READER_TOKEN: ${ZS_READER_TOKEN:?set ZS_READER_TOKEN in .env}
+      ZS_ADMIN_TOKEN: ${ZS_ADMIN_TOKEN:?set ZS_ADMIN_TOKEN in .env}
       ZS_INSTRUMENTS_OWNER_DB_PASSWORD: ${ZS_INSTRUMENTS_OWNER_DB_PASSWORD:?set ZS_INSTRUMENTS_OWNER_DB_PASSWORD in .env}
       ZS_INSTRUMENTS_APP_DB_PASSWORD: ${ZS_INSTRUMENTS_APP_DB_PASSWORD:?set ZS_INSTRUMENTS_APP_DB_PASSWORD in .env}
     ports:
