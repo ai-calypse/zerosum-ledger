@@ -75,6 +75,10 @@ The residual reconciles exactly: 29,500 ours − 29,354 settled = 146, which is 
 
 After both runs the ledger holds 143 applied orders; invariants I2–I4 consistent, 0 quarantined.
 
+These figures are **as of 08:43 UTC**. The same stack later received the dashboard's generated data and one
+test-leaked `COLLECTION` order ([scope-decisions](../../scope-decisions.md#testcontainers-runs-leak-into-a-running-compose-stack)),
+so its clearing balance moved on; the two reconciliation runs themselves are stored and unchanged.
+
 ## 6. Gate compared against
 
 - **M11(a)**, a matching settlement report produces a `SETTLEMENT` order: **met end to end**, on the real

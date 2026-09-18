@@ -29,3 +29,4 @@ Thumbs.db
 
 # Prompt-02 documentation bundle (duplicate of docs/)
 /zerosum-ledger-docs.zip
+.gstack/

@@ -63,6 +63,13 @@ tasks.withType<Test>().configureEach {
     // An empty tag selection is reported, never failed or passed silently. Projects without test
     // sources are reported by Gradle itself as NO-SOURCE.
     failOnNoDiscoveredTests = false
+    // The services default ZS_KAFKA_BOOTSTRAP to localhost:9092 and ZS_OTLP_METRICS_URL to localhost:4318, which is
+    // exactly where a running Compose stack listens. A Spring context without its own Testcontainers broker then
+    // published into the live stack and booked a real order (docs/scope-decisions.md, "Testcontainers runs leak").
+    // Pinning each test base class missed eleven of them, so the dead address is set once here. A test with its own
+    // broker still wins: @DynamicPropertySource outranks the application.yml placeholder this feeds.
+    environment("ZS_KAFKA_BOOTSTRAP", "127.0.0.1:1")
+    environment("ZS_OTLP_METRICS_URL", "http://127.0.0.1:1/v1/metrics")
     val taskPath = path
     addTestListener(object : TestListener {
         override fun beforeSuite(suite: TestDescriptor) {}

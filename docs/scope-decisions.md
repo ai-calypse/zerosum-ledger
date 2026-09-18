@@ -521,8 +521,17 @@ one step from being promoted on contaminated rows.
 **Fixed** by pinning `spring.kafka.bootstrap-servers` to `127.0.0.1:1` in `LedgerApiTestBase`, so the fail-closed
 path is deterministic instead of contingent on a port being free.
 
-**Still open:** any test context that neither disables its consumer nor pins a bootstrap address will do this again.
-The general rule is that a test must not be able to reach a developer's running infrastructure by default.
+**It did happen again, 2026-09-18 08:54 UTC.** `AttemptEndpointsIT` (instrument-service), run while the stack was
+up, published a `CHARGE_SUCCEEDED` event into the live broker, and the running order-service booked it as a real
+`COLLECTION` order (`provider:fakecard/clearing +2,500`). The ledger stayed consistent, and the order was left in
+place because the ledger is append-only. The dashboard agent that found it pinned three tests and counted eleven
+more that could do the same.
+
+**Fixed at the root** instead of per test: `zs.java-conventions` sets `ZS_KAFKA_BOOTSTRAP=127.0.0.1:1` and
+`ZS_OTLP_METRICS_URL=http://127.0.0.1:1/v1/metrics` for every `Test` task. Every service reads its broker and metrics
+endpoint through those placeholders, so no test can reach a running stack's Kafka or Prometheus by default. A test
+with its own Testcontainers broker is unaffected, because `@DynamicPropertySource` outranks the placeholder. The
+e2e and chaos tests reach the stack over HTTP, JDBC and `docker exec`, never through these variables.
 
 ## CR-S05-03 — the payout submission path is restated rather than shared
 
