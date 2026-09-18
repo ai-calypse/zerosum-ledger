@@ -141,9 +141,11 @@ configuration is reachable only if listener concurrency is raised while every or
 
 **Recorded cap (S07-T06 edge case).** On one hot entity, 32 concurrent writers × 50-order batches is the largest
 configuration measured that stays inside the timeouts (lock-wait p95 2.3 s against a 5 s statement timeout — not a
-comfortable margin); 32 × 100 is outside them. **Not fixed here**: the classifier and the timeouts are S02-owned (D02-4).
-The two candidate changes — treating 57014 raised while acquiring entity locks as transient, or capping
-concurrency × batch per hot entity — need a change request against D02-4.
+comfortable margin); 32 × 100 is outside them. **Fixed after this study** by the first of the two candidate changes:
+a 57014 raised while acquiring entity locks is now transient and retried
+([CR-S07-01](../../scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed),
+commit `f9baa0e`, with a regression test that fails without it). The study was **not re-run** after the fix, so the
+32 × 100 windows stay invalid and no post-fix throughput is claimed for that configuration.
 
 ### 8.4 Per-window concurrent load
 

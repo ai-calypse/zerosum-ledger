@@ -33,8 +33,9 @@ upper bound. A quiet-machine re-run has not been done.
 - **A valid order can be quarantined under hot-entity contention.** At 32 writers × 100-order batches on one entity, the
   entity-lock statement exceeded the 5 s statement timeout; SQLSTATE 57014 is not in the retry classifier's transient
   set, so the engine isolated 58 batches and quarantined 3 valid orders. No money lost, I2–I5 held. Not reachable with
-  the deployed single-threaded listener; recorded cap: ≤ 50-order batches at 32 writers per hot entity. Fix needs a
-  change request against D02-4 ([batched-vs-per-order.md §8.3](batched-vs-per-order.md#83-the-32--100-configuration-quarantined-valid-orders)).
+  the deployed single-threaded listener. **Fixed** as [CR-S07-01](../../scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed)
+  (`f9baa0e`): a 57014 raised while acquiring entity locks is now retried, with a regression test that fails without
+  the fix. The study was not re-run afterwards ([batched-vs-per-order.md §8.3](batched-vs-per-order.md#83-the-32--100-configuration-quarantined-valid-orders)).
 - **`ledger.apply.default-batch-size` is dead configuration.** It is validated but never read; the pipeline already
   applies each Kafka poll as one batch (~12.5 orders per transaction at 200/s, ~33 at 500/s).
 - **Past ~100 platform entities, lock contention is gone** (lock-wait p95 3 ms) and the per-order transaction itself is
