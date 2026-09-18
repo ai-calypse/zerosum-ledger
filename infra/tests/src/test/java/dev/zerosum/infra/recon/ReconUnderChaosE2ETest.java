@@ -242,7 +242,12 @@ class ReconUnderChaosE2ETest {
                 break;
             }
             terminal.set(countTerminal(prefix));
-            if (!instrumentsKilled && posted.get() >= killInstrumentsAt) {
+            // F3 aims at an attempt between its provider call and its state update: once past the point, it waits (for
+            // at most 15 more orders) until one of this cycle's attempts is SUBMITTING. Webhooks settle most lost
+            // responses within a second, so an unaimed kill usually finds none.
+            if (!instrumentsKilled && posted.get() >= killInstrumentsAt && (posted.get() >= killInstrumentsAt + 15
+                    || Stack.count("instruments", "SELECT count(*) FROM payment_attempts WHERE order_group_id LIKE ? "
+                    + "AND status = 'SUBMITTING'", prefix + "%") > 0)) {
                 kills.add(kill(INSTRUMENT_SERVICE, posted.get(), prefix, downMillis, new AtomicBoolean()));
                 instrumentsKilled = true;
             } else if (instrumentsKilled && !ordersKilled && posted.get() >= killOrdersAt) {
