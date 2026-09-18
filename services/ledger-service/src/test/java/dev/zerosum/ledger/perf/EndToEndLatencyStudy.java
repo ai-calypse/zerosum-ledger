@@ -156,12 +156,13 @@ class EndToEndLatencyStudy {
         if (!fullStudy) {
             System.out.println("ZS-PERF WARNING this run uses overrides and is a harness smoke check, not evidence");
         }
-        assertEquals(PerfParameters.overridesRequested(), !fullStudy,
+        assertEquals(PerfParameters.qualityOverridesRequested(), !fullStudy,
                 "override properties must reach the test JVM; the ledger build forwards zs.perf.* explicitly");
 
         List<E2eRun> runs = new ArrayList<>();
-        // Evidence goes to docs/results/perf/; a smoke run goes to a scratch directory (S07-T04 instruction 8).
-        Path raw = (fullStudy ? RESULTS
+        // Evidence goes to docs/results/perf/<run label>/; a smoke run goes to a scratch directory (S07-T04
+        // instruction 8), so it can never be mistaken for, or overwrite, a measured result.
+        Path raw = (fullStudy ? RESULTS.resolve(PerfParameters.runLabel())
                 : LedgerTestDatabase.ROOT.resolve("services/ledger-service/build/perf-smoke"))
                 .resolve("e2e-latency-runs.json");
 
@@ -222,8 +223,12 @@ class EndToEndLatencyStudy {
         double applyMicrosBefore = applyTimer == null ? 0 : applyTimer.totalTime(TimeUnit.MICROSECONDS);
 
         Arrivals arrivals = append(ordersTx, writer, parameters, rate, parameters.e2eWindowSeconds(), base + 1);
+        Instant windowEnd = Instant.now();
         long lastId = maxOutboxId(ordersTemplate);
         awaitQuiesce(ordersTemplate);
+        // The window's orders keep flowing through the relay and the listener until the pipeline quiesces, so a
+        // check for overlapping load has to cover this instant too, not just the end of the arrivals.
+        Instant quiesced = Instant.now();
 
         long applyBatches = (applyTimer == null ? 0 : applyTimer.count()) - applyCountBefore;
         double applyMicros = (applyTimer == null ? 0 : applyTimer.totalTime(TimeUnit.MICROSECONDS)) - applyMicrosBefore;
@@ -266,7 +271,8 @@ class EndToEndLatencyStudy {
 
         long[] invariants = i2ToI4();
         long quarantined = countInLedger("SELECT count(*) FROM quarantined_orders");
-        return new E2eRun(rate, repetition, parameters.e2eWindowSeconds(), outboxRows.size(), endToEnd.size(), missing,
+        return new E2eRun(rate, repetition, parameters.e2eWindowSeconds(), windowStart.toString(),
+                windowEnd.toString(), quiesced.toString(), outboxRows.size(), endToEnd.size(), missing,
                 arrivals.appended(), arrivals.late(),
                 percentiles(endToEnd), percentiles(outboxStage), percentiles(kafkaApplyStage),
                 applyBatches, applyBatches == 0 ? 0 : applyMicros / applyBatches, quarantined,
@@ -466,7 +472,9 @@ class EndToEndLatencyStudy {
             Files.createDirectories(file.getParent());
             StringBuilder json = new StringBuilder("{\n");
             json.append("  \"study\": \"S07 end-to-end order-to-apply latency (P2)\",\n")
+                    .append("  \"run_label\": \"").append(PerfParameters.runLabel()).append("\",\n")
                     .append("  \"full_study\": ").append(fullStudy).append(",\n")
+                    .append("  \"rates\": \"").append(parameters.e2eRates()).append("\",\n")
                     .append("  \"seed\": ").append(seed.value()).append(",\n")
                     .append("  \"window_seconds\": ").append(parameters.e2eWindowSeconds()).append(",\n")
                     .append("  \"warmup_seconds\": ").append(parameters.e2eWarmupSeconds()).append(",\n")
@@ -503,7 +511,8 @@ class EndToEndLatencyStudy {
      * @param applyBatchMeanMicros mean apply batch duration from the engine's own timer, which bounds how much
      *                             {@code applied_at} understates the moment the balance became visible
      */
-    private record E2eRun(int rate, int repetition, int windowSeconds, long windowOrders, long measuredOrders,
+    private record E2eRun(int rate, int repetition, int windowSeconds, String windowStartUtc, String windowEndUtc,
+            String quiescedUtc, long windowOrders, long measuredOrders,
             long missingOrders, long appended, long lateArrivals, long[] endToEnd, long[] outboxStage,
             long[] kafkaApply, long applyBatches, double applyBatchMeanMicros, long quarantined, long i2Violations,
             long i3Violations, long i4Violations, long i5Violations, int maxLatePercent) {
@@ -518,13 +527,15 @@ class EndToEndLatencyStudy {
         }
 
         E2eRun withI5(long violations) {
-            return new E2eRun(rate, repetition, windowSeconds, windowOrders, measuredOrders, missingOrders, appended,
+            return new E2eRun(rate, repetition, windowSeconds, windowStartUtc, windowEndUtc, quiescedUtc, windowOrders,
+                    measuredOrders, missingOrders, appended,
                     lateArrivals, endToEnd, outboxStage, kafkaApply, applyBatches, applyBatchMeanMicros, quarantined,
                     i2Violations, i3Violations, i4Violations, violations, maxLatePercent);
         }
 
         String summary() {
-            return String.format("e2e rate=%d rep=%d appended=%d measured=%d missing=%d late=%d "
+            return String.format("e2e window=" + windowStartUtc + ".." + quiescedUtc
+                            + " rate=%d rep=%d appended=%d measured=%d missing=%d late=%d "
                             + "p50=%.1fms p95=%.1fms p99=%.1fms outboxP95=%.1fms kafkaApplyP95=%.1fms "
                             + "applyBatches=%d applyMeanMs=%.1f quar=%d i2=%d i3=%d i4=%d i5=%d valid=%s",
                     rate, repetition, appended, measuredOrders, missingOrders, lateArrivals,
@@ -535,6 +546,8 @@ class EndToEndLatencyStudy {
 
         String toJson() {
             return String.format("{\"rate_orders_per_second\": %d, \"repetition\": %d, \"window_seconds\": %d, "
+                            + "\"window_start_utc\": \"" + windowStartUtc + "\", \"window_end_utc\": \"" + windowEndUtc
+                            + "\", \"quiesced_utc\": \"" + quiescedUtc + "\", "
                             + "\"window_orders\": %d, \"measured_orders\": %d, \"missing_orders\": %d, "
                             + "\"appended\": %d, \"late_arrivals\": %d, \"held_the_rate\": %s, "
                             + "\"end_to_end_p50_micros\": %d, \"end_to_end_p95_micros\": %d, "

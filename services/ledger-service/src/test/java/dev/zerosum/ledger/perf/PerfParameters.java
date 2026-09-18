@@ -78,20 +78,41 @@ record PerfParameters(int windowSeconds, int warmupSeconds, int repetitions, int
                 e2eLateThresholdMillis, e2eMaxLatePercent);
     }
 
-    /** True when nothing was overridden, so the run may be reported as evidence. */
+    /**
+     * True when every per-window quality setting is at its file value, so the run may be reported as evidence.
+     *
+     * <p>Selecting a subset of the grid (which batch sizes, writer counts, entity counts or rates to measure) does not
+     * make a run a smoke check: every window it does measure is measured exactly as the file says, and running one
+     * measurement per invocation is what lets each be committed as soon as it finishes. Shortening a window, a warm-up
+     * or the repetitions is what turns a run into a smoke check, because that changes what each number means.
+     */
     boolean isFullStudy(PerfParameters fromFile) {
-        return equals(fromFile);
+        return windowSeconds == fromFile.windowSeconds && warmupSeconds == fromFile.warmupSeconds
+                && repetitions == fromFile.repetitions && e2eWindowSeconds == fromFile.e2eWindowSeconds
+                && e2eWarmupSeconds == fromFile.e2eWarmupSeconds;
     }
 
     /**
-     * Whether any override was requested at all. Checked against {@link #isFullStudy} so a {@code -D} that never
-     * reached the forked test JVM cannot silently turn a smoke check into a six-hour study, or the reverse — the
-     * failure SP1 hit and guarded against (D02-10).
+     * Whether a quality override was requested. Checked against {@link #isFullStudy} so the harness notices when the
+     * requested overrides and the parameters it actually runs with disagree (D02-10).
      */
-    static boolean overridesRequested() {
-        return List.of(WINDOW_PROPERTY, WARMUP_PROPERTY, REPETITIONS_PROPERTY, BATCH_SIZES_PROPERTY,
-                        BATCH_WRITERS_PROPERTY, ENTITY_COUNTS_PROPERTY, E2E_RATES_PROPERTY).stream()
+    static boolean qualityOverridesRequested() {
+        return List.of(WINDOW_PROPERTY, WARMUP_PROPERTY, REPETITIONS_PROPERTY).stream()
                 .anyMatch(name -> System.getProperty(name) != null);
+    }
+
+    static final String RUN_LABEL_PROPERTY = "zs.perf.runLabel";
+
+    /**
+     * The subdirectory of {@code docs/results/perf/} this invocation writes to, so separate invocations never
+     * overwrite each other's raw data.
+     */
+    static String runLabel() {
+        String label = System.getProperty(RUN_LABEL_PROPERTY, "run");
+        if (!label.matches("[A-Za-z0-9._-]{1,64}")) {
+            throw new IllegalArgumentException(RUN_LABEL_PROPERTY + " must be a plain directory name: " + label);
+        }
+        return label;
     }
 
     private static int intOverride(String property, int fallback) {

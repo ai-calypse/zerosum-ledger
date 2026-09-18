@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -76,7 +77,8 @@ class ApplyThroughputStudy {
      * instruction 8), so a three-second harness check can never be mistaken for, or overwrite, a measured result.
      */
     private static Path resultsDir(boolean fullStudy) {
-        return fullStudy ? RESULTS : LedgerTestDatabase.ROOT.resolve("services/ledger-service/build/perf-smoke");
+        return fullStudy ? RESULTS.resolve(PerfParameters.runLabel())
+                : LedgerTestDatabase.ROOT.resolve("services/ledger-service/build/perf-smoke");
     }
 
     @Test
@@ -135,12 +137,14 @@ class ApplyThroughputStudy {
                         TimeUnit.SECONDS.toNanos(parameters.warmupSeconds()), null, base);   // warm-up, not measured
 
                 PerfWindow window = new PerfWindow();
+                Instant windowStart = Instant.now();
                 drive(driver, payloads, writers, batchSize,
                         TimeUnit.SECONDS.toNanos(parameters.windowSeconds()), window, base + 1);
+                Instant windowEnd = Instant.now();
 
                 long[] invariants = i2ToI4(db);
                 PerfRun run = new PerfRun(measurement, writers, batchSize, entityCount, repetition,
-                        parameters.windowSeconds(), window.applied.get(),
+                        parameters.windowSeconds(), windowStart.toString(), windowEnd.toString(), window.applied.get(),
                         window.ordersPerSecond(parameters.windowSeconds()), window.batchP50Micros(),
                         window.batchP95Micros(), window.lockWaitP50Micros(), window.lockWaitP95Micros(),
                         window.batches.get(), window.duplicates.get(), window.quarantined.get(),
@@ -261,14 +265,14 @@ class ApplyThroughputStudy {
 
     private boolean announce(String measurement, PerfParameters parameters, PerfParameters fromFile, Seed seed) {
         boolean fullStudy = parameters.isFullStudy(fromFile);
-        System.out.printf("ZS-PERF start measurement=%s windowSeconds=%d warmupSeconds=%d repetitions=%d "
+        System.out.printf("ZS-PERF start measurement=%s runLabel=%s windowSeconds=%d warmupSeconds=%d repetitions=%d "
                         + "fullStudy=%s seed=%d image=%s%n",
-                measurement, parameters.windowSeconds(), parameters.warmupSeconds(), parameters.repetitions(),
-                fullStudy, seed.value(), LedgerTestDatabase.postgresImage());
+                measurement, PerfParameters.runLabel(), parameters.windowSeconds(), parameters.warmupSeconds(),
+                parameters.repetitions(), fullStudy, seed.value(), LedgerTestDatabase.postgresImage());
         if (!fullStudy) {
             System.out.println("ZS-PERF WARNING this run uses overrides and is a harness smoke check, not evidence");
         }
-        assertEquals(PerfParameters.overridesRequested(), !fullStudy,
+        assertEquals(PerfParameters.qualityOverridesRequested(), !fullStudy,
                 "override properties must reach the test JVM. A Gradle -D sets them on the daemon only; the ledger "
                         + "build forwards zs.perf.* explicitly. Without that, a smoke check silently runs the full study.");
         return fullStudy;
@@ -291,7 +295,11 @@ class ApplyThroughputStudy {
             Files.createDirectories(file.getParent());
             StringBuilder json = new StringBuilder("{\n");
             json.append("  \"study\": \"S07 ").append(measurement).append("\",\n")
+                    .append("  \"run_label\": \"").append(PerfParameters.runLabel()).append("\",\n")
                     .append("  \"full_study\": ").append(fullStudy).append(",\n")
+                    .append("  \"batch_sizes\": \"").append(parameters.batchSizes()).append("\",\n")
+                    .append("  \"batch_writers\": \"").append(parameters.batchWriters()).append("\",\n")
+                    .append("  \"entity_counts\": \"").append(parameters.entityCounts()).append("\",\n")
                     .append("  \"seed\": ").append(seed.value()).append(",\n")
                     .append("  \"window_seconds\": ").append(parameters.windowSeconds()).append(",\n")
                     .append("  \"warmup_seconds\": ").append(parameters.warmupSeconds()).append(",\n")
