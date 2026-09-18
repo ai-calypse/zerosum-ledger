@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.zerosum.infra.volume.CardTimeoutVolumeE2ETest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-18T07:28:25.877Z" hostname="Mac" time="728.759">
+  <properties/>
+  <testcase name="M8(b): timeout_after_commit_rate=0.2 — provider truth shows exactly one successful charge per attempt" classname="dev.zerosum.infra.volume.CardTimeoutVolumeE2ETest" time="728.747"/>
+  <system-out><![CDATA[{"provenance": {"captured_at": "2026-09-18T07:40:34.503238Z", "git_sha": "b3610c69494432abae2ffeaddb0397e6ded50c37", "working_tree": "clean (0 changes)", "versions_document": "docs/adr/0002-stack-and-pinned-versions.md", "java_runtime": "25.0.4.1+1-LTS", "hardware": "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64", "seeds": [8180004], "runtime_versions": {"fake-providers image": "sha256:72b4878b18e83366073a73eaa45838dbbee81ec480d1787cfe59ff9c007d102a", "JVM": "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)", "instrument-service image": "sha256:ce22a063fb8096deef5ae0515a5674a41fc5e0e8330f00217e6b258456279322"}},
+"summary": {"label":"m8b-chunk4","run":"v3efd7d4c4f","seed":8180004,"profile":"{\"timeout_after_commit_rate\":0.2,\"webhook_drop_rate\":0.0,\"seed\":8180004}","charges_requested":2000,"orders_created":2000,"attempts":2000,"attempts_distinct_orders":2000,"attempt_statuses":{"SUCCEEDED":2000},"outcome_paths":{"response":1586,"webhook":414},"settled_by":{"response | provider accepted the submission (<id>)":1586,"webhook | webhook <id> reported SUCCEEDED":414},"provider_charges_per_attempt":{"1":2000},"attempts_with_exactly_one_successful_charge":2000,"stray_charges_in_window":0,"fault_rows_for_seed_before":0,"fault_rows_in_window_by_type":{"timeout_after_commit /fakecard/v1/charges":414},"timeout_after_commit_rows":414,"lost_responses":414,"lost_responses_matched_to_a_fault_row":414,"timeout_fault_rows_attributed_to_retries_of_unknown_attempts":0,"unknown_attempts_with_a_lost_retry":0,"timeout_fault_rows_ambiguous":0,"timeout_fault_rows_unexplained":0,"riders":50,"riders_with_nonzero_receivable":0,"fault_profile_activated_at":"2026-09-18T07:28:26.971497Z","last_order_posted_at":"2026-09-18T07:39:31.393231Z","fault_profile_restored_at":"2026-09-18T07:40:34.088994Z","wall_seconds_activation_to_restore":727}}
+
+]]></system-out>
+  <system-err><![CDATA[SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+]]></system-err>
+</testsuite>
