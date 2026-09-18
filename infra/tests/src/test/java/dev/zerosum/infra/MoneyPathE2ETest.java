@@ -146,10 +146,12 @@ class MoneyPathE2ETest {
      * for this order is not necessarily on the first page.
      */
     private long deltaRecordedFor(String entityId, String orderId) {
+        // Read to the end at the largest page the API allows. A fixed page cap (formerly 50 x 100 rows) stopped
+        // finding the row once platform:main passed 5,000 changelog rows, which the S08 volume run took it past.
         Long after = 0L;
-        for (int page = 0; page < 50 && after != null; page++) {
+        while (after != null) {
             HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
-                            LEDGER + "/v1/entities/" + entityId + "/changelog?after_seq=" + after))
+                            LEDGER + "/v1/entities/" + entityId + "/changelog?limit=500&after_seq=" + after))
                     .header("Authorization", "Bearer " + readerToken())
                     .GET());
             assertEquals(200, response.statusCode(), response.body());
