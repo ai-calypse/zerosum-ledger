@@ -247,7 +247,8 @@ class AblationExperimentE2ETest {
             case "F12b" -> f7 + "," + f8;
             default -> null;
         };
-        return knobs == null ? NO_FAULTS : "{" + knobs + ",\"seed\":" + seed + "}";
+        // The knob parser reads numbers as doubles, so the provider gets a seed that survives that exactly.
+        return knobs == null ? NO_FAULTS : "{" + knobs + ",\"seed\":" + (seed & 0x7fffffff) + "}";
     }
 
     private static void putFakeCard(String profile) {
