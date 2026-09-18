@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * S06-T01 evidence: each discrepancy knob corrupts the report in its own way and records what it did (D06-1, §0.3 E2).
@@ -38,6 +39,10 @@ class DiscrepancyKnobIT extends FakeProvidersIT {
     private static final LocalDate DUPLICATE_DAY = LocalDate.of(2026, 2, 3);
     private static final LocalDate CLEAN_DAY = LocalDate.of(2026, 2, 4);
     private static final LocalDate PRECEDENCE_DAY = LocalDate.of(2026, 2, 5);
+    private static final LocalDate RACE_DAY = LocalDate.of(2026, 2, 6);
+
+    @Autowired
+    SettlementReports settlements;
 
     @AfterEach
     void clearProfile() {
@@ -126,6 +131,23 @@ class DiscrepancyKnobIT extends FakeProvidersIT {
         assertThat(faults(PRECEDENCE_DAY, "report_missing_line")).containsExactly(target(PRECEDENCE_DAY, chargeId));
         assertThat(faults(PRECEDENCE_DAY, "report_off_by_one")).isEmpty();
         assertThat(faults(PRECEDENCE_DAY, "report_duplicate_line")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a request that loses the generation race leaves no injection in the fault log")
+    void theLosingDraftLeavesNoFaultLogRows() {
+        String chargeId = capture(RACE_DAY, 6_000);
+        activate(Map.of("report_off_by_one_rate", 1, "seed", SEED));
+        SettlementReportResponse winner = report(RACE_DAY);
+
+        // The loser of two concurrent first requests is exactly a generation that finds the day already stored: it
+        // draws the knobs, logs its injections, and its insert does nothing. Driven directly, so the race is certain
+        // rather than hoped for. Before the fix those log rows committed although the draft was never served, and
+        // I12 counted an injection that reached nobody as undetected.
+        SettlementReportResponse loser = settlements.generate(RACE_DAY);
+
+        assertThat(loser).as("the loser serves the winner's bytes").isEqualTo(winner);
+        assertThat(faults(RACE_DAY, "report_off_by_one")).containsExactly(target(RACE_DAY, chargeId));
     }
 
     private SettlementReportResponse report(LocalDate day) {
