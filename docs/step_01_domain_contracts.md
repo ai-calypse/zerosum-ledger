@@ -831,14 +831,14 @@ Evaluate each item against evidence recorded in H.4. Thresholds and counts are t
 
 | Artifact | Planned path | Actual path | Revision/hash |
 |---|---|---|---|
-| `libs/money` module (main, test fixtures, tests) | `libs/money/` | `libs/money/` | `7392376`, `d46ab54`, `7163530` (main); `0f16d8b`, `48f0203` (fixtures, tests) |
-| `libs/contracts` module (schemas, goldens, helpers, tests) | `libs/contracts/` | `libs/contracts/` | `74b2bff` |
-| Checked-in ISO table | `libs/money/src/main/resources/<root>/money/iso4217-minor-units.csv` | `libs/money/src/main/resources/dev/zerosum/money/iso4217-minor-units.csv` | `7392376`; source SHA-256 `838dfb99…91c9` |
-| Money-order schema v1 | `libs/contracts/src/main/resources/schemas/zerosum.money_order.v1.schema.json` | same | `74b2bff` |
-| Payment-event schema v1 | `libs/contracts/src/main/resources/schemas/zerosum.payment_event.v1.schema.json` | same | `74b2bff` |
-| Golden O1–O8, paired events, expected balances, manifest | `libs/contracts/src/main/resources/golden/` | same | `74b2bff` |
-| ADR-0003 sign convention | `docs/adr/0003-sign-convention.md` | same (Accepted) | `aee589d` |
-| ADR-0009 seeded generative tests | `docs/adr/0009-seeded-generative-tests.md` | same (Accepted) | `0f16d8b` |
+| `libs/money` module (main, test fixtures, tests) | `libs/money/` | `libs/money/` | `38a8e84`, `8a63e7e`, `a9fb5d6` (main); `4ddf073`, `f1d748a` (fixtures, tests) |
+| `libs/contracts` module (schemas, goldens, helpers, tests) | `libs/contracts/` | `libs/contracts/` | `576b332` |
+| Checked-in ISO table | `libs/money/src/main/resources/<root>/money/iso4217-minor-units.csv` | `libs/money/src/main/resources/dev/zerosum/money/iso4217-minor-units.csv` | `38a8e84`; source SHA-256 `838dfb99…91c9` |
+| Money-order schema v1 | `libs/contracts/src/main/resources/schemas/zerosum.money_order.v1.schema.json` | same | `576b332` |
+| Payment-event schema v1 | `libs/contracts/src/main/resources/schemas/zerosum.payment_event.v1.schema.json` | same | `576b332` |
+| Golden O1–O8, paired events, expected balances, manifest | `libs/contracts/src/main/resources/golden/` | same | `576b332` |
+| ADR-0003 sign convention | `docs/adr/0003-sign-convention.md` | same (Accepted) | `fd83f2f` |
+| ADR-0009 seeded generative tests | `docs/adr/0009-seeded-generative-tests.md` | same (Accepted) | `4ddf073` |
 | Verification transcripts | — | `docs/results/s01/s01-t0{1..7}-*.txt` | committed with each task |
 
 ### H.4 Validation results and evidence
@@ -892,20 +892,20 @@ Evaluate each item against evidence recorded in H.4. Thresholds and counts are t
 
 | Task ID | Status | Output paths | Evidence | Blockers |
 |---|---|---|---|---|
-| S01-T01 | Done | `Money`, `CurrencyMismatchException`, `CurrencyRules`, `iso4217-minor-units.csv`, `scripts/GenerateMinorUnitTable.java`, `MoneyTest`, `CurrencyRulesTest` (`7392376`) | [docs/results/s01/s01-t01-money-table.txt](results/s01/s01-t01-money-table.txt): regeneration `diff` identical, header hash = input hash, XXE input refused, `java.util.Currency` grep empty, 21 tests green | — |
-| S01-T02 | Done | `FeeCalculator`, `FareSplitter`, `FeeCalculatorTest`, `FareSplitterTest` (`d46ab54`) | [docs/results/s01/s01-t02-fee-split.txt](results/s01/s01-t02-fee-split.txt): 16 tests green (worked-example fee 102, O1/O3 splits, sum/symmetry grid, no drift) | — |
-| S01-T03 | Done (revalidated after CR-S02-04) | `ChartOfAccounts`, `EntityKind`, `NormalSide`, `ZeroSumValidator`, `Violation`, `OrderCandidate`, `ValidationLimits`, `allowed-currencies.txt`, `ChartOfAccountsTest`, `ZeroSumValidatorTest` (`7163530`) | [docs/results/s01/s01-t03-validator-chart.txt](results/s01/s01-t03-validator-chart.txt): all 70 `libs/money` tests green | — |
-| S01-T04 | Done | `docs/adr/0003-sign-convention.md` (`aee589d`) | [docs/results/s01/s01-t04-adr-0003.txt](results/s01/s01-t04-adr-0003.txt): status Accepted, 4 linked paths exist, contra-balance test passes | — |
+| S01-T01 | Done | `Money`, `CurrencyMismatchException`, `CurrencyRules`, `iso4217-minor-units.csv`, `scripts/GenerateMinorUnitTable.java`, `MoneyTest`, `CurrencyRulesTest` (`38a8e84`) | [docs/results/s01/s01-t01-money-table.txt](results/s01/s01-t01-money-table.txt): regeneration `diff` identical, header hash = input hash, XXE input refused, `java.util.Currency` grep empty, 21 tests green | — |
+| S01-T02 | Done | `FeeCalculator`, `FareSplitter`, `FeeCalculatorTest`, `FareSplitterTest` (`8a63e7e`) | [docs/results/s01/s01-t02-fee-split.txt](results/s01/s01-t02-fee-split.txt): 16 tests green (worked-example fee 102, O1/O3 splits, sum/symmetry grid, no drift) | — |
+| S01-T03 | Done (revalidated after CR-S02-04) | `ChartOfAccounts`, `EntityKind`, `NormalSide`, `ZeroSumValidator`, `Violation`, `OrderCandidate`, `ValidationLimits`, `allowed-currencies.txt`, `ChartOfAccountsTest`, `ZeroSumValidatorTest` (`a9fb5d6`) | [docs/results/s01/s01-t03-validator-chart.txt](results/s01/s01-t03-validator-chart.txt): all 70 `libs/money` tests green | — |
+| S01-T04 | Done | `docs/adr/0003-sign-convention.md` (`fd83f2f`) | [docs/results/s01/s01-t04-adr-0003.txt](results/s01/s01-t04-adr-0003.txt): status Accepted, 4 linked paths exist, contra-balance test passes | — |
 | S01-T05 | Done | `libs/contracts/**` (schemas, goldens, manifest, `ContractSchemas`, `GoldenPayloads`, negatives, 4 test classes) | [docs/results/s01/s01-t05-contracts.txt](results/s01/s01-t05-contracts.txt): 15 tests green; 27 negative cases each rejected with its keyword; Jackson resolution recorded | Downstream risk only: Boot-BOM consumers pin Jackson 3.1.5 under the validator built for 3.2.1 (H.5) |
-| S01-T06 | Done | `libs/money/src/testFixtures/java/dev/zerosum/money/generate/{Seed,SeededExtension,OrderGenerator,TripSequenceGenerator,StreamPerturbation}.java`, `ValidatorGenerativeTest`, `GeneratorDeterminismTest`, `docs/adr/0009-seeded-generative-tests.md` (`0f16d8b`) | [docs/results/s01/s01-t06-generative.txt](results/s01/s01-t06-generative.txt): 10,000 orders (5,000 valid, 5,000 invalid across all 9 families) green; digest `19f9f818…78a0` for seed `8119415789160221247` identical on replay; zero-sum rule disabled → bulk test fails at order #15 (`ZERO_SUM_VIOLATED got []`) with its seed, reverted clean; 0 jqwik/quickcheck matches in 7,097 dependency-report lines | CI placement evidence inherits the S00 GitHub blocker (H.5) |
-| S01-T07 | Done | `libs/money/src/testFixtures/java/dev/zerosum/money/arch/MoneyArchRules.java`, `libs/money/src/test/java/dev/zerosum/money/arch/MoneyArchitectureTest.java`, `libs/money/src/test/java/dev/zerosum/archcanary/*.java` (`48f0203`) | [docs/results/s01/s01-t07-archunit.txt](results/s01/s01-t07-archunit.txt): real classes pass rules A–E; each of the 5 canaries fires; a temporary `double` field in `Money` fails with "Rule A … dev.zerosum.money.Money … MANUAL_CHECK_RATE", reverted clean; 81 `libs/money` tests green | CI placement evidence inherits the S00 GitHub blocker (H.5). The first compile used a non-existent `getCallsFromSelf()`; fixed from the jar's API listing before any evidence run. |
+| S01-T06 | Done | `libs/money/src/testFixtures/java/dev/zerosum/money/generate/{Seed,SeededExtension,OrderGenerator,TripSequenceGenerator,StreamPerturbation}.java`, `ValidatorGenerativeTest`, `GeneratorDeterminismTest`, `docs/adr/0009-seeded-generative-tests.md` (`4ddf073`) | [docs/results/s01/s01-t06-generative.txt](results/s01/s01-t06-generative.txt): 10,000 orders (5,000 valid, 5,000 invalid across all 9 families) green; digest `19f9f818…78a0` for seed `8119415789160221247` identical on replay; zero-sum rule disabled → bulk test fails at order #15 (`ZERO_SUM_VIOLATED got []`) with its seed, reverted clean; 0 jqwik/quickcheck matches in 7,097 dependency-report lines | CI placement evidence inherits the S00 GitHub blocker (H.5) |
+| S01-T07 | Done | `libs/money/src/testFixtures/java/dev/zerosum/money/arch/MoneyArchRules.java`, `libs/money/src/test/java/dev/zerosum/money/arch/MoneyArchitectureTest.java`, `libs/money/src/test/java/dev/zerosum/archcanary/*.java` (`f1d748a`) | [docs/results/s01/s01-t07-archunit.txt](results/s01/s01-t07-archunit.txt): real classes pass rules A–E; each of the 5 canaries fires; a temporary `double` field in `Money` fails with "Rule A … dev.zerosum.money.Money … MANUAL_CHECK_RATE", reverted clean; 81 `libs/money` tests green | CI placement evidence inherits the S00 GitHub blocker (H.5). The first compile used a non-existent `getCallsFromSelf()`; fixed from the jar's API listing before any evidence run. |
 
 <a id="change-record"></a>
 ### I.2 Consumed sources and change record
 
 | Source/artifact path | Revision or hash | Recorded at | Affected tasks | Review outcome |
 |---|---|---|---|---|
-| `docs/zerosum_ledger_mvp_plan.md` | `d65384c 2026-09-15` | 2026-09-15 (S01 start at `143270f`; Phase 1, 2 and 3 boundaries) | S01-T01 … S01-T07 | No impact: unchanged since `143270f` |
+| `docs/zerosum_ledger_mvp_plan.md` | `1df78b3 2026-09-15` | 2026-09-15 (S01 start at `5dbe89e`; Phase 1, 2 and 3 boundaries) | S01-T01 … S01-T07 | No impact: unchanged since `5dbe89e` |
 | `docs/zerosum_ledger_mvp_plan.md` §0.3 C1 (request vs stored order) | v1.2 | 2026-09-15 (doc 1.1) | S01-T05 | Resolved in master v1.2 (§0.3 C1) |
 | `docs/zerosum_ledger_mvp_plan.md` §0.3 C4 (repeated lines) | v1.2 | 2026-09-15 (doc 1.1) | S01-T03, S01-T06 | Resolved in master v1.2 (§0.3 C4) |
 | `docs/zerosum_ledger_mvp_plan.md` §0.3 C5 (event types, `event_id`) | v1.2 | 2026-09-15 (doc 1.1) | S01-T05 | Resolved in master v1.2 (§0.3 C5) |
@@ -913,15 +913,15 @@ Evaluate each item against evidence recorded in H.4. Thresholds and counts are t
 | `docs/zerosum_ledger_mvp_plan.md` §0.3 C7 (mapper-order source) | v1.2 | 2026-09-15 (doc 1.1) | S01-T05 | Resolved in master v1.2 (§0.3 C7) |
 | `docs/zerosum_ledger_mvp_plan.md` §0.3 C16 (generator home, ArchUnit split, JSON Schema validator pin) | v1.2 | 2026-09-15 (doc 1.1) | S01-T05, S01-T06, S01-T07 | Resolved in master v1.2 (§0.3 C16) |
 | `docs/zerosum_ledger_mvp_plan.md` §0.3 O6 (M1(d) scope) | v1.2 | 2026-09-15 (doc 1.1) | S01-T05 | Resolved in master v1.2 (§0.3 O6) |
-| `docs/README.md` | `d65384c 2026-09-15` | 2026-09-15 (S01 start, phase boundaries) | All (procedures) | No impact: unchanged |
-| `docs/step_00_foundations.md` (register and execution record) | `35ca6bc 2026-09-15` (merged to `main` in `143270f`) | 2026-09-15 (S01 start) | All | Accepted S00 handoff: G0 Passed; D00-1, D00-2, D00-5, D00-8, D00-9, D00-10 consumed. The Blocked S00 items (GitHub push, CI runs) aren't S01 blockers per S01 C.4, but S01's "CI placement" evidence inherits the same blocker (H.5). |
-| `gradle/libs.versions.toml` | `d4e49f0 2026-09-15` | 2026-09-15 | S01-T05, S01-T06, S01-T07 | No impact: ArchUnit 1.5.0 and json-schema-validator 3.0.7 already pinned (C16); unchanged |
-| `settings.gradle.kts`, `build.gradle.kts`, and any build-convention sources named by D00-10 | `settings.gradle.kts` `5507e6e`; `build-logic/…/zs.java-conventions` and `zs.library-conventions` `09cedee` (no root `build.gradle.kts`, D00-2) | 2026-09-15 | All | No impact: unchanged |
-| `libs/money/build.gradle.kts`, `libs/contracts/build.gradle.kts` (as created by S00) | both `09cedee` at S01 start; `libs/contracts/build.gradle.kts` edited by S01-T05 (adds `libs:money` and the validator) | 2026-09-15 | All | Revalidated: S01-owned additions only, catalog entries used |
-| `.github/workflows/ci.yml` | `f840db0 2026-09-15` | 2026-09-15 | S01-T06, S01-T07 | No impact: `build` runs untagged tests, where every S01 test lives |
-| `docs/adr/0001-record-architecture-decisions.md` (template) | `4db1472 2026-09-15` | 2026-09-15 | S01-T04, S01-T06 | No impact: ADR-0003 follows its format and reserved number |
-| `docs/adr/0002-*.md` (pinned versions) | `f840db0 2026-09-15` | 2026-09-15 | S01-T05, S01-T06, S01-T07 | No impact: unchanged |
-| `.env.example` | `f840db0 2026-09-15` | 2026-09-15 | S01-T06 | No impact: unchanged (S01-T06 adds the seed override variable) |
+| `docs/README.md` | `1df78b3 2026-09-15` | 2026-09-15 (S01 start, phase boundaries) | All (procedures) | No impact: unchanged |
+| `docs/step_00_foundations.md` (register and execution record) | `034e7de 2026-09-15` (merged to `main` in `5dbe89e`) | 2026-09-15 (S01 start) | All | Accepted S00 handoff: G0 Passed; D00-1, D00-2, D00-5, D00-8, D00-9, D00-10 consumed. The Blocked S00 items (GitHub push, CI runs) aren't S01 blockers per S01 C.4, but S01's "CI placement" evidence inherits the same blocker (H.5). |
+| `gradle/libs.versions.toml` | `e87c4e7 2026-09-15` | 2026-09-15 | S01-T05, S01-T06, S01-T07 | No impact: ArchUnit 1.5.0 and json-schema-validator 3.0.7 already pinned (C16); unchanged |
+| `settings.gradle.kts`, `build.gradle.kts`, and any build-convention sources named by D00-10 | `settings.gradle.kts` `11d99ff`; `build-logic/…/zs.java-conventions` and `zs.library-conventions` `0130cde` (no root `build.gradle.kts`, D00-2) | 2026-09-15 | All | No impact: unchanged |
+| `libs/money/build.gradle.kts`, `libs/contracts/build.gradle.kts` (as created by S00) | both `0130cde` at S01 start; `libs/contracts/build.gradle.kts` edited by S01-T05 (adds `libs:money` and the validator) | 2026-09-15 | All | Revalidated: S01-owned additions only, catalog entries used |
+| `.github/workflows/ci.yml` | `2d762a3 2026-09-15` | 2026-09-15 | S01-T06, S01-T07 | No impact: `build` runs untagged tests, where every S01 test lives |
+| `docs/adr/0001-record-architecture-decisions.md` (template) | `9c1b922 2026-09-15` | 2026-09-15 | S01-T04, S01-T06 | No impact: ADR-0003 follows its format and reserved number |
+| `docs/adr/0002-*.md` (pinned versions) | `2d762a3 2026-09-15` | 2026-09-15 | S01-T05, S01-T06, S01-T07 | No impact: unchanged |
+| `.env.example` | `2d762a3 2026-09-15` | 2026-09-15 | S01-T06 | No impact: unchanged (S01-T06 adds the seed override variable) |
 | Change request **CR-S02-02** from [S02 I.2](step_02_ledger_core.md#change-record) against D01-5 | Ledger needs only the ‡ rules; `ZeroSumValidator.RuleSet.LEDGER` added, `FULL` stays the default | 2026-09-15 | S01-T03 | Accepted. S01-T03 Needs review → Revalidated: `ZeroSumValidatorTest` adds `ledgerRuleSetChecksOnlyTheAccountForTheKindAndZeroSum`; the full `libs/money` suite runs green before the change is committed (evidence in S02 T02 results) |
 | ISO 4217 List One source file (external; SHA-256 when downloaded) | SHA-256 `838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9`, published 2026-01-01, retrieved 2026-09-15 from the master §2.4 URL | 2026-09-15 | S01-T01 | Recorded in the table header and D01-2 |
 

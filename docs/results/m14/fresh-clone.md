@@ -16,7 +16,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `eb8b163`, cloned from `https://github.com/ai-calypse/zerosum-ledger` into an empty directory; the W1 result records a clean tree |
+| Git commit SHA | `d0eb638`, cloned from `https://github.com/ai-calypse/zerosum-ledger` into an empty directory; the W1 result records a clean tree |
 | Versions | [ADR-0002](../../adr/0002-stack-and-pinned-versions.md) at that SHA |
 | Seeds | W1 seed 4242, 1 run |
 | Hardware | Apple M4 (Mac16,12), 10 cores, 24 GiB, macOS 26.5.2; Docker Desktop VM 10 CPUs / 7.75 GiB |

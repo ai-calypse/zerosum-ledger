@@ -27,7 +27,7 @@ against the live Compose stack's ledger; that is recorded as Not run in
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `4e7d942b676417d8a25c9aa83926cc94bcc6beeb`; **working tree DIRTY at launch** — the harness being measured was itself the uncommitted change. The runs were re-executed unchanged before the commit that adds this file |
+| Git commit SHA | `0eac552e038d04bccfd365c670075f434f22586f`; **working tree DIRTY at launch** — the harness being measured was itself the uncommitted change. The runs were re-executed unchanged before the commit that adds this file |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at that SHA. Runtime-reported by the tool: PostgreSQL `18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu`, JVM `OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)`, `java.runtime.version 25.0.4.1+1-LTS`. The container image is the one pinned in `docker-compose.yml`, read from that file by `ZsTestDatabase` rather than restated here |
 | Seeds | none — the verifier is not generative. The tool prints `none (non-generative evidence)` in its own report |
 | Hardware | `Mac16,12`, 10 cores, 24.0 GiB RAM (25,769,803,776 bytes), Mac OS X 26.5.2, aarch64. Captured by the tool, not typed in |

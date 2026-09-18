@@ -19,7 +19,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | Runs 2–5: `b3610c69494432abae2ffeaddb0397e6ded50c37`, working tree clean. Run 1: `b422c86a2822f7ee08e596a7375375fd67dff464`, working tree DIRTY with 2 untracked paths — `docs/results/s08/raw/aggregate.py` and the not-yet-run `infra/tests/.../ablation/` sources, both committed unchanged in `b3610c6`. `CardTimeoutVolumeE2ETest` is byte-identical at both SHAs. Branched from `main` at `08f9c7f`. |
+| Git commit SHA | Runs 2–5: `26597c08c252061dabb1e3bfe0263864eff6f296`, working tree clean. Run 1: `d072bb29df3a013953d3c97a3d380e5ad8c1bbe8`, working tree DIRTY with 2 untracked paths — `docs/results/s08/raw/aggregate.py` and the not-yet-run `infra/tests/.../ablation/` sources, both committed unchanged in `26597c0`. `CardTimeoutVolumeE2ETest` is byte-identical at both SHAs. Branched from `main` at `d02f55a`. |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: instrument-service image `sha256:ce22a063fb8096deef5ae0515a5674a41fc5e0e8330f00217e6b258456279322` (contains `recovery/AttemptSweeper` and `AttemptResolver`, i.e. S05-T12; built 2026-09-17T21:19Z, after T12's commit, and no instrument-service change since), fake-providers image `sha256:72b4878b18e83366073a73eaa45838dbbee81ec480d1787cfe59ff9c007d102a`, test JVM OpenJDK 25.0.4.1 |
 | Seeds | 8180001, 8180002, 8180003, 8180004, 8180005 (one per run; FakeCard's `seed` knob) |
 | Hardware | Apple M4 (Mac16,12), 10 cores, 24.0 GiB RAM, macOS 26.5.2, aarch64 |
@@ -118,7 +118,7 @@ the correct outcome of this profile, and it is the webhook path working, not the
 Not part of the 10,000: an extra 1,000-charge run with `{"timeout_after_commit_rate":0.2,"webhook_drop_rate":1.0,
 "seed":8180101}`, so that no webhook can settle a lost response and every one must go `UNKNOWN` and be resolved by
 `AttemptResolver`. A dropped webhook is rescheduled rather than lost (`WebhookSender`), so the dropped events drain
-once the profile is restored. Provenance: SHA `b993b49` with the working tree DIRTY by two files that the test does
+once the profile is restored. Provenance: SHA `37198fa` with the working tree DIRTY by two files that the test does
 not read (this document, untracked, and `raw/aggregate.py`, modified); seed 8180101; same images and hardware.
 Raw: `raw/m8b-resolver1.json`, `raw/m8b-resolver1-attempts.csv.gz`, `raw/m8b-resolver1-TEST.xml` (`tests="1"
 failures="0" errors="0"`).

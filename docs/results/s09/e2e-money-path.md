@@ -1,6 +1,6 @@
 # S09 — the first end-to-end test: the money path against the running stack
 
-Date: 2026-09-17. Branch: `step/09-e2e-hardening` (test first landed on `step/09-architecture`, merged `85a1882`).
+Date: 2026-09-17. Branch: `step/09-e2e-hardening` (test first landed on `step/09-architecture`, merged `58b074d`).
 
 ## What was run
 

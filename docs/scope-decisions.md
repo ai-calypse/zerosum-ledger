@@ -573,7 +573,7 @@ say "it never happened" about one.
 **Found:** 2026-09-17, across the parallel-agent waves. **My process failure, not the agents'.**
 
 Worktrees created with `isolation: "worktree"` did **not** branch from the `main` I had just merged. Every agent in
-the final wave — performance, chaos, dashboard — branched from `98f33603`, while `main` was at `4d0406b`. Neither
+the final wave — performance, chaos, dashboard — branched from `505fecc4`, while `main` was at `aa95b8e`. Neither
 S05-T10 (payout runs) nor S05-T12 (sweepers) existed in their trees.
 
 **What it cost, concretely:**

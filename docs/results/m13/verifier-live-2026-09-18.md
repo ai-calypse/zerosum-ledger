@@ -22,7 +22,7 @@ Written by tools/verifier. Do not edit by hand: re-run the tool, which recapture
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `c39694ccdc0761909cb6754ad646c213b856864c`; working tree DIRTY — 2 uncommitted file(s); this result is not reproducible from the SHA alone |
+| Git commit SHA | `3e147f34cbfbf444e6da6792e24f7ebd5c83e9d4`; working tree DIRTY — 2 uncommitted file(s); this result is not reproducible from the SHA alone |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: JVM OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium), PostgreSQL PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit |
 | Seeds | none (non-generative evidence) |
 | Hardware | Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64 |

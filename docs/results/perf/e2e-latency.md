@@ -17,7 +17,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | Harness `86ece1bd3fca77a7970d0444d2d0fe1fe0083863`; working tree clean at launch (0 changes). Worktree base `98f336037ee846f337529951296ab2c883bb45b4`, older than `main`: the payout and resolver work merged since does not touch the order → outbox → Kafka → ledger apply path measured here |
+| Git commit SHA | Harness `b463d78540e7cac4803fd970ea8d11ddd1e7307f`; working tree clean at launch (0 changes). Worktree base `505fecc4d17499a8c3d78019c1c75b5de8242768`, older than `main`: the payout and resolver work merged since does not touch the order → outbox → Kafka → ledger apply path measured here |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at that SHA. Runtime: PostgreSQL `postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`, Kafka `apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`, JVM Eclipse Temurin 25.0.4.1+1 (Gradle toolchain), Gradle 9.7.1, Spring Boot 4.1.1, Docker engine 29.8.0 |
 | Seeds | `-4567742916743277886` (one study seed; every window derives its arrivals and order ids from it) |
 | Hardware | Apple M4, 10 cores, 24 GiB RAM, macOS 26.5.2 (25F84), arm64. **A laptop, measured through the Docker Desktop VM** — the reference machine of [assumption A7](../../zerosum_ledger_mvp_plan.md#assumptions) |
@@ -70,7 +70,7 @@ D00-3 image, preload and memory limit. The ledger's invariant gauges keep runnin
 ## 6. Exact commands
 
 ```sh
-git rev-parse HEAD; git status --porcelain | wc -l     # 86ece1b…, 0
+git rev-parse HEAD; git status --porcelain | wc -l     # b463d78…, 0
 # VM load log, alongside the study (30 s samples of every container)
 while true; do echo "$(date -u +%FT%TZ) ps[$(docker ps --format '{{.Names}}={{.Status}}' | tr '\n' ';')] \
   stats[$(docker stats --no-stream --format '{{.Name}}={{.CPUPerc}},{{.MemUsage}}' | tr '\n' ';')]" \

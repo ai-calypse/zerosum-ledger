@@ -10,8 +10,8 @@ provenance (M13 c), raw data and a MEASURED-versus-ESTIMATE table:
 | Throughput across N distinct platform entities (SP4 option (b), workload-level emulation) | [entity-spread.md](entity-spread.md) | [2026-09-18-entity/](2026-09-18-entity/) |
 
 **Machine.** Apple M4, 10 cores, 24 GiB, macOS 26.5.2 — a laptop, measured through its Docker Desktop VM (10 CPUs,
-7.75 GiB), PostgreSQL 18.6 at the D00-3 1536 MB limit, **durability on** (`fsync` intact). Harness `86ece1b`
-(worktree base `98f33603`, older than `main`; nothing merged since touches the measured paths).
+7.75 GiB), PostgreSQL 18.6 at the D00-3 1536 MB limit, **durability on** (`fsync` intact). Harness `b463d78`
+(worktree base `505fecc4`, older than `main`; nothing merged since touches the measured paths).
 
 **Every window was measured under concurrent load on a shared VM.** Another agent's chaos run (M8(b) volume chunks
 2–5: FakeCard charges with `timeout_after_commit` faults through its own Compose stack) overlapped every timestamped
@@ -34,7 +34,7 @@ upper bound. A quiet-machine re-run has not been done.
   entity-lock statement exceeded the 5 s statement timeout; SQLSTATE 57014 is not in the retry classifier's transient
   set, so the engine isolated 58 batches and quarantined 3 valid orders. No money lost, I2–I5 held. Not reachable with
   the deployed single-threaded listener. **Fixed** as [CR-S07-01](../../scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed)
-  (`f9baa0e`): a 57014 raised while acquiring entity locks is now retried, with a regression test that fails without
+  (`87f0710`): a 57014 raised while acquiring entity locks is now retried, with a regression test that fails without
   the fix. The study was not re-run afterwards ([batched-vs-per-order.md §8.3](batched-vs-per-order.md#83-the-32--100-configuration-quarantined-valid-orders)).
 - **`ledger.apply.default-batch-size` is dead configuration.** It is validated but never read; the pipeline already
   applies each Kafka poll as one batch (~12.5 orders per transaction at 200/s, ~33 at 500/s).

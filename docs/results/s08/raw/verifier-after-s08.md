@@ -22,7 +22,7 @@ Written by tools/verifier. Do not edit by hand: re-run the tool, which recapture
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `63324a0ce70d159744819856c607b2c5e5a6a1d4`; working tree clean (0 changes) |
+| Git commit SHA | `749c1e101516e38a3875eab0af2037f9bda4224d`; working tree clean (0 changes) |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: PostgreSQL PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit, JVM OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium) |
 | Seeds | none (non-generative evidence) |
 | Hardware | Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64 |

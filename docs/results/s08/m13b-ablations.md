@@ -29,7 +29,7 @@ the failure. They are not the A2 and A4 variants of the master, and they do not 
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `63a610be25ac750251403f01d2af0011310fca6b` for both. A4 ran on a clean tree; A2 ran with 2 untracked files, A4's raw output (`raw/a4-*.{txt,xml}`), which the A2 test does not read. |
+| Git commit SHA | `680c72a076a8e6cbd022a5a0f26cb07f6a996587` for both. A4 ran on a clean tree; A2 ran with 2 untracked files, A4's raw output (`raw/a4-*.{txt,xml}`), which the A2 test does not read. |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. order-service image `sha256:6049b4bf815a8bdadefcb9f4a050723e877d7e63dedb4cd08ac4d7d31b899fd7`; PostgreSQL `postgres:18.6`, Kafka `apache/kafka:4.3.1` (digests in `docker-compose.yml`); test JVM OpenJDK 25.0.4.1 |
 | Seeds | none (non-generative: fixed bodies, random run ids) |
 | Hardware | Apple M4 (Mac16,12), 10 cores, 24.0 GiB RAM, macOS 26.5.2, aarch64; Docker Desktop 29.8.0, VM 10 CPUs / 7.75 GiB |

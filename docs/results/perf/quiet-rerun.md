@@ -18,7 +18,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `eb8b163`. The tree was clean when the runner started (10:07:51), and no repository file was edited until all four studies had finished (10:56:06) apart from the studies' own output directories. These study JSONs do not record the SHA themselves |
+| Git commit SHA | `d0eb638`. The tree was clean when the runner started (10:07:51), and no repository file was edited until all four studies had finished (10:56:06) apart from the studies' own output directories. These study JSONs do not record the SHA themselves |
 | Harness | unchanged from [perf-summary.md](perf-summary.md): `EndToEndLatencyStudy`, `ApplyThroughputStudy`, parameters from `perf.properties` |
 | Seeds | recorded per study in its JSON |
 | Hardware | Apple M4, 10 cores, 24 GiB, macOS 26.5.2; Docker Desktop VM 10 CPUs / 7.75 GiB; PostgreSQL 18.6 at 1,536 MB, `fsync` on |

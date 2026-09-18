@@ -136,7 +136,7 @@ promoted while its last hop ran against a stub.
 | Study | measurement runs | Timeboxed performance windows (`studyTest`), output committed as evidence in [results/perf/](results/perf/perf-summary.md) |
 
 Unit and integration counts are from `./gradlew test integrationTest --rerun-tasks` on 2026-09-18 (09:51–10:06 UTC,
-commit `ee4be74`), with no Compose stack running, read out of
+commit `8b72516`), with no Compose stack running, read out of
 `build/test-results/*/TEST-*.xml` for the thirteen modules in `settings.gradle.kts` rather than from
 `BUILD SUCCESSFUL`: this build sets `failOnNoDiscoveredTests = false`, so a green build is not by itself evidence that
 anything ran. Earlier figures here went stale repeatedly, because parallel work makes a count true only for the tree it

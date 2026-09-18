@@ -19,7 +19,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `d4e49f03a4688994dd652865db744fb4dde0a458` (spike code and raw evidence; working tree clean apart from this results file and ADR-0002) |
+| Git commit SHA | `e87c4e76c44c906e242843b28fc1fbe0cdac56ef` (spike code and raw evidence; working tree clean apart from this results file and ADR-0002) |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../adr/0002-stack-and-pinned-versions.md) at the SHA above. Resolved on the spike's test runtime classpath: Spring Boot 4.1.1, Spring Framework 7.0.9, spring-kafka 4.1.1, kafka-clients 4.2.1, Flyway 12.4.0, Testcontainers 2.0.5, JUnit 6.0.3, PostgreSQL JDBC 42.7.13, micrometer-registry-otlp 1.17.1, OpenTelemetry SDK 1.62.0. Runtime-reported: JVM Temurin 25.0.4.1+1, Kafka broker 4.3.1, PostgreSQL 18.6, OTel Java agent 2.31.1, Grafana 13.2.1 and otelcol-contrib 0.160.0 inside `grafana/otel-lgtm:0.33.0`. |
 | Seeds | none (non-generative evidence) |
 | Hardware | Apple M4, 10 cores, 24 GiB RAM, macOS 26.5.2 |

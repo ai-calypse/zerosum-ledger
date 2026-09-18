@@ -17,7 +17,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `9234ff45411234b5b86be2b8f7df34fb8c0f1451`; working tree clean at launch (0 changes) |
+| Git commit SHA | `b4de2cbe7a2e4105f33edf6a5ee8dabdeef84984`; working tree clean at launch (0 changes) |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../adr/0002-stack-and-pinned-versions.md) at that SHA. Runtime-reported: PostgreSQL `postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`, JVM Eclipse Temurin 25.0.4.1+1-LTS, Docker engine 29.8.0, Docker Compose v5.5.1 |
 | Seeds | `-8011099974981670798` — one study seed; each window derives its workload from it and the raw data records it |
 | Hardware | Apple M4, 10 cores, 24 GiB RAM, macOS 26.5.2, arm64. This is the reference machine described in [assumption A7](../zerosum_ledger_mvp_plan.md#assumptions), so no off-reference labelling is needed |

@@ -1,7 +1,7 @@
 # S04-T06 — Trace propagation across the pipeline
 
 - **Date:** 2026-09-16 (first run), re-verified after the CR-S04-01 fix
-- **Git SHA:** `6d7efd6` (fix), first run at `032acd4`
+- **Git SHA:** `de61328` (fix), first run at `ebc1110`
 - **Stack:** `docker compose` per D00-3 — PostgreSQL 18.6, Kafka 4.3.1 KRaft, grafana/otel-lgtm 0.33.0, OTel agent 2.31.1
 - **Method:** one money order posted through the live API with a writer token, traced end to end, spans read from
   Tempo's query API (`/api/search`, `/api/traces/<id>`) inside the `otel-lgtm` container

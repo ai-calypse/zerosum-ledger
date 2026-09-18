@@ -22,7 +22,7 @@ Written by tools/simulator. Do not edit by hand: re-run the tool with the seed b
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `eb8b1636d1e0e11188d02ccfa0fd0de79dbb4131`; working tree clean (0 changes) |
+| Git commit SHA | `d0eb63888dea5f8e6d98e3ba69e2d77826a6cc9e`; working tree clean (0 changes) |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: JVM OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium) |
 | Seeds | 4273 |
 | Hardware | Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64 |

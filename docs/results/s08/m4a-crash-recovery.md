@@ -17,12 +17,12 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `5d9d751969488027509267d7a514026511c75a43`; working tree clean (0 changes). Branched from `main` at `08f9c7f`. |
+| Git commit SHA | `7a2c948d0f9f81aff505ac1ee184c3cac336ad57`; working tree clean (0 changes). Branched from `main` at `d02f55a`. |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: order-service image `sha256:6049b4bf815a8bdadefcb9f4a050723e877d7e63dedb4cd08ac4d7d31b899fd7`, kafka `apache/kafka:4.3.1@sha256:77e3df90…6532837`, test JVM OpenJDK 25.0.4.1 (Eclipse Adoptium) |
 | Seeds | none (non-generative evidence: fixed order bodies, random run ids) |
 | Hardware | Apple M4 (Mac16,12), 10 cores, 24.0 GiB RAM, macOS 26.5.2, aarch64 |
 
-**Image vs SHA.** The order-service image was built 2026-09-17T04:20Z, before `08f9c7f`. `git log` shows no change
+**Image vs SHA.** The order-service image was built 2026-09-17T04:20Z, before `d02f55a`. `git log` shows no change
 to `services/order-service` or to any library it links (`libs/outbox`, `libs/money`, `libs/contracts`, `libs/auth`)
 after that build; the two later `libs/` commits touch `libs/evidence` and `libs/testsupport`, which order-service does
 not ship. The running code therefore matches the SHA for everything this test exercises.

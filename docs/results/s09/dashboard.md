@@ -1,7 +1,7 @@
 # S09 — the operator dashboard (ZeroSum Explorer)
 
-Date: 2026-09-18, 08:45–09:47 UTC. Built on `main`; the page is commit `c2e995c`, the read endpoints behind it are
-`743ebbe`, `0565641`, `a2abc89` and `e0f3a6f`.
+Date: 2026-09-18, 08:45–09:47 UTC. Built on `main`; the page is commit `0695ddb`, the read endpoints behind it are
+`55c40de`, `d75e517`, `35e8b59` and `907a2a9`.
 
 The Explorer was a set of look-up forms. It is now a dashboard of the whole running system, reached through the
 one-origin proxy at **http://127.0.0.1:8080/explorer.html** (`docker-compose.demo.yml`). It is still one file,
@@ -135,7 +135,7 @@ into the running system. The full integration suites below were run with `ZS_KAF
 did not override `ZS_OTLP_METRICS_URL`, so their metrics may have been pushed into the live Prometheus under the same
 job names; the Live metrics charts for that window can include test traffic.
 
-**Since fixed at the root** (`ee4be74`): the shared build convention now gives every test task
+**Since fixed at the root** (`8b72516`): the shared build convention now gives every test task
 `ZS_KAFKA_BOOTSTRAP=127.0.0.1:1` and `ZS_OTLP_METRICS_URL=http://127.0.0.1:1/v1/metrics`, so none of the contexts listed
 above can reach a running stack any more, whether pinned individually or not.
 

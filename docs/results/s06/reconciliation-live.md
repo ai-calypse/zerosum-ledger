@@ -17,7 +17,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `de9dacf`. Images built at 08:28 UTC from `b91c0bc`; only documentation and evidence files changed between the two |
+| Git commit SHA | `babe6b3`. Images built at 08:28 UTC from `6bedb40`; only documentation and evidence files changed between the two |
 | Versions | [ADR-0002](../../adr/0002-stack-and-pinned-versions.md). PostgreSQL 18.6, Kafka 4.3.1, nginx 1.29 (digests in `docker-compose.yml`) |
 | Seeds | fault profile seed `9180002` for the faulted run; the clean run has no generative input |
 | Hardware | Apple M4, 10 cores, 24 GiB, macOS 26.5.2, Docker Desktop VM 10 CPUs / 7.75 GiB |

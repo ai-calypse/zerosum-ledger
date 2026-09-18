@@ -34,7 +34,7 @@ Provenance for the stub run in §8.2. There is no provenance for a money-path ru
 
 | Item | Value |
 |---|---|
-| Git commit SHA | `4e7d942b676417d8a25c9aa83926cc94bcc6beeb`; **working tree DIRTY at launch** — the harness being measured was itself the uncommitted change |
+| Git commit SHA | `0eac552e038d04bccfd365c670075f434f22586f`; **working tree DIRTY at launch** — the harness being measured was itself the uncommitted change |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at that SHA. Runtime-reported by the tool: JVM `OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)`, `java.runtime.version 25.0.4.1+1-LTS`. No broker or database version is reported, because the stub run reached neither |
 | Seeds | base seed `4242`; per-run seeds `4273` and `4304` (run *r* uses `seed + 31*r`). Every run records its own seed in the tool's JSON output |
 | Hardware | `Mac16,12`, 10 cores, 24.0 GiB RAM (25,769,803,776 bytes), Mac OS X 26.5.2, aarch64. Captured by the tool, not typed in |

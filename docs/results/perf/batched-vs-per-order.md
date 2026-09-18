@@ -17,7 +17,7 @@
 
 | Item | Value |
 |---|---|
-| Git commit SHA | Timestamped runs: harness `86ece1bd3fca77a7970d0444d2d0fe1fe0083863`, working tree clean at launch. Interrupted run: harness `8286fb3310ff47d7cfed587a742468de26b0638a`, working tree clean at launch — identical measurement code, before per-window timestamps were added. Worktree base for both: `98f336037ee846f337529951296ab2c883bb45b4`, older than `main`; the work merged since does not touch the ledger apply path |
+| Git commit SHA | Timestamped runs: harness `b463d78540e7cac4803fd970ea8d11ddd1e7307f`, working tree clean at launch. Interrupted run: harness `813eae8b07d65f30f9c6a51df17799e1a63f8131`, working tree clean at launch — identical measurement code, before per-window timestamps were added. Worktree base for both: `505fecc4d17499a8c3d78019c1c75b5de8242768`, older than `main`; the work merged since does not touch the ledger apply path |
 | Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at that SHA. Runtime: PostgreSQL `postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`, JVM Eclipse Temurin 25.0.4.1+1 (Gradle toolchain), Gradle 9.7.1, Docker engine 29.8.0 |
 | Seeds | Interrupted run `6195560421540639378`; run A `-3349792232827965418`; run B `4537063549066979895`; entity-spread (the 32-writer per-order row) `285598337035934583` |
 | Hardware | Apple M4, 10 cores, 24 GiB RAM, macOS 26.5.2 (25F84), arm64. **A laptop, measured through the Docker Desktop VM** — the reference machine of [assumption A7](../../zerosum_ledger_mvp_plan.md#assumptions) |
@@ -64,13 +64,13 @@ Parameters: [services/ledger-service/src/test/resources/perf/perf.properties](..
 ## 6. Exact commands
 
 ```sh
-git rev-parse HEAD; git status --porcelain | wc -l     # 86ece1b…, 0 (timestamped runs)
+git rev-parse HEAD; git status --porcelain | wc -l     # b463d78…, 0 (timestamped runs)
 # vm-load.log sampler as in e2e-latency.md §6, one log per run directory
 ./gradlew :services:ledger-service:studyTest --tests '*ApplyThroughputStudy.batchedVersusPerOrderApply' --rerun \
   -Pzs.perf.runLabel=2026-09-18-batch-a -Pzs.perf.batchSizes=1 -Pzs.perf.batchWriters=1
 ./gradlew :services:ledger-service:studyTest --tests '*ApplyThroughputStudy.batchedVersusPerOrderApply' --rerun \
   -Pzs.perf.runLabel=2026-09-18-batch-b -Pzs.perf.batchSizes=50,100 -Pzs.perf.batchWriters=32,1
-# interrupted run, harness 8286fb3, full grid, killed after 18 of 24 windows
+# interrupted run, harness 813eae8, full grid, killed after 18 of 24 windows
 ./gradlew :services:ledger-service:studyTest --tests '*ApplyThroughputStudy' --tests '*EndToEndLatencyStudy' --rerun
 ```
 
@@ -144,7 +144,7 @@ configuration measured that stays inside the timeouts (lock-wait p95 2.3 s again
 comfortable margin); 32 × 100 is outside them. **Fixed after this study** by the first of the two candidate changes:
 a 57014 raised while acquiring entity locks is now transient and retried
 ([CR-S07-01](../../scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed),
-commit `f9baa0e`, with a regression test that fails without it). The study was **not re-run** after the fix, so the
+commit `87f0710`, with a regression test that fails without it). The study was **not re-run** after the fix, so the
 32 × 100 windows stay invalid and no post-fix throughput is claimed for that configuration.
 
 ### 8.4 Per-window concurrent load
