@@ -58,7 +58,12 @@ All ten ADRs are Accepted. See [docs/adr/](adr/).
 Compiled from `docs/results/**`, `docs/scope-decisions.md` and test sources. **Plan text is never evidence.** A
 criterion is MET only where a named test or recorded run demonstrates it.
 
-**26 MET · 11 PARTIAL · 6 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria.
+**30 MET · 9 PARTIAL · 4 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria. One of the four NOT MET is M11(c),
+recorded as NOT RUN: neither met nor failed.
+
+S08 moved four rows on measured runs against the live stack, each recomputed from its raw data before it was
+promoted: M4(a) and M4(c) (a real `kill -9`), M8(b) (10,000 charges), and M14(b) (the third OpenAPI spec). M13(b)
+stays NOT MET even though two ablations were emulated, because the switches the criterion names do not exist.
 
 M13(a) moved from NOT MET to PARTIAL when the simulator and verifier stopped being stubs (CR-S09-01). It is
 deliberately **not** MET: the command exists and is exercised, but never against the running system, and this table
@@ -78,9 +83,9 @@ does not promote a criterion on a stub.
 | M3(c) 50 concurrent, one key → one row | MET | `OrderStoreIT` (created=1, replayed=49) — store level; HTTP level used 20 |
 | M3(d) Missing key → 400 | MET | `MoneyOrderApiIT` |
 | M3(e) Keys never expire | **UNKNOWN** | No test asserts it; only source comments. A design property, not evidence |
-| M4(a) `kill -9` → published within 5 s | **NOT MET** | `s03-t05-outbox.txt` says "M4(a) — NOT CLAIMED": the test destroys the relay *object*, not the process |
+| M4(a) `kill -9` → published within 5 s | MET | [m4a-crash-recovery.md](results/s08/m4a-crash-recovery.md): `docker kill -s KILL` of order-service with 20 committed, unpublished orders (proved from the database before each kill), 5 repetitions. **100 / 100** published after restart and applied once; last publish 126–148 ms after Spring's Started line, 3,750–3,822 ms after container start — inside 5 s by either reading. The window is held open by pausing Kafka, not hit by timing; warm restarts only |
 | M4(b) Only the relay publishes | MET | `PublishPathArchitectureTest` (failed on real code first, forcing a fix) |
-| M4(c) Duplicate publishes harmless downstream | PARTIAL | Both halves proven separately; the composite crash case is Blocked (CR-S04-02) |
+| M4(c) Duplicate publishes harmless downstream | MET | The M4(a) crash produced **real** duplicates: sends the killed producer had already written reached the broker, the restarted relay sent them again, and the topic held 21–24 copies of 20 orders per run (17 duplicates in all). `applied_orders` stayed at exactly 20 per run and the rider receivable at exactly 20 × fare. Reached through a real crash, not the D03-5 injection point CR-S04-02 asked for, which still does not exist |
 | M5(a) 3× publish = same balances | MET | `DuplicateDeliveryIT` through a real broker. End-to-end variant not delivered |
 | M5(b) No changelog `seq` gaps | MET | `s02-t03-stress.txt` (incl. 32×20,000 at 30% duplicates) |
 | M5(c) Per-currency sum is 0 | MET | `InvariantsApiIT`; `sp1-runs.json` (0 violations, 12 windows) |
@@ -91,7 +96,7 @@ does not promote a criterion on a stub.
 | M7(a) Both adapters pass one shared suite | PARTIAL | `PaymentInstrumentContractSuite` passes for both, and its webhook-parsing case now **runs** rather than skipping (S05-T11). Still against a stub, never the real service, which is why this is not MET |
 | M7(b) Provider-boundary ArchUnit rule | MET | `InstrumentBoundaryTest`; fires on a canary |
 | M8(a) State × event table test | MET | `TransitionTableTest` (S05-T08): the state×event product is **generated, not hand-listed**, so adding a state or event without a table decision fails the build. Illegal transitions are logged and counted, asserted with a captured appender and a meter registry |
-| M8(b) 10,000 charges at 0.2 timeout rate | **NOT MET** | The pieces exist — fault knobs (S05-T03) and the UNKNOWN resolver (S05-T12) — but no volume run has been performed. The resolver's quiesce test drives 12 attempts, which is not a substitute for 10,000 and is labelled as such |
+| M8(b) 10,000 charges at 0.2 timeout rate | MET | [m8b-card-timeout-volume.md](results/s08/m8b-card-timeout-volume.md): 5 seeded runs × 2,000 = **10,000** charges through the real money path at `timeout_after_commit_rate` 0.2. Every attempt has **exactly one** successful provider charge, 0 stray charges, every rider's receivable back to 0; all **1,946** injected timeouts matched one-to-one to a lost response, 0 unexplained. Recomputed from the per-attempt CSVs by the coordinator. The webhook settled every lost response before the resolver was needed; a separate 1,000-charge run with every webhook dropped sent 229 attempts to `UNKNOWN`, all resolved with one charge each, slowest 196.6 s |
 | M8(c) Nothing stuck in UNKNOWN > 5 min | MET | `QuiesceNoStuckAttemptsIT`: after load stops nothing remains in SUBMITTING or UNKNOWN and every attempt was charged exactly once in provider ground truth. `ResolverFakeCardIT` (4) and `ResolverFakeBankIT` (4) cover idempotent retry, the two-condition quiet-period resubmission, and — the one that matters most — **a lookup that cannot answer never causes a resubmission**, however long the quiet period has passed |
 | M9(a) Bad signature / stale timestamp → 400 | MET | `WebhookSignatureTest` (7) and `WebhookReceiverIT` (9): a forged, tampered, unsigned or stale delivery is **400 and writes nothing**; tampering by one digit fails; the 300 s tolerance is rejected in either direction; both secrets verify during rotation |
 | M9(b) 30% duplicates + 30% reordering | PARTIAL | The **dedupe half** is evidenced: one event delivered many times, sequentially and concurrently, is recorded once and applied once (`WebhookReceiverIT`). The criterion asks for 30% duplicates *plus 30% reordering at volume*, and no reorder-rate run exists — the sender's reorder knob (S05-T03) has never been driven |
@@ -102,13 +107,13 @@ does not promote a criterion on a stub.
 | M11(b) Injected discrepancies → typed breaks | MET | Each knob maps to its **own** break type — missing→`MISSING_IN_REPORT`, off-by-one→`AMOUNT_MISMATCH`, duplicate→`DUPLICATE_LINE` — and the tests assert the *type*, not the count, so a matcher that flagged everything as "mismatch" would fail (`SettlementMatcherTest` 13, `DiscrepancyKnobIT` 5). Totals are recomputed from the served lines, so a corrupted report is self-consistent and only line-level matching finds it. [docs/results/s06/reconciliation.md](results/s06/reconciliation.md) |
 | M11(c) Reconciliation under chaos | **NOT RUN** | No A0 chaos orchestration, and no scheduler advances settlement cycles, so "0 unexplained breaks after 2 cycles" cannot be evaluated. Neither met nor failed. |
 | M12(a) One trace across the pipeline | PARTIAL | `s04-trace-propagation.md`: connected **by links**, deliberately not claimed as one parent-child trace |
-| M12(b) Dashboards for flow, invariants, providers | PARTIAL | Flow and invariants load from the repository; the providers dashboard is blocked on S05 |
+| M12(b) Dashboards for flow, invariants, providers | PARTIAL | Flow and invariants dashboards load from the repository. There is **no providers Grafana dashboard**; provider state is visible only in the operator Explorer's provider panel, which is not what the criterion asks for |
 | M12(c) Alert rules fire in a test | PARTIAL | 6 rules provisioned; **1 of 5 conditions observed firing** (outbox backlog, t+212 s under a real Kafka outage) |
 | M13(a) One command runs a named scenario | PARTIAL | Both tools are real CLIs (CR-S09-01). `./gradlew :tools:simulator:run` runs the W1 scenario for N seeded runs and writes JSON + Markdown; `:tools:verifier:run` checks I2–I4 as the read-only role. Proven by `VerifierIT` (6 tests, against a real database) and `SimulatorStubRunTest` (6 tests, against a **stub**). **Never run against the live stack**, so the money-path half is [Not run](results/m13/simulator.md#2-status) |
-| M13(b) Ablations A1–A4 | **NOT MET** | S08 not started |
+| M13(b) Ablations A1–A4 | **NOT MET** | The S08-T03 ablation switches do not exist in `services/` or `libs/`, so no ablation runs as specified. Two are **emulated** and labelled as such ([m13b-ablations.md](results/s08/m13b-ablations.md)): A2 (no outbox, by deleting the crashed orders' outbox rows) lost 67 of 100 committed orders in 5 / 5 runs, and the ledger's own `/v1/invariants` still said consistent — only the cross-database count caught it; A4 (zero-sum triggers disabled in a rolled-back transaction) accepted an order summing to +1 in 5 / 5 runs, rejected with 23514 when enabled. A1 and A3 not run |
 | M13(c) Results record hardware, versions, SHA, seeds | PARTIAL | The convention exists; SP1/SP3 and both M13 results comply. It is now *enforced by code*: `libs/evidence` captures the block — including whether the tree was dirty — and both tools write it, so it cannot be typed in stale. Still a convention, not a check: nothing fails a build for omitting it |
 | M14(a) Fresh clone → W1 in ≤ 10 min | **NOT MET** | Never timed; no timing is claimed anywhere |
-| M14(b) Architecture doc, ADRs, OpenAPI | PARTIAL | This document, 10 ADRs, and two OpenAPI specs with drift tests. `openapi/instrument-service.yaml` is absent |
+| M14(b) Architecture doc, ADRs, OpenAPI | MET | This document, 10 ADRs, and **three** OpenAPI specs (`openapi/order-service.yaml`, `ledger-service.yaml`, `instrument-service.yaml`), each checked against the running service by a conformance test |
 | M14(c) Demo video | **NOT MET** | Not recorded |
 
 ### Two contradictions worth stating
@@ -124,18 +129,19 @@ does not promote a criterion on a stub.
 
 | Layer | Count | What it runs against |
 |---|---|---|
-| Unit | 347 (0 failed, 1 skipped) | No containers |
-| Integration | 264 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
-| End-to-end | 1 (0 failed) | Re-measured on the running seven-container stack after all three merges; see [results/s05/deployment-check.md](results/s05/deployment-check.md) |
+| Unit | 360 (0 failed, 1 skipped) | No containers |
+| Integration | 292 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
+| End-to-end | 1 (0 failed) | `MoneyPathE2ETest`, on the running Compose stack |
+| Chaos | 4 (each 0 failed in its recorded run) | The running stack, destructively: `kill -9`, a paused broker, 10,000-charge fault volume, two ablation emulations. Tagged `chaos`, run only by `chaosTest`, never by `make demo`. XML per run in [results/s08/raw/](results/s08/raw/) |
+| Study | measurement runs | Timeboxed performance windows (`studyTest`), output committed as evidence in [results/perf/](results/perf/perf-summary.md) |
 
-Counts are from `./gradlew build integrationTest --rerun-tasks` on 2026-09-17, read out of
-`build/test-results/*/TEST-*.xml` rather than from `BUILD SUCCESSFUL` — this build sets
-`failOnNoDiscoveredTests = false`, so a green build is not by itself evidence that anything ran. The previous figures
-here have been stale twice over. 223 / 180 predated S05-T07. The 254 / 198 that briefly replaced them were
-measured in a worktree holding neither the S05-T08 transition tables nor the S05-T03 fault knobs, so they were stale
-on arrival — parallel work makes a count true only for the tree it was taken on. 309 / 229 were measured on this
-tree, after all three merges. Of them, the evidence harness contributes 20 tests — `libs/evidence` 8 unit,
-`tools/simulator` 12 unit, `tools/verifier` 6 integration.
+Unit and integration counts are from `./gradlew test integrationTest --rerun-tasks` on 2026-09-18 (08:12–08:26 UTC,
+commit `b91c0bc` plus documentation edits), with no Compose stack running, read out of
+`build/test-results/*/TEST-*.xml` for the thirteen modules in `settings.gradle.kts` rather than from
+`BUILD SUCCESSFUL`: this build sets `failOnNoDiscoveredTests = false`, so a green build is not by itself evidence that
+anything ran. Earlier figures here went stale repeatedly, because parallel work makes a count true only for the tree it
+was taken on. The last two integration tests added were the operator Explorer's safety-contract test and the CR-S07-01
+regression test.
 
 The single remaining skip is deliberate, and it is the only one left of four. The adapter contract suite aborts its
 **settlement-report** case on an assumption naming the missing capability — for **FakeBank only**, which genuinely

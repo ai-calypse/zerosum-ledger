@@ -7,59 +7,81 @@ providers.
 
 It is a learning and portfolio project. No real money, cards or bank accounts are involved.
 
+## Headline results
+
+Measured, not estimated. Each figure links to a report with its raw data, UTC windows, seeds, git SHA and hardware.
+All performance figures come from **an Apple M4 laptop through Docker Desktop, with durability on (`fsync` intact),
+while a chaos run was using the same VM**. They are conservative: that load can only slow things down.
+
+| What | Result | Evidence |
+|---|---|---|
+| Order-to-ledger latency at 200 orders/s | **p50 44 ms · p95 74 ms · p99 79 ms**; 125,998 orders over 6 windows, 0 missing | [e2e-latency.md](docs/results/perf/e2e-latency.md) |
+| Ledger throughput, one hot account, batched apply | **3,981 orders/s** (32 writers × 50-order transactions); about **6×** per-order at one writer (527 → 3,242) | [batched-vs-per-order.md](docs/results/perf/batched-vs-per-order.md) |
+| Hot account spread over 100 sub-accounts | **2.3×** throughput (707 → 1,647 orders/s), lock-wait p95 **147 → 3 ms** | [entity-spread.md](docs/results/perf/entity-spread.md) |
+| `kill -9` of order-service between commit and publish | **100 / 100** orders published after restart and applied **exactly once**, though 1–4 duplicates per run really reached Kafka; last publish ≤ 148 ms after the app started (bound: 5 s) | [m4a-crash-recovery.md](docs/results/s08/m4a-crash-recovery.md) |
+| 10,000 card charges with 20 % of provider responses lost after commit | **Exactly one** successful charge for every one of 10,000 attempts; all **1,946** injected timeouts traced one-to-one to a lost response; 0 stray charges | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
+| The same, with every provider webhook dropped | 229 of 1,000 attempts went `UNKNOWN`; the resolver settled all 229, one charge each; the slowest was settled 196.6 s after submission (limit: 5 min in `UNKNOWN`) | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
+| A defect found by measuring, then fixed | Under hot-account contention, valid orders were quarantined instead of retried. Root-caused, fixed, with a regression test proven to fail without the fix | [CR-S07-01](docs/scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed) |
+| Test suite, force-executed 2026-09-18 | **360 unit + 292 integration** (real PostgreSQL and Kafka via Testcontainers), **0 failures**, 1 deliberate skip; plus end-to-end and chaos layers run against the live stack | [architecture.md](docs/architecture.md#what-the-tests-actually-cover) |
+
+Latency covers the outbox → Kafka (12 partitions) → ledger path, timed at both ends on one PostgreSQL clock, and
+excludes the HTTP layer. The "5,000 orders/s batched" design estimate was **not** reached (best: 80 % of it), and
+500 orders/s sustained for 10 minutes was not run. [perf-summary.md](docs/results/perf/perf-summary.md) lists every
+figure that can be quoted, and every one that cannot.
+
 ## What it demonstrates
 
 - **Money that cannot silently go missing.** Every order's entries sum to zero per currency, enforced by application
   validation *and* by a deferred database constraint, so an insert that bypasses the application still fails at
-  `COMMIT`.
-- **An append-only audit trail.** `UPDATE`, `DELETE` and `TRUNCATE` fail on the order and ledger tables for the
-  application role *and* for the owner role; corrections are compensating orders, never edits.
-- **Effectively-once processing.** Publishing every order three times produces balances identical to publishing once.
-- **A transactional outbox.** The API accepts orders while the broker is down; the relay publishes afterwards, and
-  marks a row published only after the broker acknowledges it.
-- **Uncertain outcomes as a first-class result.** A provider timeout is neither success nor failure, and the design
-  refuses to guess: it is resolved by lookup, and for a provider without idempotency keys, only after a quiet period.
-- **Observability that can be alerted on**, and **CI** that runs the unit, integration and container layers.
+  `COMMIT`. A read-only verifier re-derives every balance from the changelog and names the invariant it finds broken.
+- **An append-only, tamper-evident audit trail.** `UPDATE`, `DELETE` and `TRUNCATE` fail for the application role
+  *and* the owner role; corrections are compensating orders. Each entity's changelog is hash-chained.
+- **Effectively-once processing.** A transactional outbox and an idempotent ledger apply: publishing every order three
+  times produces balances identical to publishing once, and a crashed publisher's duplicates are absorbed.
+- **Uncertain outcomes as a first-class result.** A provider timeout is neither success nor failure. The attempt goes
+  `UNKNOWN` and is resolved by lookup; for a provider without idempotency keys, only after a quiet period. Attempts
+  move through state × event transition tables held as data, so an unhandled combination fails the build.
+- **Two deliberately mismatched fake providers** (a card network with idempotency keys and webhooks, a bank with
+  neither) behind one `PaymentInstrument` interface, with nine seeded fault knobs: timeouts after commit, connection
+  resets, dropped, duplicated and reordered webhooks, returned payouts, and missing, duplicated or off-by-one
+  settlement-report lines.
+- **Payouts and reconciliation.** Payout runs with at most one in-flight payout per driver and currency (a database
+  constraint, not a check), refusal when the ledger is more than 5 s stale, and settlement reports matched into typed
+  breaks.
+- **Signed webhooks** (HMAC-SHA256, 300 s tolerance, secret rotation), **an operator dashboard** served under a strict
+  Content Security Policy, **Grafana dashboards and alert rules**, and **CI** that runs the unit, integration and
+  container layers.
 
-## Measured evidence
+## Evidence index
 
-Every number here comes from an executed run, not from reading the code. Test counts below were force-executed with
-`--rerun-tasks` on 2026-09-17 and read out of `build/test-results/*/TEST-*.xml`, because a Gradle up-to-date pass
-proves only that nothing changed — and because this build sets `failOnNoDiscoveredTests = false`, which means
-`BUILD SUCCESSFUL` on its own does not prove a single test ran.
+Test counts are force-executed (`--rerun-tasks`) and read out of `build/test-results/*/TEST-*.xml`, because this
+build sets `failOnNoDiscoveredTests = false` and `BUILD SUCCESSFUL` on its own does not prove a single test ran.
 
-| What | Result | Where |
-|---|---|---|
-| Unit tests, 10 modules | 347 passed, 0 failed, 1 skipped | `./gradlew test` |
-| Integration tests, 7 modules (Testcontainers) | 264 passed, 0 failed, 0 skipped | `./gradlew integrationTest` |
-| Ledger lock contention study (SP1) | [docs/results/sp1-lock-study.md](docs/results/sp1-lock-study.md) | measured |
-| Stack version compatibility spike (SP3) | [docs/results/sp3-stack-compat.md](docs/results/sp3-stack-compat.md) | measured |
-| Fake providers and adapters | [docs/results/s05/providers.md](docs/results/s05/providers.md) | measured |
-| Trace across API → outbox → Kafka → apply | [docs/results/s04-trace-propagation.md](docs/results/s04-trace-propagation.md) | measured |
-| End-to-end money path, live stack | 1 test, 0 failed | `./gradlew e2eTest` (needs the stack up) |
-| Ledger invariant verifier (I2, I3, I4) | 6 tests, 0 failed — fails a corrupted ledger and names the invariant | [docs/results/m13/verifier.md](docs/results/m13/verifier.md) |
-| Seeded W1 scenario runner | 12 tests, 0 failed — **not run against the live stack** | [docs/results/m13/simulator.md](docs/results/m13/simulator.md) |
-
-The one skipped test is deliberate, and it is all that remains of four. The shared adapter contract suite aborts its
-settlement-report case on a JUnit assumption naming the missing capability — for **FakeBank only**, which genuinely
-has no settlement reports. The webhook receiver removed two of them and settlement reports removed the third, by
-implementing the capabilities rather than deleting the cases. That is what a skip is for: it disappears when the gap
-closes, rather than quietly passing all along.
+| What | Where |
+|---|---|
+| Acceptance criteria M1–M14, row by row, with the test behind each | [docs/architecture.md](docs/architecture.md#acceptance-criteria-m1m14) |
+| Ledger lock contention study (SP1) | [docs/results/sp1-lock-study.md](docs/results/sp1-lock-study.md) |
+| Performance: latency, batching, entity spread | [docs/results/perf/](docs/results/perf/perf-summary.md) |
+| Crash recovery and fault volume runs (S08) | [docs/results/s08/](docs/results/s08/) |
+| Providers, attempts, transitions, policy, payouts, resolver (S05) | [docs/results/s05/](docs/results/s05/) |
+| Reconciliation (S06) | [docs/results/s06/reconciliation.md](docs/results/s06/reconciliation.md) |
+| Live money path, proxy and webhook loop (S09) | [docs/results/s09/](docs/results/s09/) |
+| Trace across API → outbox → Kafka → apply | [docs/results/s04-trace-propagation.md](docs/results/s04-trace-propagation.md) |
 
 ## What is *not* built
 
-Kept explicit on purpose — see [docs/scope-decisions.md](docs/scope-decisions.md) for each decision and its cost.
+Kept explicit on purpose. [docs/scope-decisions.md](docs/scope-decisions.md) records each decision and its cost.
 
-- **End-to-end coverage is one test, the money path only.** It asserts that an accepted order reaches the ledger,
-  that its entries sum to zero, that the changelog links back to the order, and that the ledger's invariants hold.
-  Nothing else is covered end to end: no provider path, no crash or restart, no fault injection, and no reconciliation.
-- **instrument-service has no persistence and no API.** It is an adapter layer. Nothing records a payment attempt, so
-  nothing resolves an `UNKNOWN` outcome yet, and the quiet-period rule is specified but unimplemented.
-- **No reconciliation, no webhook delivery, no fault injection.** Settlement reports are declared in the interface and
-  implemented by nobody.
-- **Acceptance criteria M8–M11 and M14 are unmet.** M13 is partial: the evidence harness is real and tested, but no
-  scenario has been run against the live stack, and the ablations (M13(b)) do not exist. M7 is not claimed: both
-  adapters pass one shared contract suite, but only against a stub, never against the running fake-providers service.
+- **Not a production system.** One broker (replication factor 1), one database server, one relay, one ledger
+  listener. No real money, cards or bank accounts.
+- **Not every path is proven live.** The charge path, webhooks, payout runs and the operator dashboard were exercised
+  against the running stack. Reconciliation and the `UNKNOWN` sweeper are covered by integration tests, not by a live
+  run.
+- **Performance gaps.** 500 orders/s sustained for 10 minutes (T1) and client-observed API latency (P1) were not
+  measured. No figure was taken on a quiet machine.
+- **Open acceptance criteria** are listed in [docs/architecture.md](docs/architecture.md#acceptance-criteria-m1m14) as NOT MET or
+  PARTIAL, each with the reason. They include reordered webhook delivery at volume, reconciliation under chaos, a
+  timed fresh-clone run, and a demo video.
 
 ## Quickstart
 
@@ -110,6 +132,9 @@ docker compose ps
 ./gradlew build            # compile + fast untagged tests, no containers
 ./gradlew integrationTest  # @Tag("integration"), Testcontainers (needs Docker)
 ./gradlew e2eTest          # @Tag("e2e") — needs the Compose stack running (step 3)
+./gradlew :infra:tests:chaosTest --tests '*OrderPublishAfterCrashE2ETest'
+                           # @Tag("chaos") — DESTRUCTIVE: kills services and pauses Kafka on the running stack.
+                           # Never run by e2eTest or `make demo`. Reset afterwards with `make down`.
 ```
 
 ### 4b. Run the evidence harness
