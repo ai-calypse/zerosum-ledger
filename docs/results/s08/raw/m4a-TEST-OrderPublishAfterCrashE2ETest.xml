@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.zerosum.infra.recovery.OrderPublishAfterCrashE2ETest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-18T06:44:18.308Z" hostname="Mac" time="97.969">
+  <properties/>
+  <testcase name="M4(a): kill -9 between commit and publish; after restart every order is published and applied once" classname="dev.zerosum.infra.recovery.OrderPublishAfterCrashE2ETest" time="97.964"/>
+  <system-out><![CDATA[M4(a) crash recovery — kill -9 order-service between commit and publish
+| Item | Value |
+|---|---|
+| Git commit SHA | `5d9d751969488027509267d7a514026511c75a43`; working tree clean (0 changes) |
+| Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: order-service image sha256:6049b4bf815a8bdadefcb9f4a050723e877d7e63dedb4cd08ac4d7d31b899fd7, kafka image apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837, JVM OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium) |
+| Seeds | none (non-generative evidence) |
+| Hardware | Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64 |
+
+| rep | run | orders | unpublished at kill | applied before restart | spring startup s | publish - container start ms | publish - app started ms | applied rows | copies on topic | rider receivable | invariants |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | crashb9f2e47d01 | 20 | 20 | 1 | 2.289 | 3822 | 134 | 20 | 21 | 20000 | true |
+| 2 | crash00cb38638d | 20 | 20 | 4 | 2.283 | 3751 | 126 | 20 | 24 | 20000 | true |
+| 3 | crash73675efe8f | 20 | 20 | 4 | 2.249 | 3765 | 126 | 20 | 24 | 20000 | true |
+| 4 | crash63bd214a7d | 20 | 20 | 4 | 2.258 | 3750 | 148 | 20 | 24 | 20000 | true |
+| 5 | crashd2ee1d846b | 20 | 20 | 4 | 2.257 | 3778 | 132 | 20 | 24 | 20000 | true |
+
+]]></system-out>
+  <system-err><![CDATA[SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+]]></system-err>
+</testsuite>

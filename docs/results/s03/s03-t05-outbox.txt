@@ -19,12 +19,17 @@ WHAT IS PROVEN
   Cleanup     published rows past retention are deleted in bounded batches; unpublished rows survive backdating to
               30 days old.
 
-M4(a) - NOT CLAIMED
+M4(a) - NOT CLAIMED HERE; CLOSED IN S08 (2026-09-18)
   RelayRestartRecoveryIT destroys the relay OBJECT and its producer, not the process: 20 rows committed while the
   broker was paused were all published by a freshly built relay in 148 ms (bound: 5 s). That proves the recovery
-  mechanism, NOT that a SIGKILL of the container loses nothing. The container-level OrderPublishAfterCrashIT is
-  DEFERRED: it needs the first e2e harness (the e2eTest task currently selects no tests) plus the full Compose stack.
-  Recorded as deferred, not as a pass.
+  mechanism, NOT that a SIGKILL of the container loses nothing. The container-level test was DEFERRED from this task.
+
+  Closed by infra/tests/.../recovery/OrderPublishAfterCrashE2ETest against the running Compose stack: broker paused,
+  20 orders committed with unpublished outbox rows (read from the database), `docker kill -s KILL` order-service
+  (exit 137), broker resumed, container restarted. 5 repetitions, 100 orders: all published and applied exactly once.
+  Last order published 3,750-3,822 ms after the container start and 126-148 ms after Spring's Started line.
+  Duplicates really arrived (the dead producer's in-flight requests landed once the broker resumed; 21-24 copies of
+  20 orders on the topic) and the ledger still applied 20 per run. Evidence: docs/results/s08/m4a-crash-recovery.md.
 
 THREE DEFECTS FOUND, ALL MINE
   1. OutboxRelay.send() had the send loop OUTSIDE its try. KafkaProducer.send() throws synchronously when metadata
