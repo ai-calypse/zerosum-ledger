@@ -87,6 +87,32 @@ class MoneyOrderController {
         return store.read(id).map(MoneyOrderResponse::of).orElseThrow(ApiException::notFound);
     }
 
+    record TypeTotal(String type, String reason, String currency, long orders,
+            @com.fasterxml.jackson.annotation.JsonProperty("volume_minor") long volumeMinor,
+            @com.fasterxml.jackson.annotation.JsonProperty("unbalanced_orders") long unbalancedOrders) {
+    }
+
+    record LegTotal(String type, String reason,
+            @com.fasterxml.jackson.annotation.JsonProperty("entity_kind") String entityKind, String account,
+            String currency, long entries,
+            @com.fasterxml.jackson.annotation.JsonProperty("signed_minor") long signedMinor) {
+    }
+
+    record OrdersSummary(List<TypeTotal> types, List<LegTotal> legs) {
+    }
+
+    /** Totals by order type and the money flow between account classes, for the S09 dashboard. Reader role. */
+    @GetMapping("/v1/money-orders/summary")
+    OrdersSummary summary(HttpServletRequest request) {
+        ApiAuthorization.require(request, Role.READER);
+        OrderStore.Summary summary = store.summary();
+        return new OrdersSummary(
+                summary.types().stream().map(t -> new TypeTotal(t.type(), t.reason(), t.currency(), t.orders(),
+                        t.volumeMinor(), t.unbalancedOrders())).toList(),
+                summary.legs().stream().map(l -> new LegTotal(l.type(), l.reason(), l.entityKind(), l.account(),
+                        l.currency(), l.entries(), l.signedMinor())).toList());
+    }
+
     @GetMapping("/v1/money-orders")
     List<MoneyOrderResponse> listByGroup(HttpServletRequest request, @RequestParam("group_id") String groupId) {
         ApiAuthorization.require(request, Role.READER);

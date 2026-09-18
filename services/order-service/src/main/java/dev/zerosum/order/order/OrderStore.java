@@ -241,6 +241,57 @@ public class OrderStore {
                 .map(this::withEntries);
     }
 
+    /** Orders of one type, reason and currency: how many, the gross debits they carry, and how many do not net to 0. */
+    public record TypeTotal(String type, String reason, String currency, long orders, long volumeMinor,
+            long unbalancedOrders) {
+    }
+
+    /** Every entry of one order type and reason landing on one (entity kind, account, currency), summed. */
+    public record LegTotal(String type, String reason, String entityKind, String account, String currency, long entries,
+            long signedMinor) {
+    }
+
+    public record Summary(List<TypeTotal> types, List<LegTotal> legs) {
+    }
+
+    /**
+     * Order totals by type and the flow of money between account classes (S09 dashboard). Both reads share one
+     * read-only REPEATABLE READ snapshot, so the two lists describe the same set of orders.
+     *
+     * <p>{@code unbalancedOrders} is recounted from the stored entries rather than trusted from the write path: the
+     * deferred trigger already refuses an order that does not net to zero per currency, and this is the independent check
+     * that it did. Sums are cast back to bigint so an aggregate beyond int64 fails the read instead of wrapping.
+     */
+    public Summary summary() {
+        var snapshot = new TransactionTemplate(transactions.getTransactionManager());
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        return snapshot.execute(status -> new Summary(
+                jdbc.sql("""
+                        WITH per_order AS (
+                            SELECT o.order_id, o.type, o.reason, e.currency, sum(e.amount_minor) AS net,
+                                   coalesce(sum(e.amount_minor) FILTER (WHERE e.amount_minor > 0), 0) AS debits
+                            FROM money_orders o JOIN money_order_entries e ON e.order_id = o.order_id
+                            GROUP BY o.order_id, o.type, o.reason, e.currency)
+                        SELECT type, reason, currency, count(*) AS orders, sum(debits)::bigint AS volume,
+                               count(*) FILTER (WHERE net <> 0) AS unbalanced
+                        FROM per_order GROUP BY type, reason, currency ORDER BY type, reason, currency""")
+                        .query((rs, rowNumber) -> new TypeTotal(rs.getString("type"), rs.getString("reason"),
+                                rs.getString("currency").strip(), rs.getLong("orders"), rs.getLong("volume"),
+                                rs.getLong("unbalanced")))
+                        .list(),
+                jdbc.sql("""
+                        SELECT o.type, o.reason, split_part(e.entity_id, ':', 1) AS kind, e.account_code, e.currency,
+                               count(*) AS entries, sum(e.amount_minor)::bigint AS signed
+                        FROM money_orders o JOIN money_order_entries e ON e.order_id = o.order_id
+                        GROUP BY 1, 2, 3, 4, 5 ORDER BY 1, 2, 3, 4, 5""")
+                        .query((rs, rowNumber) -> new LegTotal(rs.getString("type"), rs.getString("reason"),
+                                rs.getString("kind"),
+                                rs.getString("account_code"), rs.getString("currency").strip(), rs.getLong("entries"),
+                                rs.getLong("signed")))
+                        .list()));
+    }
+
     /** A group's orders in creation order, which is a trip's full history (S03-T03). */
     public List<StoredOrder> readByGroup(String orderGroupId) {
         return jdbc.sql(SELECT_HEADER + " WHERE order_group_id = :groupId ORDER BY created_at, order_id")

@@ -94,6 +94,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  # decision: S09 — the operator dashboard (docs/results/s09/dashboard.md)
+  /v1/money-orders/summary:
+    get:
+      operationId: getMoneyOrdersSummary
+      summary: Order totals by type, and the flow of money between account classes
+      description: |
+        Requires the **reader** role. Both lists are read from one read-only REPEATABLE READ snapshot.
+
+        `types` counts orders per type, reason and currency, with their gross debit volume and
+        `unbalanced_orders`: orders whose entries do not net to zero in that currency, recounted from the stored
+        entries. The deferred trigger refuses such an order at commit, so anything but zero is a defect.
+
+        `legs` sums every entry of one order type and reason landing on one (entity kind, account, currency). It is
+        the money flow the dashboard draws: a `trip.completed` order debits rider receivable and credits driver
+        payable and platform revenue, a `charge.succeeded` order moves the receivable into provider clearing, and so
+        on for every reason.
+
+        This scans every stored order; it is an on-demand operator read, not something to poll.
+      tags: [money-orders]
+      responses:
+        '200':
+          description: The totals and the legs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrdersSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
   /v1/money-orders/{orderId}:
     get:
       operationId: getMoneyOrder
@@ -186,6 +215,54 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+    OrdersSummary:
+      type: object
+      additionalProperties: false
+      required: [types, legs]
+      properties:
+        types:
+          type: array
+          items: { $ref: '#/components/schemas/OrderTypeTotal' }
+        legs:
+          type: array
+          items: { $ref: '#/components/schemas/OrderLegTotal' }
+
+    OrderTypeTotal:
+      type: object
+      additionalProperties: false
+      required: [type, reason, currency, orders, volume_minor, unbalanced_orders]
+      properties:
+        type: { type: string, enum: [COMMERCE, COLLECTION, REFUND, DISBURSEMENT, SETTLEMENT] }
+        reason: { type: string }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        orders: { type: integer, format: int64, minimum: 1 }
+        volume_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The sum of the positive (debit) entries in this currency.
+        unbalanced_orders:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Orders whose entries do not net to zero in this currency. Always 0 unless the trigger failed.
+
+    OrderLegTotal:
+      type: object
+      additionalProperties: false
+      required: [type, reason, entity_kind, account, currency, entries, signed_minor]
+      properties:
+        type: { type: string, enum: [COMMERCE, COLLECTION, REFUND, DISBURSEMENT, SETTLEMENT] }
+        reason: { type: string }
+        entity_kind: { type: string, enum: [rider, driver, platform, provider] }
+        account: { $ref: '#/components/schemas/AccountCode' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        entries: { type: integer, format: int64, minimum: 1 }
+        signed_minor:
+          type: integer
+          format: int64
+          description: Sum of these entries, debit positive and credit negative (ADR-0003).
+
     OutboxStats:
       type: object
       additionalProperties: false
