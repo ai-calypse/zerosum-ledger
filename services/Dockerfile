@@ -13,6 +13,10 @@ COPY build/libs/app.jar /app/app.jar
 # properties: OTEL_*_EXPORTER environment variables would also switch off Boot's Micrometer OTLP export (SP3).
 # Heap is a share of the container memory limit, leaving room for metaspace, threads and the agent.
 ENV JAVA_TOOL_OPTIONS="-javaagent:/opt/otel/opentelemetry-javaagent.jar -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -XX:MaxRAMPercentage=60"
+# glibc gives busy threads their own malloc arenas (up to 8 x cores), each reserving and fragmenting its own memory,
+# outside anything the JVM reports. Measured: JVM-accounted memory ~385 MB against ~750 MB resident in a 768 MB
+# container. Two arenas is the usual bound for a JVM, which does its own heap management.
+ENV MALLOC_ARENA_MAX=2
 
 USER app
 
