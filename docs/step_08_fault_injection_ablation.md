@@ -885,7 +885,7 @@ The exact CLI flags and file schemas are recorded in D08-1, D08-2 and D08-4, not
 | Per-fault injection smoke F1–F12 | S08-T02 action logs and effect checks | Not run | — | — |
 | Executor refusal outside chaos | S08-T02 refusal test | Not run | — | — |
 | Startup guard cases | S08-T03 guard tests (CI) | Not run | — | — |
-| Seam behavior A1–A5 | S08-T03 integration tests (CI) | Not run | — | — |
+| Seam behavior A1–A5 | S08-T03 integration tests (CI) | Not run — the seams do not exist; the 2026-09-18 evidence pass could not edit `services/**` or `libs/**` | — | — |
 | Owners' flags-off suites and ArchUnit | S08-T03 CI run | Not run | — | — |
 | Pilot batch schema validation and M13(c) metadata | S08-T04 pilot | Not run | — | — |
 | Resumability and independence | S08-T04 tests | Not run | — | — |
@@ -893,6 +893,9 @@ The exact CLI flags and file schemas are recorded in D08-1, D08-2 and D08-4, not
 | Hard gate 2: ablation validity | S08-T05 validity evaluation | Not run | — | — |
 | Hard gate 4: I12 detection | S08-T05 F10 cell | Not run | — | — |
 | Results regenerate from run JSON | S08-T05 aggregation diff | Not run | — | — |
+| M4 (a): `kill -9` order-service between commit and publish (outside the T01–T05 tooling) | `infra/tests/.../recovery/OrderPublishAfterCrashE2ETest`, 5 × 20 orders, broker paused to hold the window | Pass: 100/100 published and applied once; last publish 3.75–3.82 s after container start, 126–148 ms after Spring started | [docs/results/s08/m4a-crash-recovery.md](results/s08/m4a-crash-recovery.md) | 2026-09-18 |
+| M8 (b): 10,000 charges at FakeCard `timeout_after_commit_rate=0.2` (outside the T01–T05 tooling) | `infra/tests/.../volume/CardTimeoutVolumeE2ETest`, 5 × 2,000, seeds 8180001–8180005, per-row fault attribution | Pass: 10,000/10,000 exactly one successful charge; 1,946 faults matched 1:1 to lost responses | [docs/results/s08/m8b-card-timeout-volume.md](results/s08/m8b-card-timeout-volume.md) | 2026-09-18 |
+| M13 (b): ablations A1–A4 | A2 emulated by state, A4 at the DB layer only (rolled back); A1, A3, B0 not run | Not met: no seams. A2 emulation lost 67/100 in 5/5 runs; A4 DB layer stored a +1 order in 5/5 | [docs/results/s08/m13b-ablations.md](results/s08/m13b-ablations.md) | 2026-09-18 |
 
 ### H.5 Known limitations and blockers
 
@@ -904,6 +907,8 @@ The exact CLI flags and file schemas are recorded in D08-1, D08-2 and D08-4, not
 | FakeBank quiet-period residual risk (ADR-0010) | Limitation | Duplicate payout possible outside simulated bounds | D05-9; stated in results |
 | Payout/adjustment race produces driver debt (R1) | Limitation | Reported metric, not a violation | S08-T04 metric; S09 limitations |
 | Single-host laptop runs; simulated providers only | Limitation | Results are environment baselines | Stated in every results file |
+| At FakeCard `timeout_after_commit_rate=0.2` alone, every lost response is settled by the provider webhook while `SUBMITTING`; 0 of 10,000 attempts reached `UNKNOWN` | Limitation | M8 (b) as worded does not exercise the S05-T12 resolver | Covered by a supplementary run with `webhook_drop_rate=1.0` (229 `UNKNOWN` → idempotent retry, one charge each); F7/F12 cells should drop or delay webhooks if they mean to test the resolver |
+| `UNKNOWN` is entered 7.0 s after `SUBMITTING` (FakeCard's withhold), not at the configured 5 s adapter read timeout | Limitation (observed 2026-09-18, not investigated) | Each lost response holds a policy thread 7 s; throughput and the D05-14 timeout contract | Owner of D05-14 |
 | Quiesce ignored unresolved attempts and pending redeliveries | Limitation | None after v1.2 | Resolved in master v1.2 (§0.3 E3); applied in D08-4, D08-6 |
 | Run allocation for ablations with several targeted faults | Limitation | None after v1.2 | Resolved in master v1.2 (§0.3 E4); applied in D08-6 |
 | Which validity threshold applies | Limitation | None after v1.2 | Resolved in master v1.2 (§0.3 E5); crash-timing-dependent cells named in D08-6 |

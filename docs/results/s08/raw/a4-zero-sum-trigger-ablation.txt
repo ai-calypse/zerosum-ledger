@@ -1,0 +1,9 @@
+A4 partial (DB trigger layer only, rolled back)
+application layer: POST unbalanced -> 422
+| rep | trigger ON: commit check | trigger OFF: commit check | stored entries sum (OFF) | triggers after rollback | rows after rollback |
+|---|---|---|---|---|---|
+| 1 | 23514 | none | 1 | O,O | 0 |
+| 2 | 23514 | none | 1 | O,O | 0 |
+| 3 | 23514 | none | 1 | O,O | 0 |
+| 4 | 23514 | none | 1 | O,O | 0 |
+| 5 | 23514 | none | 1 | O,O | 0 |
