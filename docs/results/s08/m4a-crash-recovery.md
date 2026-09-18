@@ -76,6 +76,8 @@ ln -s <main checkout>/.env .env          # the worktree has no .env of its own; 
 
 ## 8. Results
 
+Regenerate with `python3 docs/results/s08/raw/aggregate.py`.
+
 | Rep | Unpublished at kill | Applied before restart | Spring startup (s) | Publish − container start (ms) | Publish − app Started (ms) | `applied_orders` rows | Copies on topic | Rider receivable | Invariants |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 20 / 20 | 1 | 2.289 | 3,822 | 134 | 20 | 21 | 20,000 | consistent |
