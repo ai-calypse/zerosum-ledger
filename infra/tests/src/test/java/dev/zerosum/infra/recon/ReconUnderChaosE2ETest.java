@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +71,8 @@ class ReconUnderChaosE2ETest {
     private static final int RIDERS = 50;
     private static final int CALLERS = 8;
     private static final int MAX_IN_FLIGHT = 120;
+    /** Order arrivals per second. */
+    private static final double RATE = Double.parseDouble(System.getProperty("zs.recon.rate", "3"));
     private static final Duration MAX_QUIESCE = Duration.ofMinutes(Long.getLong("zs.recon.quiesceMinutes", 15));
     private static final String INSTRUMENT_SERVICE = "zerosum-ledger-instrument-service-1";
     private static final List<String> TERMINAL = List.of("SUCCEEDED", "DECLINED", "FAILED");
@@ -197,12 +200,25 @@ class ReconUnderChaosE2ETest {
         var retries = new AtomicLong();
         var replays = new AtomicLong();
         var kills = new ArrayList<Map<String, Object>>();
+        var ordersDown = new AtomicBoolean();
         Instant loadStart = dbNow().minusSeconds(1);
         ExecutorService callers = Executors.newFixedThreadPool(CALLERS);
         var futures = new ArrayList<Future<?>>();
+        long firstArrival = System.nanoTime();
         for (int c = 0; c < CALLERS; c++) {
             futures.add(callers.submit(() -> {
                 for (int i = next.getAndIncrement(); i < TRIPS; i = next.getAndIncrement()) {
+                    // Open-model arrivals at a fixed rate, so the load spans long enough for both kills to land in
+                    // it. Unpaced, the callers post a whole cycle in about a second and the kills find nothing to hit.
+                    long due = firstArrival + (long) (i * 1e9 / RATE) - System.nanoTime();
+                    if (due > 0) {
+                        Stack.sleep(Duration.ofNanos(due));
+                    }
+                    // Past the F1 point, arrivals wait for the kill, so it cannot land after the last order: the
+                    // orders behind it are posted into a dead order-service and must retry their way through.
+                    while (i >= killOrdersAt && !ordersDown.get()) {
+                        Stack.sleep(Duration.ofMillis(100));
+                    }
                     // Paced so the policy's bounded queue (200) never overflows; overflow is a legitimate path, but it
                     // parks attempts in CREATED for the 30 s sweeper and is not what this run measures.
                     while (i - terminal.get() >= MAX_IN_FLIGHT) {
@@ -220,12 +236,17 @@ class ReconUnderChaosE2ETest {
         boolean instrumentsKilled = false;
         boolean ordersKilled = false;
         while (!callers.isTerminated()) {
+            if (futures.stream().anyMatch(f -> f.state() == Future.State.FAILED)) {
+                // A dead caller would leave the others waiting for a kill that its missing order never triggers.
+                callers.shutdownNow();
+                break;
+            }
             terminal.set(countTerminal(prefix));
             if (!instrumentsKilled && posted.get() >= killInstrumentsAt) {
-                kills.add(kill(INSTRUMENT_SERVICE, posted.get(), prefix, downMillis));
+                kills.add(kill(INSTRUMENT_SERVICE, posted.get(), prefix, downMillis, new AtomicBoolean()));
                 instrumentsKilled = true;
             } else if (instrumentsKilled && !ordersKilled && posted.get() >= killOrdersAt) {
-                kills.add(kill(Stack.ORDER_SERVICE, posted.get(), prefix, downMillis));
+                kills.add(kill(Stack.ORDER_SERVICE, posted.get(), prefix, downMillis, ordersDown));
                 ordersKilled = true;
             }
             Stack.sleep(Duration.ofMillis(500));
@@ -248,6 +269,7 @@ class ReconUnderChaosE2ETest {
         result.put("seed", daySeed);
         result.put("profile", profile);
         result.put("trips", TRIPS);
+        result.put("arrival_rate_per_s", RATE);
         result.put("fare_total", java.util.Arrays.stream(fares).sum());
         result.put("orders_accepted", posted.get());
         result.put("post_retries", retries.get());
@@ -405,7 +427,8 @@ class ReconUnderChaosE2ETest {
         }
     }
 
-    private static Map<String, Object> kill(String container, int postedAtKill, String prefix, long downMillis) {
+    private static Map<String, Object> kill(String container, int postedAtKill, String prefix, long downMillis,
+            AtomicBoolean down) {
         var kill = new LinkedHashMap<String, Object>();
         kill.put("container", container);
         kill.put("orders_posted_at_kill", postedAtKill);
@@ -414,6 +437,7 @@ class ReconUnderChaosE2ETest {
                 prefix + "%"));
         kill.put("killed_at", Instant.now().toString());
         Stack.docker("kill", "-s", "KILL", container);
+        down.set(true);
         for (int i = 0; i < 20 && "true".equals(Stack.docker("inspect", "-f", "{{.State.Running}}", container)); i++) {
             Stack.sleep(Duration.ofMillis(250));
         }
