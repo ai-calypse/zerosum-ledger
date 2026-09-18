@@ -94,6 +94,12 @@ zs:
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)
   port: 8081
+  tomcat:
+    threads:
+      # Sized to the connection pool (Hikari's default 10), not Tomcat's default 200. Every write holds a pooled
+      # connection, so threads beyond a few per connection only queue for one while each keeps a stack and a malloc
+      # arena. At 200 the container passed its 768 MB limit at 1,000 requests/s and was killed (P1 ladder, 2026-09-18).
+      max: 32
 
 management:
   endpoints:
