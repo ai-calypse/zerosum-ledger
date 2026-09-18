@@ -55,8 +55,11 @@ repairs the shared stack. The un-ablated control is M4 (a): the same scenario wi
 
 Test: [`infra/tests/src/test/java/dev/zerosum/infra/ablation/OutboxAblationE2ETest.java`](../../../infra/tests/src/test/java/dev/zerosum/infra/ablation/OutboxAblationE2ETest.java)
 
+> These runs used `e2eTest`. The failure-mode tests were retagged `chaos` afterwards, so that `make demo` (which
+> runs `e2eTest`) can never kill a service or delete outbox rows; re-run them with `chaosTest`.
+
 ```sh
-./gradlew :infra:tests:e2eTest --tests '*OutboxAblationE2ETest' --rerun -Dzs.ablation.repetitions=5 -Dzs.ablation.orders=20
+./gradlew :infra:tests:chaosTest --tests '*OutboxAblationE2ETest' --rerun -Dzs.ablation.repetitions=5 -Dzs.ablation.orders=20
 ```
 
 Raw: [raw/a2-outbox-ablation.txt](raw/a2-outbox-ablation.txt), [raw/a2-TEST.xml](raw/a2-TEST.xml)
@@ -106,7 +109,7 @@ stack and would violate I1 there permanently.
 Test: [`infra/tests/src/test/java/dev/zerosum/infra/ablation/ZeroSumTriggerAblationE2ETest.java`](../../../infra/tests/src/test/java/dev/zerosum/infra/ablation/ZeroSumTriggerAblationE2ETest.java)
 
 ```sh
-./gradlew :infra:tests:e2eTest --tests '*ZeroSumTriggerAblationE2ETest' --rerun -Dzs.ablation.repetitions=5
+./gradlew :infra:tests:chaosTest --tests '*ZeroSumTriggerAblationE2ETest' --rerun -Dzs.ablation.repetitions=5
 ```
 
 Raw: [raw/a4-zero-sum-trigger-ablation.txt](raw/a4-zero-sum-trigger-ablation.txt), [raw/a4-TEST.xml](raw/a4-TEST.xml)

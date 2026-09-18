@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
  * dedupes the ones that did get through, and the shared stack is left consistent. The un-ablated control is
  * {@code OrderPublishAfterCrashE2ETest}, which runs the same scenario without the deletion.
  */
-@Tag("e2e")
+@Tag("chaos")
 class OutboxAblationE2ETest {
 
     private static final long FARE = 1_000;

@@ -49,7 +49,7 @@ import org.junit.jupiter.api.Timeout;
  * test refuses a run in which the log shows no fault at all, because "zero before and zero after" is what a wrong
  * filter looks like.
  */
-@Tag("e2e")
+@Tag("chaos")
 class CardTimeoutVolumeE2ETest {
 
     private static final long FARE = 1_000;

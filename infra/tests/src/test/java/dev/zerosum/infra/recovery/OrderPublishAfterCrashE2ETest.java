@@ -50,7 +50,7 @@ import org.junit.jupiter.api.Test;
  * test counts the copies on the topic, so "no duplicate application" is shown against duplicates that actually
  * arrived rather than asserted over a topic that never held any.
  */
-@Tag("e2e")
+@Tag("chaos")
 class OrderPublishAfterCrashE2ETest {
 
     private static final String TOPIC = "payments.money-orders.v1";

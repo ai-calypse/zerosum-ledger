@@ -60,10 +60,13 @@ stamp on Spring's "Started OrderServiceApplication" line are docker's. All three
 
 ## 6. Exact commands
 
+> These runs used `e2eTest`. The failure-mode tests were retagged `chaos` afterwards, so that `make demo` (which
+> runs `e2eTest`) can never kill a service or delete outbox rows; re-run them with `chaosTest`.
+
 ```sh
 # stack already up: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --wait
 ln -s <main checkout>/.env .env          # the worktree has no .env of its own; it is gitignored
-./gradlew :infra:tests:e2eTest --tests '*OrderPublishAfterCrashE2ETest' --rerun \
+./gradlew :infra:tests:chaosTest --tests '*OrderPublishAfterCrashE2ETest' --rerun \
   -Dzs.crash.repetitions=5 -Dzs.crash.orders=20
 ```
 

@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
  * so {@code DISABLE TRIGGER} and the insert are both undone by the rollback; the deferred trigger is forced to run
  * inside the transaction with {@code SET CONSTRAINTS ALL IMMEDIATE}, which is exactly the check COMMIT would make.
  */
-@Tag("e2e")
+@Tag("chaos")
 class ZeroSumTriggerAblationE2ETest {
 
     record Outcome(int rep, String controlSqlState, String ablatedSqlState, long ablatedStoredSum,

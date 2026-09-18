@@ -59,10 +59,13 @@ Test: [`infra/tests/src/test/java/dev/zerosum/infra/volume/CardTimeoutVolumeE2ET
 
 ## 6. Exact commands
 
+> These runs used `e2eTest`. The failure-mode tests were retagged `chaos` afterwards, so that `make demo` (which
+> runs `e2eTest`) can never kill a service or delete outbox rows; re-run them with `chaosTest`.
+
 ```sh
 # stack up: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --wait; .env symlinked into the worktree
 for k in 1 2 3 4 5; do
-  ./gradlew :infra:tests:e2eTest --tests '*CardTimeoutVolumeE2ETest' --rerun \
+  ./gradlew :infra:tests:chaosTest --tests '*CardTimeoutVolumeE2ETest' --rerun \
     -Dzs.volume.charges=2000 -Dzs.volume.seed=818000$k -Dzs.volume.label=m8b-chunk$k
 done
 python3 docs/results/s08/raw/aggregate.py     # regenerates every table below
