@@ -3,10 +3,16 @@ package dev.zerosum.outbox;
 import io.opentelemetry.api.trace.Span;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Appends outbox rows inside the caller's transaction (D03-5).
@@ -22,10 +28,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class OutboxWriter {
 
+    private static final Logger log = LoggerFactory.getLogger(OutboxWriter.class);
+
     private final JdbcClient jdbc;
+    /** decision: D08-3 — non-null only for the A2 ablation ({@link OutboxFactory#dualWriter}); null means the outbox. */
+    private final KafkaTemplate<String, String> dualWrite;
 
     public OutboxWriter(JdbcClient jdbc) {
+        this(jdbc, null);
+    }
+
+    OutboxWriter(JdbcClient jdbc, KafkaTemplate<String, String> dualWrite) {
         this.jdbc = jdbc;
+        this.dualWrite = dualWrite;
     }
 
     /**
@@ -37,6 +52,9 @@ public class OutboxWriter {
         Map<String, String> withTrace = new LinkedHashMap<>(headers == null ? Map.of() : headers);
         traceparent().ifPresent(value -> withTrace.putIfAbsent("traceparent", value));
 
+        if (dualWrite != null) {
+            return sendAfterCommit(topic, messageKey, payload, withTrace);
+        }
         return jdbc.sql("""
                 INSERT INTO outbox (topic, message_key, payload, headers)
                 VALUES (:topic, :messageKey, cast(:payload as jsonb), cast(:headers as jsonb))
@@ -47,6 +65,29 @@ public class OutboxWriter {
                 .param("headers", asJson(withTrace))
                 .query(Long.class)
                 .single();
+    }
+
+    /**
+     * decision: D08-3 — the A2 ablation (master §8.5; §0.3 C10 exempts this seam, inside {@code libs/outbox}, from the
+     * relay-only rule). The naive dual write: no row, and once the caller's transaction has committed, one direct send.
+     * A send that fails or never leaves the process is logged and dropped; nothing persists or retries it, because
+     * persisting and retrying it is exactly what the outbox adds.
+     */
+    private long sendAfterCommit(String topic, String messageKey, String payload, Map<String, String> headers) {
+        var message = new ProducerRecord<>(topic, null, messageKey, payload);
+        headers.forEach((name, value) ->
+                message.headers().add(name, value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                dualWrite.send(message).whenComplete((sent, failure) -> {
+                    if (failure != null) {
+                        log.error("ZS-CHAOS A2 dual write lost a committed message for key {}", messageKey, failure);
+                    }
+                });
+            }
+        });
+        return -1;
     }
 
     /** The active span as a W3C {@code traceparent}, or empty when nothing is recording (§0.3 C11). */

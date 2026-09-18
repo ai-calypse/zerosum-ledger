@@ -1,6 +1,7 @@
 // decision: D05-6, D05-11 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
 package dev.zerosum.instrument.policy;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.instrument.core.Commands.ChargeCommand;
 import dev.zerosum.instrument.core.Commands.RefundCommand;
 import dev.zerosum.instrument.core.InstrumentExceptions.UnknownProviderException;
@@ -52,6 +53,9 @@ public class AttemptSubmitter {
     private final Clock clock;
     private final Duration readTimeout;
     private final boolean collectionsEnabled;
+    /** decision: D08-3 — the A3 ablation and the F3 crash hook. Both off outside the guarded chaos profile. */
+    private final boolean freshKeyOnUnknown;
+    private final boolean crashHook;
 
     AttemptSubmitter(AttemptStore attempts, AttemptTransitions transitions, AttemptOutcomes outcomes,
             ProviderRegistry providers, PolicyMetrics metrics, ExecutorService policySubmissions, Clock clock,
@@ -60,7 +64,9 @@ public class AttemptSubmitter {
             @Value("${zs.instruments.read-timeout}") Duration readTimeout,
             // decision: D05-11 — the collections kill switch. Read at startup, because a switch that could change
             // under a submission in flight would make "was it on when we called?" unanswerable.
-            @Value("${zs.kill-switches.collections-enabled}") boolean collectionsEnabled) {
+            @Value("${zs.kill-switches.collections-enabled}") boolean collectionsEnabled, ChaosGuard.Active chaos) {
+        this.freshKeyOnUnknown = chaos.on("A3");
+        this.crashHook = chaos.on("F3");
         this.attempts = attempts;
         this.transitions = transitions;
         this.outcomes = outcomes;
@@ -135,7 +141,24 @@ public class AttemptSubmitter {
             return;   // another delivery of the same order is already submitting it
         }
 
-        SubmitResult result = call(instrument, attempt, originalRef);
+        SubmitResult result = call(instrument, attempt, originalRef, attempt.attemptId().toString());
+
+        // decision: D08-3 — A3 ablation (master §8.5, §0.3 E7): no UNKNOWN handling. A charge whose outcome is unknown
+        // is resubmitted at once, as the same attempt, under a fresh provider idempotency key. Bounded, so a provider
+        // that keeps timing out still ends in UNKNOWN rather than spinning; each resubmission may be a second charge.
+        for (int resubmits = 0; freshKeyOnUnknown && attempt.isCharge() && result instanceof SubmitResult.Unknown
+                && resubmits < 3; resubmits++) {
+            log.warn("ZS-CHAOS A3 resubmitting attempt {} under a fresh key after: {}", attemptId,
+                    ((SubmitResult.Unknown) result).reason());
+            result = call(instrument, attempt, originalRef, UUID.randomUUID().toString());
+        }
+
+        // decision: D08-3 — F3 (master §8.4, §0.3 E9), chaos only, armed once per injection by the harness: the
+        // provider has answered and nothing is written down, so the attempt is left in SUBMITTING for the sweeper.
+        if (crashHook && ChaosGuard.consumeArm("F3")) {
+            log.warn("ZS-CHAOS F3 halting between the provider call and the state update of attempt {}", attemptId);
+            ChaosGuard.halt();
+        }
 
         try {
             submitLater(outcomes.apply(attemptId, result));
@@ -147,7 +170,8 @@ public class AttemptSubmitter {
         }
     }
 
-    private SubmitResult call(PaymentInstrument instrument, AttemptRow attempt, String originalRef) {
+    private SubmitResult call(PaymentInstrument instrument, AttemptRow attempt, String originalRef,
+            String idempotencyKey) {
         Money amount = Money.of(attempt.amountMinor(), attempt.currency());
         // The deadline is ours, not the adapter's: an adapter that blocked past it would turn a slow provider into a
         // parked executor thread.
@@ -155,7 +179,7 @@ public class AttemptSubmitter {
         try {
             return attempt.isCharge()
                     ? instrument.charge(new ChargeCommand(attempt.attemptId(), attempt.instrumentToken(), amount,
-                            deadline))
+                            deadline, idempotencyKey))
                     : instrument.refund(new RefundCommand(attempt.attemptId(), originalRef, amount, deadline));
         } catch (RuntimeException failure) {
             // The request was already on the wire, so the only honest answer is that we do not know. Anything else

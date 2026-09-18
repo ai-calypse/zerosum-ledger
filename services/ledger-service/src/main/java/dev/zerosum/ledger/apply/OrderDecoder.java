@@ -1,5 +1,6 @@
 package dev.zerosum.ledger.apply;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.contracts.ContractSchemas;
 import dev.zerosum.money.OrderCandidate;
 import dev.zerosum.money.Violation;
@@ -10,6 +11,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -40,6 +42,17 @@ public class OrderDecoder {
 
     private final JsonMapper json = JsonMapper.builder().build();
     private final ZeroSumValidator validator = ZeroSumValidator.defaults();
+    /** decision: D08-3 — A4's ledger layer (§0.3 E8): the zero-sum re-check is skipped. Off outside chaos. */
+    private final boolean skipZeroSum;
+
+    public OrderDecoder() {
+        this.skipZeroSum = false;
+    }
+
+    @Autowired
+    public OrderDecoder(ChaosGuard.Active chaos) {
+        this.skipZeroSum = chaos.on("A4");
+    }
 
     public Result decode(byte[] payload) {
         JsonNode root;
@@ -80,6 +93,9 @@ public class OrderDecoder {
         List<Violation> violations = validator.validate(
                 new OrderCandidate(root.get("type").asString(), root.get("reason").asString(), candidateEntries),
                 ZeroSumValidator.RuleSet.LEDGER);
+        if (skipZeroSum) {
+            violations = violations.stream().filter(v -> v.code() != Violation.Code.ZERO_SUM_VIOLATED).toList();
+        }
         if (!violations.isEmpty()) {
             return new Result.Rejected(orderId, QuarantineCode.STRUCTURALLY_INVALID, violations.toString());
         }

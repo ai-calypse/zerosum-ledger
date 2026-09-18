@@ -90,6 +90,13 @@ zs:
     writer-tokens: ${ZS_WRITER_TOKENS:}
     reader-token: ${ZS_READER_TOKEN:}
     admin-token: ${ZS_ADMIN_TOKEN:}
+  # decision: D08-3 — chaos switches (master §8.5), off. Honoured only under the `chaos` profile with
+  # ZS_ALLOW_CHAOS=true; libs/auth ChaosGuard refuses to start otherwise. Set by docker-compose.chaos.yml
+  # (ZS_CHAOS_A1, ZS_CHAOS_A4, ZS_CHAOS_F2) for the ablation experiment only.
+  chaos:
+    a1: false
+    a4: false
+    f2: false
 
 server:
   # decision: D00-3 — docs/step_00_foundations.md#decisions-and-outputs (ports per master §4.6 topology)

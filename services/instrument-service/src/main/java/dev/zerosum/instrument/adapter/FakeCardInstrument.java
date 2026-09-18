@@ -65,7 +65,7 @@ public class FakeCardInstrument implements PaymentInstrument {
         var request = new ProviderWire.ChargeRequest(command.attemptId().toString(), command.instrumentToken(),
                 command.amount().amountMinor(), command.amount().currency());
         return ProviderHttp.submitting(() -> classifyCharge(
-                http.post("/fakecard/v1/charges", request, command.attemptId().toString())));
+                http.post("/fakecard/v1/charges", request, command.idempotencyKey())));
     }
 
     private SubmitResult classifyCharge(ProviderHttp.Response response) {

@@ -19,12 +19,26 @@ public final class Commands {
     private Commands() {
     }
 
-    public record ChargeCommand(UUID attemptId, String instrumentToken, Money amount, Instant deadline) {
+    /**
+     * @param idempotencyKey what the provider dedupes on. The attempt id for every caller except the A3 ablation
+     *                       (D08-3, §0.3 E7), which resubmits the same attempt under a fresh key; the client reference
+     *                       stays the attempt id either way, so a duplicate charge remains attributable.
+     */
+    public record ChargeCommand(UUID attemptId, String instrumentToken, Money amount, Instant deadline,
+            String idempotencyKey) {
         public ChargeCommand {
             requireCommon(attemptId, amount, deadline);
             if (instrumentToken == null || instrumentToken.isBlank()) {
                 throw new IllegalArgumentException("a charge needs an instrument token");
             }
+            if (idempotencyKey == null || idempotencyKey.isBlank()) {
+                throw new IllegalArgumentException("a charge needs an idempotency key");
+            }
+        }
+
+        /** The attempt id as the idempotency key. */
+        public ChargeCommand(UUID attemptId, String instrumentToken, Money amount, Instant deadline) {
+            this(attemptId, instrumentToken, amount, deadline, attemptId == null ? null : attemptId.toString());
         }
     }
 

@@ -1,5 +1,6 @@
 package dev.zerosum.order.api;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.auth.Principal;
 import dev.zerosum.auth.Role;
 import dev.zerosum.money.ChartOfAccounts;
@@ -42,9 +43,12 @@ class MoneyOrderController {
     private static final CurrencyRules CURRENCIES = CurrencyRules.defaults();
 
     private final OrderStore store;
+    /** decision: D08-3 — A4's application layer (§0.3 E8): the zero-sum rule is skipped. Off outside chaos. */
+    private final boolean skipZeroSum;
 
-    MoneyOrderController(OrderStore store) {
+    MoneyOrderController(OrderStore store, ChaosGuard.Active chaos) {
         this.store = store;
+        this.skipZeroSum = chaos.on("A4");
     }
 
     @PostMapping("/v1/money-orders")
@@ -60,7 +64,7 @@ class MoneyOrderController {
         }
 
         NewOrder order = toNewOrder(principal, idempotencyKey.strip(), body);
-        validate(order);   // before the idempotency lookup: a validation failure is never stored (D03-3)
+        validate(order, skipZeroSum);   // before the idempotency lookup: a validation failure is never stored (D03-3)
 
         OrderStore.Result result = store.create(order);
         return switch (result.status()) {
@@ -157,7 +161,7 @@ class MoneyOrderController {
      * The D03-3 validation order, run before any database work so a rejected request is never stored and a corrected
      * retry with the same key still succeeds (Stripe semantics, master standards).
      */
-    private static void validate(NewOrder order) {
+    private static void validate(NewOrder order, boolean skipZeroSum) {
         if (order.orderGroupId() == null || order.orderGroupId().isBlank()) {
             throw ApiException.validationFailed("order_group_id is required");
         }
@@ -179,6 +183,9 @@ class MoneyOrderController {
             }
         }
         List<Violation> violations = VALIDATOR.validate(order.asCandidate());
+        if (skipZeroSum) {
+            violations = violations.stream().filter(v -> v.code() != Violation.Code.ZERO_SUM_VIOLATED).toList();
+        }
         if (!violations.isEmpty()) {
             Violation first = violations.get(0);
             // Only a genuine imbalance is not_zero_sum. An overflow is a representation limit, so it is a validation
