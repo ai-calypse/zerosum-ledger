@@ -21,6 +21,7 @@ while a chaos run was using the same VM**. They are conservative: that load can 
 | `kill -9` of order-service between commit and publish | **100 / 100** orders published after restart and applied **exactly once**, though 1–4 duplicates per run really reached Kafka; last publish ≤ 148 ms after the app started (bound: 5 s) | [m4a-crash-recovery.md](docs/results/s08/m4a-crash-recovery.md) |
 | 10,000 card charges with 20 % of provider responses lost after commit | **Exactly one** successful charge for every one of 10,000 attempts; all **1,946** injected timeouts traced one-to-one to a lost response; 0 stray charges | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
 | The same, with every provider webhook dropped | 229 of 1,000 attempts went `UNKNOWN`; the resolver settled all 229, one charge each; the slowest was settled 196.6 s after submission (limit: 5 min in `UNKNOWN`) | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
+| Reconciliation against the running FakeCard | 20 / 20 report lines matched, the settlement followed into the ledger, provider clearing back to exactly 0; with report corruption injected, 8 typed breaks and the 146 residual **flagged, not adjusted away** | [reconciliation-live.md](docs/results/s06/reconciliation-live.md) |
 | A defect found by measuring, then fixed | Under hot-account contention, valid orders were quarantined instead of retried. Root-caused, fixed, with a regression test proven to fail without the fix | [CR-S07-01](docs/scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed) |
 | Test suite, force-executed 2026-09-18 | **360 unit + 292 integration** (real PostgreSQL and Kafka via Testcontainers), **0 failures**, 1 deliberate skip; plus end-to-end and chaos layers run against the live stack | [architecture.md](docs/architecture.md#what-the-tests-actually-cover) |
 
@@ -74,9 +75,10 @@ Kept explicit on purpose. [docs/scope-decisions.md](docs/scope-decisions.md) rec
 
 - **Not a production system.** One broker (replication factor 1), one database server, one relay, one ledger
   listener. No real money, cards or bank accounts.
-- **Not every path is proven live.** The charge path, webhooks, payout runs and the operator dashboard were exercised
-  against the running stack. Reconciliation and the `UNKNOWN` sweeper are covered by integration tests, not by a live
-  run.
+- **Some live runs take shortcuts, and say so.** The charge path, webhooks, payout runs, the `UNKNOWN` resolver,
+  reconciliation and the seeded W1 scenario were all exercised against the running stack. But the reconciliation runs
+  close their day by backdating that run's own rows, as the integration tests do, rather than waiting for a real
+  UTC midnight.
 - **Performance gaps.** 500 orders/s sustained for 10 minutes (T1) and client-observed API latency (P1) were not
   measured. No figure was taken on a quiet machine.
 - **Open acceptance criteria** are listed in [docs/architecture.md](docs/architecture.md#acceptance-criteria-m1m14) as NOT MET or

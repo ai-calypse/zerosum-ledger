@@ -1,0 +1,11 @@
+[08:41:28] run rl4a734cab charges 20 closing day 2026-09-17
+[08:41:28] posted 20 COMMERCE orders, total fare 29500
+[08:41:29] attempts: SUCCEEDED=20
+[08:41:29] provider charges for these attempts: SUCCEEDED=20 sum=29500
+[08:41:29] backdate charges: UPDATE 20
+[08:41:29] backdate attempts: UPDATE 20
+[08:41:30] FakeCard report 2026-09-17 HTTP 200 {"report_id": "rpt_2026_09_17", "provider": "fakecard", "report_date": "2026-09-17", "lines": [{"provider_ref": "ch_06cb5fc5-6ceb-4087-8745-eae2fd978bbb", "client_reference": "01a0b3ad-83e5-79b3-b49a-84a55f265d39", "kind": "CHARGE", "currency": "USD", "gross_minor": 1150, "fee_minor": 63}, {"provider_ref": "ch_8e6de2d3-0ba2-4492-b550-931c9ae77744", "client_reference": "01a0b3ad-83e0-7c44-a8d0-fb1a
+[08:41:30] reconciliation run HTTP 201 {"run_id": "01a0b3ad-8aac-7354-8c12-8604856b1941", "provider": "fakecard", "report_date": "2026-09-17", "report_id": "rpt_2026_09_17", "status": "COMPLETED", "lines_matched": 20, "breaks_found": 0, "settled": true, "replayed": false}
+[08:41:30] breaks HTTP 200 []
+[08:41:30] second caller, different key: HTTP 200 {"run_id": "01a0b3ad-8aac-7354-8c12-8604856b1941", "provider": "fakecard", "report_date": "2026-09-17", "report_id": "rpt_2026_09_17", "status": "COMPLETED", "lines_matched": 20, "breaks_found": 0, "settled": true, "replayed": true}
+{"run": "rl4a734cab", "day": "2026-09-17", "n": 20, "fare_total": 29500}
