@@ -1,0 +1,16 @@
+{
+  "tool": "tools/verifier",
+  "label": "verifier-live-2026-09-18",
+  "started_at": "2026-09-18T08:39:13.832816Z",
+  "jdbc_url": "jdbc:postgresql://127.0.0.1:5432/ledger",
+  "connected_as": "verifier",
+  "session_transaction_read_only": "on",
+  "scope": {"entities": 83, "accounts": 83, "changelog_rows": 183, "applied_orders": 61, "empty": false},
+  "checks": [
+    {"id": "I2", "checks": "global per-currency sum of ledger balances is 0", "passed": true, "violation_count": 0, "list_truncated": false, "violations": []},
+    {"id": "I3", "checks": "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum", "passed": true, "violation_count": 0, "list_truncated": false, "violations": []},
+    {"id": "I4", "checks": "changelog seq is gapless per entity", "passed": true, "violation_count": 0, "list_truncated": false, "violations": []}
+  ],
+  "passed": true,
+  "provenance": {"captured_at": "2026-09-18T08:39:13.963565Z", "git_sha": "c39694ccdc0761909cb6754ad646c213b856864c", "working_tree": "DIRTY — 2 uncommitted file(s); this result is not reproducible from the SHA alone", "versions_document": "docs/adr/0002-stack-and-pinned-versions.md", "java_runtime": "25.0.4.1+1-LTS", "hardware": "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64", "seeds": [], "runtime_versions": {"JVM": "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)", "PostgreSQL": "PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"}}
+}
