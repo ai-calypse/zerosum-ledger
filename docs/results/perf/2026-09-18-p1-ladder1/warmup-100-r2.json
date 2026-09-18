@@ -1,0 +1,222 @@
+{
+ "root_group": {
+  "name": "",
+  "path": "",
+  "id": "d41d8cd98f00b204e9800998ecf8427e",
+  "groups": [],
+  "checks": [
+    {
+     "name": "201 Created",
+     "path": "::201 Created",
+     "id": "728dcd977aae263ca314731145e1d447",
+     "passes": 3001,
+     "fails": 0
+    }
+   ]
+ },
+ "options": {
+  "summaryTrendStats": [
+   "min",
+   "med",
+   "avg",
+   "p(90)",
+   "p(95)",
+   "p(99)",
+   "max"
+  ],
+  "summaryTimeUnit": "",
+  "noColor": false
+ },
+ "state": {
+  "testRunDurationMs": 30002.209584,
+  "isStdOutTTY": false,
+  "isStdErrTTY": false
+ },
+ "metrics": {
+  "iterations": {
+   "values": {
+    "count": 3001,
+    "rate": 100.02596614085435
+   },
+   "type": "counter",
+   "contains": "default"
+  },
+  "data_received": {
+   "contains": "data",
+   "values": {
+    "count": 2318350,
+    "rate": 77272.6419868876
+   },
+   "type": "counter"
+  },
+  "vus": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "value": 0,
+    "min": 0,
+    "max": 2
+   }
+  },
+  "http_req_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 1.32825,
+    "avg": 1.4416249973342212,
+    "p(90)": 2.017958,
+    "p(95)": 2.465334,
+    "p(99)": 3.424708,
+    "max": 15.408833,
+    "min": 0.611125
+   }
+  },
+  "http_req_connecting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 0.0017159570143285576,
+    "p(90)": 0,
+    "p(95)": 0,
+    "p(99)": 0.0705,
+    "max": 0.550375,
+    "min": 0,
+    "med": 0
+   }
+  },
+  "http_req_failed": {
+   "contains": "default",
+   "values": {
+    "fails": 3001,
+    "rate": 0,
+    "passes": 0
+   },
+   "type": "rate"
+  },
+  "http_reqs": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "rate": 100.02596614085435,
+    "count": 3001
+   }
+  },
+  "http_req_waiting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0.590083,
+    "med": 1.289958,
+    "avg": 1.398567943352213,
+    "p(90)": 1.9605,
+    "p(95)": 2.379791,
+    "p(99)": 3.334833,
+    "max": 15.296333
+   }
+  },
+  "iteration_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 2.67,
+    "p(99)": 3.767375,
+    "max": 15.628042,
+    "min": 0.672084,
+    "med": 1.445583,
+    "avg": 1.568978608797067,
+    "p(90)": 2.199292
+   }
+  },
+  "http_req_blocked": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "max": 0.696916,
+    "min": 0.000917,
+    "med": 0.002416,
+    "avg": 0.0053434568477174985,
+    "p(90)": 0.00425,
+    "p(95)": 0.006458,
+    "p(99)": 0.099792
+   }
+  },
+  "vus_max": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "max": 50,
+    "value": 50,
+    "min": 50
+   }
+  },
+  "http_req_tls_handshaking": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0,
+    "med": 0,
+    "avg": 0,
+    "p(90)": 0,
+    "p(95)": 0,
+    "p(99)": 0,
+    "max": 0
+   }
+  },
+  "http_req_receiving": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 0.051917,
+    "p(99)": 0.09775,
+    "max": 2.5215,
+    "min": 0.007333,
+    "med": 0.022,
+    "avg": 0.026628709430189888,
+    "p(90)": 0.039625
+   }
+  },
+  "checks": {
+   "values": {
+    "passes": 3001,
+    "fails": 0,
+    "rate": 1
+   },
+   "type": "rate",
+   "contains": "default"
+  },
+  "http_req_duration{expected_response:true}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0.611125,
+    "med": 1.32825,
+    "avg": 1.4416249973342212,
+    "p(90)": 2.017958,
+    "p(95)": 2.465334,
+    "p(99)": 3.424708,
+    "max": 15.408833
+   }
+  },
+  "http_req_sending": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 0.016428344551816094,
+    "p(90)": 0.023041,
+    "p(95)": 0.028209,
+    "p(99)": 0.0435,
+    "max": 0.201875,
+    "min": 0.004917,
+    "med": 0.015084
+   }
+  },
+  "data_sent": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "count": 2237335,
+    "rate": 74572.34087162558
+   }
+  }
+ }
+}

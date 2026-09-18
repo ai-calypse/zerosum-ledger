@@ -28,6 +28,8 @@ record PerfParameters(int windowSeconds, int warmupSeconds, int repetitions, int
     static final String BATCH_SIZES_PROPERTY = "zs.perf.batchSizes";
     static final String BATCH_WRITERS_PROPERTY = "zs.perf.batchWriters";
     static final String ENTITY_COUNTS_PROPERTY = "zs.perf.entityCounts";
+    static final String ENTITY_WRITERS_PROPERTY = "zs.perf.entityWriters";
+    static final String ENTITY_BATCH_SIZE_PROPERTY = "zs.perf.entityBatchSize";
     static final String E2E_RATES_PROPERTY = "zs.perf.e2eRates";
 
     static PerfParameters fromClasspath() {
@@ -70,7 +72,7 @@ record PerfParameters(int windowSeconds, int warmupSeconds, int repetitions, int
                 listOverride(BATCH_SIZES_PROPERTY, batchSizes),
                 listOverride(BATCH_WRITERS_PROPERTY, batchWriters),
                 listOverride(ENTITY_COUNTS_PROPERTY, entityCounts),
-                entityWriters, entityBatchSize,
+                intOverride(ENTITY_WRITERS_PROPERTY, entityWriters), intOverride(ENTITY_BATCH_SIZE_PROPERTY, entityBatchSize),
                 listOverride(E2E_RATES_PROPERTY, e2eRates),
                 e2eAppenders,
                 intOverride(WINDOW_PROPERTY, e2eWindowSeconds),

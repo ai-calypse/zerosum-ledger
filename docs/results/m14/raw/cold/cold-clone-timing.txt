@@ -1,0 +1,20 @@
+=== evict 22:22:24
+evicted: none of the project images remain
+build cache: Build Cache 0B
+T0 22:22:25 clone
+SHA 417b4127295f9c44a21ed6ebcba532d135e118f3
+T1 22:22:26 make env
+T2 22:22:27 make up
+T3 22:27:13 W1
+T4 22:27:15 done (simulator exit 0)
+clone                                             1.2 s
+make env                                          0.3 s
+make up (downloads, build, start, healthy)      286.1 s
+W1 scenario                                       2.5 s
+TOTAL clone -> W1 completed                     290.1 s  (4.83 min)
+gradle home downloaded: 1.4G  (jdks: 438M, wrapper: 164M, caches: 832M)
+images now: zerosum-ledger-fake-providers:latest 627MB;zerosum-ledger-instrument-service:latest 673MB;zerosum-ledger-order-service:latest 672MB;zerosum-ledger-ledger-service:latest 673MB;grafana/otel-lgtm:<none> 3.42GB;postgres:<none> 672MB;apache/kafka:<none> 690MB;nginx:<none> 92.7MB;
+pull/download log lines: 1213
+ZS-SIM ledger invariants consistent=true unresolved_quarantined=0
+ZS-SIM result PASS
+ZS-SIM wrote /private/tmp/claude-501/-Users-yakshgandhi-Documents-Development-fintech-blogs/8d2f12f4-2483-4d36-9402-1628da230ac5/scratchpad/m14a-cold/w1-cold-clone.json and /private/tmp/claude-501/-Users-yakshgandhi-Documents-Development-fintech-blogs/8d2f12f4-2483-4d36-9402-1628da230ac5/scratchpad/m14a-cold/w1-cold-clone.md

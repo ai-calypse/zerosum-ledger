@@ -1,0 +1,90 @@
+23:10:59 344.6MiB / 768MiB 427.03%
+23:11:03 361.1MiB / 768MiB 327.64%
+23:11:07 370.1MiB / 768MiB 283.37%
+23:11:11 383.4MiB / 768MiB 174.95%
+23:11:15 384.8MiB / 768MiB 78.56%
+23:11:19 385.9MiB / 768MiB 79.36%
+23:11:23 392.6MiB / 768MiB 56.56%
+23:11:27 393.8MiB / 768MiB 53.64%
+23:11:31 394.2MiB / 768MiB 30.69%
+23:11:35 394.5MiB / 768MiB 34.65%
+23:11:39 394.2MiB / 768MiB 36.60%
+23:11:43 395MiB / 768MiB 37.43%
+23:11:48 398.6MiB / 768MiB 39.35%
+23:11:52 399.5MiB / 768MiB 37.67%
+23:11:56 400.1MiB / 768MiB 50.61%
+23:12:00 400.4MiB / 768MiB 41.33%
+23:12:04 400.1MiB / 768MiB 39.62%
+23:12:08 406.4MiB / 768MiB 121.84%
+23:12:12 407MiB / 768MiB 60.16%
+23:12:16 407.2MiB / 768MiB 48.66%
+23:12:20 406.7MiB / 768MiB 50.38%
+23:12:24 407.6MiB / 768MiB 89.07%
+23:12:28 407.2MiB / 768MiB 107.27%
+23:12:32 415.1MiB / 768MiB 106.00%
+23:12:36 417.1MiB / 768MiB 99.18%
+23:12:40 417MiB / 768MiB 75.02%
+23:12:44 417.9MiB / 768MiB 67.47%
+23:12:48 417.3MiB / 768MiB 105.01%
+23:12:52 429.2MiB / 768MiB 54.19%
+23:12:56 440.2MiB / 768MiB 55.52%
+23:13:01 439.4MiB / 768MiB 54.41%
+23:13:05 451.1MiB / 768MiB 60.06%
+23:13:09 477.1MiB / 768MiB 54.23%
+23:13:13 516.7MiB / 768MiB 65.37%
+23:13:17 518.9MiB / 768MiB 59.30%
+23:13:21 518.9MiB / 768MiB 55.14%
+23:13:25 523MiB / 768MiB 53.45%
+23:13:29 522.8MiB / 768MiB 51.69%
+23:13:34 523.5MiB / 768MiB 55.12%
+23:13:38 522.8MiB / 768MiB 40.67%
+23:13:42 525.8MiB / 768MiB 54.24%
+23:13:46 523.5MiB / 768MiB 48.44%
+23:13:50 524MiB / 768MiB 61.58%
+23:13:54 525.7MiB / 768MiB 44.28%
+23:13:58 526.4MiB / 768MiB 51.58%
+23:14:02 526.1MiB / 768MiB 46.44%
+23:14:06 527.2MiB / 768MiB 52.46%
+23:14:10 526.8MiB / 768MiB 44.43%
+23:14:14 526.9MiB / 768MiB 40.74%
+23:14:18 526.3MiB / 768MiB 43.34%
+23:14:22 526.9MiB / 768MiB 46.18%
+23:14:26 526.9MiB / 768MiB 61.92%
+23:14:31 526.6MiB / 768MiB 51.08%
+23:14:35 526.2MiB / 768MiB 40.91%
+23:14:39 523.3MiB / 768MiB 163.57%
+23:14:43 519.3MiB / 768MiB 135.28%
+23:14:47 520MiB / 768MiB 126.36%
+23:14:51 519.2MiB / 768MiB 136.06%
+23:14:55 519.7MiB / 768MiB 132.67%
+23:14:59 519.4MiB / 768MiB 122.65%
+23:15:03 519.3MiB / 768MiB 100.35%
+23:15:07 511.6MiB / 768MiB 0.93%
+23:15:11 511.3MiB / 768MiB 2.12%
+23:15:15 510.9MiB / 768MiB 1.36%
+23:15:19 506.7MiB / 768MiB 1.96%
+23:15:23 506.2MiB / 768MiB 0.10%
+23:15:27 506MiB / 768MiB 0.27%
+23:15:31 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:34 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:38 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:41 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:44 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:47 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:50 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:53 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:56 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:15:59 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:16:02 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:16:05 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:16:08 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:16:11 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:16:14 Error response from daemon: No such container: zerosum-ledger-order-service-1
+23:16:17 0B / 0B 0.00%
+23:16:20 0B / 0B 0.00%
+23:16:23 138.5MiB / 768MiB 200.42%
+23:16:27 246.7MiB / 768MiB 231.08%
+23:16:31 290.5MiB / 768MiB 199.66%
+23:16:35 335.5MiB / 768MiB 213.35%
+23:16:39 351.7MiB / 768MiB 6.61%
+23:16:43 356.6MiB / 768MiB 24.57%

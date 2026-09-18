@@ -36,7 +36,7 @@ tasks.withType<Test>().configureEach {
     // decision: D07-5, D07-6 — S07 performance study smoke overrides, forwarded for the same reason as SP1's: a
     // Gradle -D reaches the daemon, not the forked test JVM, and the study asserts that a requested override arrived.
     listOf("windowSeconds", "warmupSeconds", "repetitions", "batchSizes", "batchWriters", "entityCounts", "e2eRates",
-            "runLabel")
+            "entityWriters", "entityBatchSize", "runLabel")
         .forEach { name ->
             providers.gradleProperty("zs.perf.$name").orNull?.let { systemProperty("zs.perf.$name", it) }
         }
