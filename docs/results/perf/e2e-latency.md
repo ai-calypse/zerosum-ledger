@@ -29,7 +29,7 @@
 | Docker engine / Compose version | 29.8.0. This study uses Testcontainers only; Compose was not invoked by it |
 | Docker VM CPUs / memory | 10 CPUs / 8,319,504,384 bytes (7.75 GiB). PostgreSQL limited to 1536 MB per D00-3 |
 | Emulated images (non-native architecture) | None; arm64 host, arm64 images |
-| Other load on the host during the run | **Another agent's full Compose stack was resident on the same VM** (8 containers: postgres, kafka, otel-lgtm, four services, nginx). Earlier the same night that agent ran `kill -9` cycles on order-service and a FakeCard volume run. [2026-09-18-e2e/vm-load.log](2026-09-18-e2e/vm-load.log) samples every container every 30 s across the whole run: **no Compose container restarted during any window**; the resident stack used about 7–30 % of one core per sample (≈ 1–3 % of the VM); one sample at 07:14:05 shows `kafka-1` at 92 % of one core, which fell between repetition 2 (ended 07:13:53) and repetition 3 (started 07:14:24) of the 500/s rate. See §10 for how this is labelled |
+| Other load on the host during the run | **All six windows overlapped a concurrent chaos run on the same VM.** The coordinator's cross-check against the chaos agent's timeline: every window (07:06:43–07:15:26 UTC) overlapped **chaos M8(b) volume chunk 2** (~07:07–07:18 UTC) — FakeCard charges at `timeout_after_commit_rate=0.2` driven through order-service → instrument-service → fake-providers → webhooks on that agent's Compose stack (8 containers). [2026-09-18-e2e/vm-load.log](2026-09-18-e2e/vm-load.log) agrees: no Compose container restarted during any window, fake-providers and instrument-service rose to ≈ 1–5 % of one core, the whole stack used ≈ 7–30 % of one core per 30 s sample (≈ 1–3 % of the 10-CPU VM), and `kafka-1` reached 92 % of one core in one sample at 07:14:05. Low-intensity load, but not a quiet machine — see §10 |
 
 ## 5. Scenario, workload and seeds
 
@@ -92,6 +92,10 @@ JUnit XML: 1 test, 0 failures, 0 errors, 572 s.
 All 6 windows are valid data points: **125,998 orders measured, 0 missing, 0 quarantined**, I2, I3, I4 and I5 zero after
 every window, late arrivals ≤ 0.05 %.
 
+> **Every figure below was measured under concurrent load on a shared VM** (chaos M8(b) chunk 2, §4). Load can only add
+> latency, so these figures **overstate** latency and do not flatter it: each is a conservative upper bound on what a
+> quiet machine would show, not a clean figure. They are kept exactly as measured.
+
 ### 8.1 Per repetition (MEASURED)
 
 | Rate /s | Rep | UTC (start–quiesced) | Orders | Late | p50 ms | p95 ms | p99 ms | Outbox stage p50 / p95 / p99 ms | Kafka + apply p50 / p95 / p99 ms | Apply batches | Mean apply batch ms |
@@ -144,13 +148,10 @@ latency measurement at that rate.
 
 ## 10. Deviations and limitations
 
-- **Concurrent load label.** Every window here ran with another agent's Compose stack resident on the same VM. By the
-  30 s load log no container restarted during any window and the stack's CPU was ≈ 1–3 % of the VM, so these windows are
-  **quiet by the load log**; one Kafka spike between two windows is recorded. The log samples every 30 s and cannot see
-  the other agent's own schedule, so the classification is **pending the coordinator's cross-check against the chaos
-  agent's timeline**. If any window overlapped that activity, its figure is **measured under concurrent load on a shared
-  VM — a conservative lower bound, not a clean figure**. Contention can only make latency worse, so no figure here can
-  be flattered by it.
+- **Concurrent load label: all six windows.** All six windows overlapped chaos M8(b) chunk 2 (low-intensity load,
+  ≈ 1–5 % of one core per service by the load log). The figures are measured under concurrent load, so they are
+  conservative: they overstate latency and do not flatter it. The numbers are kept as measured. A quiet-machine re-run
+  has not been done; the coordinator has offered to re-run if one is needed.
 - **Shorter windows than the matrix.** The master's pipeline row is 2 min warm-up + 10 min × 3; this is 30 s + 60 s × 3.
   Repetitions and the median-of-repetitions rule are not reduced. A 10-minute window would expose slow drift (table
   growth, autovacuum, GC) that 60 s cannot.
