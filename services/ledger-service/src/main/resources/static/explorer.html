@@ -1,1010 +1,2755 @@
 <!DOCTYPE html>
 <!--
-  decision: D09-4 — docs/step_09_demo_docs_release.md#s09-t03
+  decision: D09-4 — docs/step_09_demo_docs_release.md#s09-t03 · S09 dashboard — docs/results/s09/dashboard.md
 
-  The Ledger Explorer. One self-contained file, served by ledger-service, with no third-party script, font or style:
-  everything the Content-Security-Policy allows is in this file, and ExplorerHeaders derives the CSP hashes from these
-  exact bytes at startup.
+  The ZeroSum Explorer: an operator dashboard over the whole running system. One self-contained file, served by
+  ledger-service, with no third-party script, font, style or image. Every chart is SVG built node by node with
+  createElementNS, and ExplorerHeaders derives the CSP hashes of the one inline script and the one inline stylesheet
+  from these exact bytes at startup.
 
-  Two rules this page does not bend:
-    * Every value is written with textContent. Nothing here uses innerHTML, so an idempotency key containing
-      <img src=x onerror=...> renders as the characters a user typed, not as markup.
-    * Signs are never recomputed. The API already reports each balance on its account's normal side (ADR-0003);
-      a second opinion in JavaScript is how a UI ends up disagreeing with the ledger it displays.
-
-  Three more this page inherits:
-    * Amounts past Number.MAX_SAFE_INTEGER are shown as exact digits with a flag, never rounded. Long integer
-      literals are quoted before JSON.parse so they survive as strings.
+  Rules this page does not bend:
+    * Every value is written with textContent or as an SVG attribute. Nothing here uses innerHTML, so an idempotency
+      key containing <img src=x onerror=...> renders as the characters a user typed, not as markup.
+    * Signs are never recomputed. The APIs report each balance on its account's normal side (ADR-0003) and the
+      per-currency totals are summed server-side; this page colours and sizes what it was given.
+    * Amounts past Number.MAX_SAFE_INTEGER are shown as exact digits with a flag, never rounded. Long integer literals
+      are quoted before JSON.parse so they survive as strings.
     * Tokens live in JS variables for the lifetime of the page. Never storage, never the URL, never a cookie, and
-      dropped the moment a service answers 401.
-    * Nothing polls. /v1/invariants takes a repeatable-read snapshot that delays vacuum on a busy database, so it
-      refreshes when an operator asks and not on a timer.
+      dropped the moment a service answers 401. Health checks and Grafana are called with no token at all.
+    * /v1/invariants takes a repeatable-read snapshot that delays vacuum on a busy database, so everything behind a
+      token refreshes when an operator asks. The only timer is the Live metrics tab, which reads Grafana alone, and
+      only while that tab is open.
 
-  Panels are grouped by the token they need and the origin they need. Ledger panels work on ledger-service's own
-  port; instrument and provider panels need the one-origin reverse proxy (docker-compose.demo.yml), because
-  connect-src 'self' is the right policy and is deliberately not widened to reach another port.
+  Every service is reached through the one-origin reverse proxy (docker-compose.demo.yml, infra/nginx/nginx.conf):
+  /v1 is ledger-service, /orders order-service, /instruments instrument-service, /providers fake-providers and
+  /grafana otel-lgtm. connect-src 'self' therefore covers all of them and is deliberately not widened. Opened on
+  ledger-service's own port, the ledger panels still work and the rest say which origin they need.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>ZeroSum Explorer</title>
 <style>
 :root {
-  --bg: #0f1115; --panel: #171a21; --raised: #1d212a; --line: #262b36;
-  --text: #e6e8ee; --muted: #8b93a7; --faint: #5d6478;
-  --good: #3fb950; --bad: #f85149; --warn: #d29922; --accent: #58a6ff; --on-accent: #06111f;
+  --bg: #f6f2eb; --surface: #fdfcfa; --alt: #f0ebe2; --sunk: #ebe5da; --line: #d9d2c6; --line-soft: #e9e3d9;
+  --ink: #1a1612; --ink-2: #4f493f; --muted: #72695d; --faint: #a39b8e;
+  --good: #4d6e4d; --bad: #9c4636; --warn: #8a6a22; --info: #3f5f7f;
+  --c1: #4f6d8a; --c2: #5c7a5c; --c3: #a35140; --c4: #8a7440; --c5: #7a5c7a; --c6: #4f7a76; --c7: #a0784a;
+  --c8: #9a5f6e;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f6f7f9; --panel: #fff; --raised: #f2f4f7; --line: #e1e4ea;
-    --text: #1c2027; --muted: #5b6474; --faint: #79818f;
-    --good: #18794e; --bad: #c9252d; --warn: #9a6700; --accent: #0a66c2; --on-accent: #fff;
+:root[data-theme="dark"] {
+  --bg: #13110e; --surface: #1b1814; --alt: #241f1a; --sunk: #0f0d0b; --line: #3a342c; --line-soft: #2b2620;
+  --ink: #f2ede5; --ink-2: #cbc3b6; --muted: #9d9588; --faint: #6c655b;
+  --good: #8fb58f; --bad: #e0907e; --warn: #d4b56f; --info: #92b3d3;
+  --c1: #92b3d3; --c2: #8fb58f; --c3: #e0907e; --c4: #d4b56f; --c5: #c09dc1; --c6: #88beb7; --c7: #dcab7b;
+  --c8: #d99aa9;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #13110e; --surface: #1b1814; --alt: #241f1a; --sunk: #0f0d0b; --line: #3a342c; --line-soft: #2b2620;
+    --ink: #f2ede5; --ink-2: #cbc3b6; --muted: #9d9588; --faint: #6c655b;
+    --good: #8fb58f; --bad: #e0907e; --warn: #d4b56f; --info: #92b3d3;
+    --c1: #92b3d3; --c2: #8fb58f; --c3: #e0907e; --c4: #d4b56f; --c5: #c09dc1; --c6: #88beb7; --c7: #dcab7b;
+    --c8: #d99aa9;
+    color-scheme: dark;
   }
 }
+
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text);
-  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
 
-header { padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
-  display: flex; gap: 12px 16px; align-items: center; flex-wrap: wrap;
-  position: sticky; top: 0; z-index: 2; }
-h1 { font-size: 15px; margin: 0; letter-spacing: .04em; white-space: nowrap; }
-h2 { font-size: 12px; margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+/* ---- shell ---- */
+.app { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh;
+  background: linear-gradient(90deg, var(--surface) 223px, var(--line) 223px 224px, var(--bg) 224px); }
+.sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--surface);
+  border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 18px; }
+.brand { display: flex; align-items: baseline; gap: 7px; padding: 4px 8px 14px; border-bottom: 1px solid var(--line); }
+.brand-mark { font: 600 23px/1 var(--serif); letter-spacing: -.01em; margin: 0; }
+.brand-sub { font: 12px/1 var(--mono); color: var(--muted); }
+.nav-groups { display: flex; flex-direction: column; gap: 16px; }
+.nav-label { font-size: 10px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted);
+  padding: 0 10px 6px; }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+  border-radius: 4px; border-left: 3px solid transparent; color: var(--ink-2); cursor: pointer; font-size: 13px; }
+.nav button:hover { background: var(--alt); color: var(--ink); }
+.nav button[aria-current="page"] { background: var(--alt); color: var(--ink); font-weight: 600; border-left-color: var(--ink); }
+.nav button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+.nav svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+.count { margin-left: auto; font: 500 10px/1 var(--mono); padding: 3px 6px; border-radius: 99px; background: var(--alt);
+  color: var(--ink-2); }
+.count.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.count.bad { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.count.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.side-foot { margin-top: auto; font-size: 11px; color: var(--muted); padding: 0 10px; line-height: 1.5; }
+
+.main { min-width: 0; display: flex; flex-direction: column; }
+.topbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+  padding: 10px 24px; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); }
+.env { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--muted); min-width: 0; }
+.env .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.env .dot.good { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+.env .dot.bad { background: var(--bad); }
 .spacer { flex: 1 1 auto; }
-.creds { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.creds { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cred { display: flex; gap: 6px; align-items: center; }
-.cred label { color: var(--muted); font-size: 12px; }
-.cred input { min-width: 150px; }
+.cred label { color: var(--muted); font-size: 11.5px; }
+.cred input { width: 150px; }
+.content { padding: 22px 24px 56px; max-width: 1380px; width: 100%; }
 
-main { padding: 16px 20px 40px; display: grid; gap: 14px; max-width: 1240px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
-.panel > header { all: unset; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
-  margin-bottom: 10px; }
-.panel-note { color: var(--faint); font-size: 12px; }
+/* ---- page furniture ---- */
+.page-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 18px;
+  flex-wrap: wrap; }
+.crumbs { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+h1 { font: 600 25px/1.2 var(--serif); margin: 0; letter-spacing: -.01em; }
+.sub { margin: 6px 0 0; color: var(--ink-2); max-width: 84ch; font-size: 13.5px; }
+[data-page] > * + * { margin-top: 14px; }
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g21 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.g12 { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.panel + .panel { margin-top: 14px; }
+.grid > .panel + .panel { margin-top: 0; }
+.panel-head { display: flex; align-items: baseline; gap: 6px 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.panel-head h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.note { color: var(--muted); font-size: 11.5px; }
+h3 { font-size: 12px; font-weight: 600; margin: 16px 0 8px; color: var(--ink-2); text-transform: uppercase;
+  letter-spacing: .06em; }
 
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
-  padding: 6px 9px; font: inherit; min-width: 220px; }
-input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent);
-  outline-offset: 1px; }
-select { min-width: 140px; }
-button { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 6px; padding: 6px 13px;
-  font: inherit; font-weight: 600; cursor: pointer; }
-button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 400; }
-button.link { background: none; border: 0; color: var(--accent); padding: 0 2px; font-weight: 400;
-  text-decoration: underline; cursor: pointer; }
-button:disabled { opacity: .45; cursor: not-allowed; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 12px; }
+.kpis:empty { display: none; }
+@media (min-width: 1181px) { .kpis.k4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px 13px;
+  position: relative; overflow: hidden; min-width: 0; }
+.kpi.clickable { cursor: pointer; }
+.kpi.clickable:hover { border-color: var(--faint); }
+.kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: transparent; }
+.kpi.good::before { background: var(--good); }
+.kpi.warn::before { background: var(--warn); }
+.kpi.bad::before { background: var(--bad); }
+.kpi .k { font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.kpi .v { font: 600 25px/1.15 var(--serif); margin-top: 6px; letter-spacing: -.01em; font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere; }
+.kpi .s { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; }
 
-table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-  position: sticky; top: 0; background: var(--panel); }
-tbody tr:hover td { background: var(--raised); }
-td.num { text-align: right; font-variant-numeric: tabular-nums; }
-td.wrap { white-space: normal; max-width: 34ch; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font: 500 10.5px/1.55 var(--mono); padding: 0 7px;
+  border-radius: 3px; background: var(--alt); color: var(--ink-2); white-space: nowrap; letter-spacing: .02em; }
+.pill.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.good { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.pill.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.pill.info { background: color-mix(in srgb, var(--info) 13%, transparent); color: var(--info); }
+.pill.faint { color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-weight: 600; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  background: var(--surface); position: sticky; top: 0; z-index: 1; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; vertical-align: middle; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num, td.mono { font-family: var(--mono); font-size: 11.5px; }
+td.wrap { white-space: normal; min-width: 16ch; max-width: 48ch; overflow-wrap: anywhere; }
+td.barcell { min-width: 120px; width: 26%; }
+tbody tr:hover td { background: var(--alt); }
+tr.clickable { cursor: pointer; }
+tr.selected td { background: var(--alt); }
+tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--ink); }
 .scroll { overflow-x: auto; }
+.compact td, .compact th { padding-top: 4px; padding-bottom: 4px; }
+.scroll.tall { max-height: 460px; overflow-y: auto; }
+.pos { color: var(--good); } .neg { color: var(--bad); } .muted { color: var(--muted); } .err { color: var(--bad); }
+.stale { opacity: .45; transition: opacity .2s; }
 
-.pos { color: var(--good); } .neg { color: var(--bad); } .muted { color: var(--muted); }
-.err { color: var(--bad); }
-.stale { opacity: .5; }
-.pill { display: inline-block; padding: 0 7px; border-radius: 99px; font-size: 11px; border: 1px solid var(--line);
-  color: var(--muted); line-height: 17px; }
-.pill.ok { color: var(--good); border-color: var(--good); }
-.pill.bad { color: var(--bad); border-color: var(--bad); }
-.pill.warn { color: var(--warn); border-color: var(--warn); }
-
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; }
-.tile { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; background: var(--bg); }
-.tile .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-.tile .v { font-size: 17px; margin-top: 3px; }
-.tile .sub { color: var(--faint); font-size: 11px; margin-top: 3px; white-space: normal; }
-.tile.bad { border-color: var(--bad); }
-.tile.warn { border-color: var(--warn); }
-
-.findings { margin-top: 10px; display: grid; gap: 6px; }
-.finding { border-left: 2px solid var(--bad); padding: 3px 0 3px 10px; white-space: normal; }
-.finding.warn { border-left-color: var(--warn); }
-.finding .what { color: var(--text); }
-.finding .detail { color: var(--muted); font-size: 12px; }
-
-.empty { color: var(--faint); padding: 10px 0; }
-code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px;
-  display: block; overflow-x: auto; white-space: pre; margin-top: 6px; color: var(--muted); }
-.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 8px 0; }
+input, select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 4px; padding: 6px 9px; min-width: 0; }
+input::placeholder { color: var(--faint); }
+input:focus-visible, select:focus-visible, button:focus-visible, .kpi:focus-visible, tr:focus-visible {
+  outline: 2px solid var(--info); outline-offset: 1px; }
+.btn { font: 500 12px/1 var(--sans); padding: 7px 11px; border-radius: 4px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--alt); }
+.btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.btn.primary:hover { opacity: .88; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.link { all: unset; color: var(--info); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link:focus-visible { outline: 2px solid var(--info); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row + .row { margin-top: 8px; }
+.row input.grow { flex: 1 1 260px; }
+.row.foot { margin-top: 14px; }
+.sums { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 8px 12px; font-size: 12.5px; }
+.sums small { display: block; font: 10.5px var(--mono); color: var(--muted); }
+.sums .val { font: 12px var(--mono); text-align: right; }
+.sums .total { font-weight: 600; border-top: 1px solid var(--line); padding-top: 8px; }
+.empty { color: var(--muted); padding: 12px 0; font-size: 12.5px; margin: 0; }
+.callout { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 4px; padding: 10px 14px;
+  background: color-mix(in srgb, var(--warn) 7%, var(--surface)); }
+.callout.good { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 7%, var(--surface)); }
+.callout.bad { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, var(--surface)); }
+.callout.info { border-left-color: var(--info); background: color-mix(in srgb, var(--info) 7%, var(--surface)); }
+.callout .t { font-weight: 600; }
+.callout .d { color: var(--ink-2); margin-top: 2px; font-size: 12.5px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 10px 0; font-size: 12.5px; }
 .kv dt { color: var(--muted); }
-.kv dd { margin: 0; overflow-wrap: anywhere; }
-@media (max-width: 640px) {
-  main { padding: 12px; } th, td { padding: 5px 7px; }
-  .cred input { min-width: 120px; } input, select { min-width: 0; width: 100%; }
+.kv dd { margin: 0; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; }
+pre.code { font: 11.5px/1.55 var(--mono); background: var(--alt); border: 1px solid var(--line); padding: 8px 10px;
+  border-radius: 4px; overflow-x: auto; margin: 8px 0 0; color: var(--ink-2); white-space: pre; }
+
+/* ---- attention list and service tiles ---- */
+.todo { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); align-items: flex-start; }
+.todo:first-child { border-top: 0; padding-top: 2px; }
+.todo .mark { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--warn); }
+.todo .mark.bad { background: var(--bad); } .todo .mark.good { background: var(--good); } .todo .mark.info { background: var(--info); }
+.todo .body { flex: 1; min-width: 0; }
+.todo .t { font-weight: 600; }
+.todo .d { color: var(--ink-2); font-size: 12px; margin-top: 1px; }
+.svc-row { display: grid; grid-template-columns: minmax(0, 1fr) max-content max-content; gap: 4px 12px; align-items: center;
+  padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.svc-row:first-child { border-top: 0; padding-top: 0; }
+.svc-row .name { font-weight: 600; }
+.svc-row .meta { font: 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.svc-row .ms { font: 11px var(--mono); color: var(--ink-2); text-align: right; }
+
+/* ---- charts: SVG geometry, HTML text ---- */
+svg.bar { display: block; width: 100%; height: 10px; border-radius: 2px; overflow: hidden; }
+svg.bar.thin { height: 6px; }
+svg.bar.fat { height: 14px; }
+.track { fill: var(--alt); }
+.f-good { fill: var(--good); } .f-bad { fill: var(--bad); } .f-warn { fill: var(--warn); } .f-info { fill: var(--info); }
+.f-faint { fill: var(--faint); } .f-ink { fill: var(--ink-2); }
+.f-c1 { fill: var(--c1); } .f-c2 { fill: var(--c2); } .f-c3 { fill: var(--c3); } .f-c4 { fill: var(--c4); }
+.f-c5 { fill: var(--c5); } .f-c6 { fill: var(--c6); } .f-c7 { fill: var(--c7); } .f-c8 { fill: var(--c8); }
+.s-good { stroke: var(--good); } .s-bad { stroke: var(--bad); } .s-warn { stroke: var(--warn); } .s-info { stroke: var(--info); }
+.s-faint { stroke: var(--faint); } .s-ink { stroke: var(--ink-2); }
+.s-c1 { stroke: var(--c1); } .s-c2 { stroke: var(--c2); } .s-c3 { stroke: var(--c3); } .s-c4 { stroke: var(--c4); }
+.s-c5 { stroke: var(--c5); } .s-c6 { stroke: var(--c6); } .s-c7 { stroke: var(--c7); } .s-c8 { stroke: var(--c8); }
+.b-good { background: var(--good); } .b-bad { background: var(--bad); } .b-warn { background: var(--warn); }
+.b-info { background: var(--info); } .b-faint { background: var(--faint); }
+.b-c1 { background: var(--c1); } .b-c2 { background: var(--c2); } .b-c3 { background: var(--c3); } .b-c4 { background: var(--c4); }
+.b-c5 { background: var(--c5); } .b-c6 { background: var(--c6); } .b-c7 { background: var(--c7); } .b-c8 { background: var(--c8); }
+.legend { display: flex; flex-wrap: wrap; gap: 5px 14px; font-size: 11.5px; color: var(--ink-2); margin-top: 10px; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.legend b { font: 600 11px var(--mono); margin-left: 4px; color: var(--ink); }
+
+.hbars { display: grid; grid-template-columns: minmax(90px, max-content) minmax(60px, 1fr) max-content; gap: 7px 12px;
+  align-items: center; font-size: 12px; }
+.hbars .lbl { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbars .lbl small { color: var(--muted); font: 10.5px var(--mono); margin-left: 5px; }
+.hbars .val { font: 11.5px var(--mono); text-align: right; white-space: nowrap; }
+.hbars .val small { color: var(--muted); margin-left: 6px; }
+.mirror { min-width: 460px; display: grid; grid-template-columns: minmax(110px, max-content) max-content minmax(80px, 1fr) max-content max-content;
+  gap: 8px 10px; align-items: center; font-size: 12px; }
+.mirror .val { font: 11.5px var(--mono); white-space: nowrap; }
+.mirror .val.l { text-align: right; }
+.mirror .hdr { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+svg.mbar { display: block; width: 100%; height: 12px; overflow: visible; }
+.axis { stroke: var(--ink-2); stroke-width: 1; }
+
+.donut-wrap { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+svg.donut { width: 168px; height: 168px; flex: none; }
+svg.donut .ring { fill: none; stroke: var(--alt); }
+svg.donut .seg { fill: none; }
+svg.donut text { fill: var(--ink); font-family: var(--serif); }
+svg.donut .cv { font-size: 30px; font-weight: 600; }
+svg.donut .cl { font: 10px var(--sans); fill: var(--muted); letter-spacing: .06em; }
+
+.cols { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; }
+.col { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; }
+.col .cv { font: 10.5px var(--mono); text-align: center; color: var(--ink-2); }
+.col .cl { font: 10px var(--mono); text-align: center; color: var(--muted); }
+svg.vbar { display: block; width: 100%; height: 86px; }
+
+.spark-card .big { font: 600 24px/1.1 var(--serif); font-variant-numeric: tabular-nums; }
+.spark-card .big small { font: 12px var(--sans); color: var(--muted); margin-left: 4px; }
+svg.spark { display: block; width: 100%; height: 64px; margin-top: 8px; }
+svg.spark.tall { height: 110px; }
+svg.spark .line { fill: none; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+svg.spark .area { opacity: .15; }
+svg.spark .base { stroke: var(--line); stroke-width: 1; }
+.spark-meta { display: flex; justify-content: space-between; gap: 8px; font: 10.5px var(--mono); color: var(--muted); margin-top: 4px; }
+.promql { font: 10.5px var(--mono); color: var(--faint); margin-top: 6px; overflow-wrap: anywhere; }
+
+/* ---- the money-flow diagram ---- */
+.flow-scroll { overflow-x: auto; }
+svg.flow { display: block; width: 100%; min-width: 820px; height: auto; }
+svg.flow text { font-family: var(--sans); fill: var(--ink-2); }
+.flow-node rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.flow-node.hot rect { stroke: var(--warn); stroke-width: 2; }
+.flow-node.ext rect { fill: var(--alt); stroke-dasharray: 4 3; }
+.flow-node .nt { fill: var(--ink); font-size: 13px; font-weight: 600; }
+.flow-node .ns { fill: var(--muted); font: 10px var(--mono); }
+.flow-node .nv { fill: var(--ink); font: 600 15px var(--serif); }
+.flow-node .nv.warn { fill: var(--warn); }
+.flow-edge { fill: none; stroke-linecap: round; opacity: .5; }
+.flow-edge.none { stroke-dasharray: 2 5; opacity: .5; stroke-width: 1.4; }
+.flow-edge.back { stroke-dasharray: 7 5; }
+.flow-ants { fill: none; stroke: var(--surface); stroke-width: 1.6; stroke-dasharray: 2 16; opacity: .9;
+  animation: ants 1.8s linear infinite; }
+@keyframes ants { to { stroke-dashoffset: -36; } }
+.flow-label rect { fill: var(--surface); stroke: var(--line-soft); }
+.flow-label .lr { font: 10px var(--mono); fill: var(--muted); }
+.flow-label .la { font: 600 11px var(--mono); fill: var(--ink); }
+.flow-label.none .la { fill: var(--faint); font-weight: 400; }
+@media (prefers-reduced-motion: reduce) { .flow-ants { animation: none; display: none; } }
+
+/* ---- timeline ---- */
+.tl { list-style: none; margin: 8px 0 0; padding: 0; }
+.tl li { display: grid; grid-template-columns: 18px minmax(0, 1fr) max-content; gap: 4px 10px; position: relative;
+  padding: 0 0 14px; }
+.tl li::before { content: ""; position: absolute; left: 8px; top: 16px; bottom: 0; width: 1px; background: var(--line); }
+.tl li:last-child::before { display: none; }
+.tl .node { width: 11px; height: 11px; border-radius: 50%; margin: 4px 0 0 3px; background: var(--faint);
+  box-shadow: 0 0 0 3px var(--surface); }
+.tl .node.good { background: var(--good); } .tl .node.bad { background: var(--bad); }
+.tl .node.warn { background: var(--warn); } .tl .node.info { background: var(--info); }
+.tl .cause { color: var(--ink-2); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.tl .when { font: 11px var(--mono); color: var(--muted); text-align: right; }
+.tl li.resolver .cause { color: var(--warn); }
+
+/* ---- measured results ---- */
+.fig { font: 600 30px/1.1 var(--serif); letter-spacing: -.01em; }
+.fig small { font: 13px var(--sans); color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+.figs { display: flex; gap: 22px; flex-wrap: wrap; margin: 6px 0 10px; }
+.figs .k { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.mrows { display: grid; grid-template-columns: max-content minmax(80px, 1fr) max-content; gap: 7px 12px; align-items: center;
+  font-size: 12px; margin-top: 8px; }
+.mrows .val { font: 11.5px var(--mono); }
+.stamp { display: inline-block; font: 500 10.5px var(--mono); color: var(--muted); border: 1px solid var(--line);
+  border-radius: 3px; padding: 1px 6px; }
+
+@media (max-width: 1180px) {
+  .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g21, .g12 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr); background: var(--bg); }
+  .sidebar { position: sticky; top: 0; z-index: 6; height: auto; flex-direction: row; align-items: center;
+    padding: 8px 12px; gap: 14px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .brand { border: 0; padding: 0; flex: none; }
+  .nav-groups { flex-direction: row; gap: 2px; }
+  .nav-label, .side-foot { display: none; }
+  .nav { flex-direction: row; }
+  .nav button { border-left: 0; border-bottom: 2px solid transparent; border-radius: 0; white-space: nowrap; padding: 8px 9px; }
+  .nav button[aria-current="page"] { border-bottom-color: var(--ink); background: transparent; }
+  .topbar { position: static; padding: 10px 16px; }
+  .content { padding: 16px 16px 48px; }
+  .g2, .g3 { grid-template-columns: minmax(0, 1fr); }
+  .cred input { width: 128px; }
+  .todo { flex-wrap: wrap; }
+  .todo > .link { flex-basis: 100%; padding-left: 20px; }
+  h1 { font-size: 22px; }
 }
 </style>
 </head>
 <body>
-<header>
-  <h1>ZeroSum Explorer</h1>
-  <span class="muted" id="origin-note"></span>
-  <span class="spacer"></span>
-  <div class="creds">
-    <span class="cred">
-      <label for="token">reader</label>
-      <input id="token" type="password" autocomplete="off" placeholder="ZS_READER_TOKEN">
-    </span>
-    <span class="cred">
-      <label for="admin-token">admin</label>
-      <input id="admin-token" type="password" autocomplete="off" placeholder="ZS_ADMIN_TOKEN">
-    </span>
-  </div>
-</header>
+<div class="app">
+  <aside class="sidebar" aria-label="Sections">
+    <div class="brand"><p class="brand-mark">ZeroSum</p><span class="brand-sub">explorer</span></div>
+    <nav class="nav-groups">
+      <div>
+        <div class="nav-label">System</div>
+        <div class="nav">
+          <button type="button" data-tab="overview" data-icon="overview">Overview<span class="count" id="count-overview" hidden></span></button>
+          <button type="button" data-tab="flow" data-icon="flow">Money flow</button>
+          <button type="button" data-tab="ledger" data-icon="ledger">Ledger explorer</button>
+        </div>
+      </div>
+      <div>
+        <div class="nav-label">Payments</div>
+        <div class="nav">
+          <button type="button" data-tab="payments" data-icon="payments">Payments<span class="count" id="count-payments" hidden></span></button>
+          <button type="button" data-tab="recon" data-icon="recon">Reconciliation<span class="count" id="count-recon" hidden></span></button>
+          <button type="button" data-tab="payouts" data-icon="payouts">Payouts<span class="count" id="count-payouts" hidden></span></button>
+          <button type="button" data-tab="providers" data-icon="providers">Providers<span class="count" id="count-providers" hidden></span></button>
+        </div>
+      </div>
+      <div>
+        <div class="nav-label">Evidence</div>
+        <div class="nav">
+          <button type="button" data-tab="live" data-icon="live">Live metrics</button>
+          <button type="button" data-tab="results" data-icon="results">Measured results</button>
+        </div>
+      </div>
+    </nav>
+    <div class="side-foot">ZeroSum Explorer · read-only.<br>Tokens are held in this tab's memory only: never stored, never in the URL.</div>
+  </aside>
 
-<main>
-  <section class="panel" id="overview-panel">
-    <header>
-      <h2>System overview</h2>
-      <span class="panel-note">ledger-service · reader token · refreshed on demand, never polled</span>
+  <div class="main">
+    <header class="topbar">
+      <div class="env"><span class="dot" id="env-dot"></span><span id="origin-note"></span><span id="as-of"></span></div>
       <span class="spacer"></span>
-      <span id="overview-at" class="panel-note"></span>
-      <button id="refresh-overview" class="secondary">Refresh</button>
+      <div class="creds">
+        <span class="cred"><label for="token">reader</label>
+          <input id="token" type="password" autocomplete="off" placeholder="ZS_READER_TOKEN"></span>
+        <span class="cred"><label for="admin-token">admin</label>
+          <input id="admin-token" type="password" autocomplete="off" placeholder="ZS_ADMIN_TOKEN"></span>
+        <button type="button" class="btn primary" id="refresh">Refresh</button>
+        <button type="button" class="btn" id="theme" aria-label="Toggle light and dark theme">Theme</button>
+      </div>
     </header>
-    <div class="tiles" id="overview-tiles"></div>
-    <div class="findings" id="overview-findings"></div>
-    <div id="overview-error" class="err"></div>
-  </section>
 
-  <section class="panel">
-    <header>
-      <h2>Entity</h2>
-      <span class="panel-note">balances, changelog and the money order behind each row (M6 a)</span>
-    </header>
-    <div class="row">
-      <input id="entity" placeholder="rider:R1" autocomplete="off" spellcheck="false">
-      <button id="lookup">Look up</button>
-      <button id="verify" class="secondary">Verify chain</button>
-      <span id="entity-error" class="err"></span>
-    </div>
-    <div id="verify-result"></div>
-    <div id="balances"></div>
-    <div id="changelog"></div>
-    <div class="row" id="changelog-controls" hidden>
-      <button id="next-page" class="secondary">Next page</button>
-      <span id="changelog-note" class="muted"></span>
-    </div>
-    <div id="order-detail"></div>
-  </section>
+    <main class="content">
+      <!-- ================================================================ overview -->
+      <section id="tab-overview" data-page>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">System · Overview</div>
+            <h1>A double-entry ledger, running</h1>
+            <p class="sub">A ride-hailing marketplace's money: trips become zero-sum money orders, flow through Kafka into an
+              append-only ledger, get collected by card, settled by the provider and paid out to drivers. Every figure
+              here is read from the running services.</p>
+          </div>
+        </div>
+        <div id="ov-prompt"></div>
+        <div class="kpis k4" id="ov-kpis"></div>
+        <div class="grid g21">
+          <section class="panel">
+            <div class="panel-head"><h2>Needs attention</h2><span class="note" id="ov-attn-note"></span></div>
+            <div id="ov-attention"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Services</h2><span class="note">health through the proxy · no token</span></div>
+            <div id="ov-health"></div>
+          </section>
+        </div>
+        <div class="grid g3">
+          <section class="panel">
+            <div class="panel-head"><h2>Consumer lag by partition</h2><span class="note">money-orders topic · ledger-service</span></div>
+            <div id="ov-lag"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Pipeline freshness</h2><span class="note">outbox → Kafka → apply</span></div>
+            <div id="ov-pipeline"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Orders applied</h2><span class="note">per minute, last hour · Prometheus</span></div>
+            <div id="ov-throughput"></div>
+          </section>
+        </div>
+      </section>
 
-  <section class="panel">
-    <header>
-      <h2>Payment attempt</h2>
-      <span class="panel-note">instrument-service · reader token · <span class="pill">needs proxy origin</span></span>
-    </header>
-    <div class="row">
-      <input id="attempt" placeholder="attempt id (uuid)" autocomplete="off" spellcheck="false">
-      <button id="lookup-attempt" class="secondary">Look up</button>
-      <span id="attempt-error" class="err"></span>
-    </div>
-    <div id="attempt-result"></div>
-  </section>
+      <!-- ================================================================ money flow -->
+      <section id="tab-flow" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">System · Money flow</div>
+            <h1>Where the money goes</h1>
+            <p class="sub">Each arrow is one kind of money order, summed from every order stored in order-service. Each box
+              is an account class and its balance in the ledger right now. Every order's entries sum to zero, so every
+              box's balance is money that moved in minus money that moved out.</p>
+          </div>
+          <div class="row"><label class="note" for="flow-currency">currency</label><select id="flow-currency"></select></div>
+        </div>
+        <section class="panel">
+          <div class="panel-head"><h2>Money flow</h2><span class="note">arrow width ∝ amount · dotted = no orders of that kind yet · dashed = reversal</span></div>
+          <div id="flow-diagram"></div>
+        </section>
+        <div class="grid g2">
+          <section class="panel">
+            <div class="panel-head"><h2>Orders by type</h2><span class="note">order-service · count and gross volume</span></div>
+            <div id="flow-types"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Every order sums to zero</h2><span class="note">credits ← | → debits, per reason</span></div>
+            <div id="flow-zero"></div>
+          </section>
+        </div>
+        <section class="panel">
+          <div class="panel-head"><h2>Balances by account class</h2><span class="note">ledger-service · credit balances left, debit balances right</span></div>
+          <div id="flow-balances"></div>
+        </section>
+      </section>
 
-  <section class="panel">
-    <header>
-      <h2>Reconciliation breaks</h2>
-      <span class="panel-note">instrument-service · reader token · <span class="pill">needs proxy origin</span></span>
-    </header>
-    <div class="row">
-      <input id="run-id" placeholder="reconciliation run id (uuid)" autocomplete="off" spellcheck="false">
-      <select id="break-type" aria-label="break type">
-        <option value="">any type</option>
-        <option value="MISSING_IN_LEDGER">MISSING_IN_LEDGER</option>
-        <option value="MISSING_IN_REPORT">MISSING_IN_REPORT</option>
-        <option value="AMOUNT_MISMATCH">AMOUNT_MISMATCH</option>
-        <option value="DUPLICATE_LINE">DUPLICATE_LINE</option>
-        <option value="KIND_MISMATCH">KIND_MISMATCH</option>
-        <option value="CURRENCY_MISMATCH">CURRENCY_MISMATCH</option>
-        <option value="TIMING">TIMING</option>
-        <option value="LINE_WITHOUT_SUCCESS">LINE_WITHOUT_SUCCESS</option>
-        <option value="REPORT_ARITHMETIC">REPORT_ARITHMETIC</option>
-      </select>
-      <select id="break-status" aria-label="break status">
-        <option value="">any status</option>
-        <option value="OPEN">OPEN</option>
-        <option value="UNEXPLAINED">UNEXPLAINED</option>
-      </select>
-      <button id="lookup-breaks" class="secondary">Look up</button>
-      <span id="breaks-error" class="err"></span>
-    </div>
-    <div id="breaks-result"></div>
-  </section>
+      <!-- ================================================================ ledger explorer -->
+      <section id="tab-ledger" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">System · Ledger explorer</div>
+            <h1>Ledger explorer</h1>
+            <p class="sub">Look up any entity: its balances on each account's normal side, its append-only changelog in
+              sequence order, the money order behind every row, and a verify that rebuilds every balance from the
+              changelog and walks the SHA-256 hash chain.</p>
+          </div>
+        </div>
+        <section class="panel">
+          <div class="row">
+            <input id="entity" class="grow" list="entity-list" placeholder="rider:R1 · driver:D1 · platform:main · provider:fakecard"
+              autocomplete="off" spellcheck="false" aria-label="entity id">
+            <datalist id="entity-list"></datalist>
+            <button type="button" class="btn primary" id="lookup">Look up</button>
+            <button type="button" class="btn" id="verify">Verify chain</button>
+            <span id="entity-error" class="err"></span>
+          </div>
+          <div id="verify-result"></div>
+        </section>
+        <div class="grid g2">
+          <section class="panel">
+            <div class="panel-head"><h2>Balances</h2><span class="note" id="balances-note"></span></div>
+            <div id="balances"><p class="empty">Look up an entity to see its balances.</p></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Money order</h2><span class="note" id="order-note">order-service, through the proxy</span></div>
+            <div id="order-detail"><p class="empty">Pick a changelog row's order to see its entries and their zero sum.</p></div>
+          </section>
+        </div>
+        <section class="panel">
+          <div class="panel-head"><h2>Changelog</h2><span class="note">every row carries the money order that caused it (M6 a)</span></div>
+          <div id="changelog"><p class="empty">No entity selected.</p></div>
+          <div class="row" id="changelog-controls" hidden>
+            <button type="button" class="btn" id="next-page">Next page</button>
+            <span id="changelog-note" class="note"></span>
+          </div>
+        </section>
+      </section>
 
-  <section class="panel">
-    <header>
-      <h2>Provider ground truth</h2>
-      <span class="panel-note">fake-providers · admin token · <span class="pill">needs proxy origin</span></span>
-    </header>
-    <div class="row">
-      <input id="truth-ref" placeholder="client_reference (an attempt id)" autocomplete="off" spellcheck="false">
-      <button id="lookup-truth" class="secondary">Look up</button>
-      <span id="truth-error" class="err"></span>
-    </div>
-    <div id="truth-result"></div>
-  </section>
-</main>
+      <!-- ================================================================ payments -->
+      <section id="tab-payments" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">Payments · Attempts</div>
+            <h1>Payment attempts</h1>
+            <p class="sub">Every charge, refund and payout is an attempt with an append-only transition history. A lost
+              provider response parks an attempt in UNKNOWN until the resolver asks the provider what really happened;
+              nothing is retried blind.</p>
+          </div>
+        </div>
+        <div class="kpis" id="pay-kpis"></div>
+        <div class="grid g2">
+          <section class="panel">
+            <div class="panel-head"><h2>By status</h2><span class="note">every attempt, all kinds</span></div>
+            <div id="pay-donut"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>By kind and provider</h2><span class="note">stacked by status</span></div>
+            <div id="pay-kinds"></div>
+          </section>
+        </div>
+        <div class="grid g21">
+          <section class="panel">
+            <div class="panel-head"><h2>Recent attempts</h2><span class="note" id="pay-recent-note">newest first · select one for its history</span></div>
+            <div id="pay-recent"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Attempt</h2></div>
+            <div class="row">
+              <input id="attempt" class="grow" placeholder="attempt id (uuid)" autocomplete="off" spellcheck="false" aria-label="attempt id">
+              <button type="button" class="btn" id="lookup-attempt">Look up</button>
+            </div>
+            <div id="attempt-error" class="err"></div>
+            <div id="attempt-result"><p class="empty">Select an attempt to see its transition history.</p></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================================================================ reconciliation -->
+      <section id="tab-recon" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">Payments · Reconciliation</div>
+            <h1>Reconciliation</h1>
+            <p class="sub">Each closed day, FakeCard's settlement report is matched line by line against our attempts. The
+              settlement is booked as reported; every disagreement becomes a typed break and stays as a residual on the
+              provider's clearing account. Nothing is adjusted away.</p>
+          </div>
+        </div>
+        <div class="kpis" id="rec-kpis"></div>
+        <div id="rec-residual"></div>
+        <section class="panel">
+          <div class="panel-head"><h2>Runs</h2><span class="note">matched lines vs breaks · select a run</span></div>
+          <div id="rec-runs"></div>
+        </section>
+        <div class="grid g12">
+          <div>
+            <section class="panel">
+              <div class="panel-head"><h2>Breaks by type</h2><span class="note" id="rec-run-note"></span></div>
+              <div id="rec-types"><p class="empty">Select a run.</p></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>Provider clearing, explained</h2><span class="note">order-service legs vs the ledger</span></div>
+              <div id="rec-explained"></div>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="panel-head"><h2>Breaks</h2>
+              <span class="spacer"></span>
+              <select id="break-type" aria-label="break type">
+                <option value="">any type</option>
+                <option value="MISSING_IN_LEDGER">MISSING_IN_LEDGER</option>
+                <option value="MISSING_IN_REPORT">MISSING_IN_REPORT</option>
+                <option value="AMOUNT_MISMATCH">AMOUNT_MISMATCH</option>
+                <option value="DUPLICATE_LINE">DUPLICATE_LINE</option>
+                <option value="KIND_MISMATCH">KIND_MISMATCH</option>
+                <option value="CURRENCY_MISMATCH">CURRENCY_MISMATCH</option>
+                <option value="TIMING">TIMING</option>
+                <option value="LINE_WITHOUT_SUCCESS">LINE_WITHOUT_SUCCESS</option>
+                <option value="REPORT_ARITHMETIC">REPORT_ARITHMETIC</option>
+              </select>
+              <select id="break-status" aria-label="break status">
+                <option value="">any status</option>
+                <option value="OPEN">OPEN</option>
+                <option value="UNEXPLAINED">UNEXPLAINED</option>
+              </select>
+            </div>
+            <div id="breaks-error" class="err"></div>
+            <div id="breaks-result"><p class="empty">Select a run to list its breaks.</p></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================================================================ payouts -->
+      <section id="tab-payouts" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">Payments · Payouts</div>
+            <h1>Payouts</h1>
+            <p class="sub">A payout run pays each eligible driver exactly what the ledger says they are owed, read at that
+              moment, and refuses outright when the pipeline is more than 5 s stale. At most one payout per driver and
+              currency is ever in flight; the database enforces it, not a check.</p>
+          </div>
+        </div>
+        <div class="kpis" id="po-kpis"></div>
+        <section class="panel">
+          <div class="panel-head"><h2>Payout runs</h2><span class="note">drivers considered, by outcome · refusals included</span></div>
+          <div id="po-runs"></div>
+        </section>
+        <div class="grid g12">
+          <section class="panel">
+            <div class="panel-head"><h2>Payout attempts by status</h2></div>
+            <div id="po-status"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Recent payout attempts</h2><span class="note">select one for its history</span></div>
+            <div id="po-attempts"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================================================================ providers -->
+      <section id="tab-providers" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">Payments · Providers</div>
+            <h1>Provider ground truth</h1>
+            <p class="sub">FakeCard and FakeBank simulate external providers, faults included. This is their own record,
+              read from their own tables. Where it disagrees with our attempts, the disagreement is the finding (I7).
+              Admin token; the whole surface is absent on the public demo profile.</p>
+          </div>
+        </div>
+        <div id="prov-prompt"></div>
+        <div class="kpis" id="prov-kpis"></div>
+        <div class="grid g3">
+          <section class="panel">
+            <div class="panel-head"><h2>FakeCard charges</h2><span class="note">by status</span></div>
+            <div id="prov-charges"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>FakeBank payouts</h2><span class="note">by status</span></div>
+            <div id="prov-payouts"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Faults injected</h2><span class="note">every one logged once</span></div>
+            <div id="prov-faults"></div>
+          </section>
+        </div>
+        <div class="grid g2">
+          <section class="panel">
+            <div class="panel-head"><h2>Active fault profiles</h2><span class="note">read-only · non-default knobs highlighted</span></div>
+            <div id="prov-profiles"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Truth by client reference</h2><span class="note">an attempt id</span></div>
+            <div class="row">
+              <input id="truth-ref" class="grow" placeholder="client_reference (an attempt id)" autocomplete="off" spellcheck="false" aria-label="client reference">
+              <button type="button" class="btn" id="lookup-truth">Look up</button>
+            </div>
+            <div class="row" id="truth-picks"></div>
+            <div id="truth-error" class="err"></div>
+            <div id="truth-result"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================================================================ live metrics -->
+      <section id="tab-live" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">Evidence · Live metrics</div>
+            <h1>Live metrics</h1>
+            <p class="sub">Read from Prometheus through Grafana's datasource proxy, on this same origin, with no token. The
+              services push OpenTelemetry metrics to the otel-lgtm container every 60 s, so the newest minute can lag.</p>
+          </div>
+          <div class="row">
+            <label class="note" for="live-window">window</label>
+            <select id="live-window"><option value="15">15 min</option><option value="60" selected>1 hour</option><option value="360">6 hours</option></select>
+            <label class="note"><input type="checkbox" id="live-auto" checked> refresh every 15 s</label>
+            <span class="note" id="live-at"></span>
+          </div>
+        </div>
+        <div id="live-error"></div>
+        <div class="grid g3" id="live-grid"></div>
+      </section>
+
+      <!-- ================================================================ measured results -->
+      <section id="tab-results" data-page hidden>
+        <div class="page-head">
+          <div>
+            <div class="crumbs">Evidence · Measured results</div>
+            <h1>Measured results</h1>
+            <p class="sub">Static figures from the recorded runs, not live values. Performance figures were measured on an
+              Apple M4 laptop under concurrent load.</p>
+          </div>
+          <span class="stamp">measured 2026-09-18, see docs</span>
+        </div>
+        <div class="grid g2">
+          <section class="panel">
+            <div class="panel-head"><h2>End-to-end order → ledger latency</h2><span class="note">at 200 orders/s</span></div>
+            <div class="figs">
+              <div><div class="k">p50</div><div class="fig">44.3<small>ms</small></div></div>
+              <div><div class="k">p95</div><div class="fig">74.3<small>ms</small></div></div>
+              <div><div class="k">p99</div><div class="fig">79.4<small>ms</small></div></div>
+            </div>
+            <div class="mrows">
+              <span>p50</span><span data-v="44.3" data-max="79.4" data-cls="c1"></span><span class="val">44.3 ms</span>
+              <span>p95</span><span data-v="74.3" data-max="79.4" data-cls="c1"></span><span class="val">74.3 ms</span>
+              <span>p99</span><span data-v="79.4" data-max="79.4" data-cls="c1"></span><span class="val">79.4 ms</span>
+            </div>
+            <p class="note">125,998 orders, 0 missing.</p>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Batched apply</h2><span class="note">one hot account</span></div>
+            <div class="figs"><div><div class="k">throughput</div><div class="fig">3,981<small>orders/s</small></div></div></div>
+            <p class="note">32 writers × 50-order batches · ~6× per-order (527 → 3,242 at 1 writer)</p>
+            <div class="mrows">
+              <span>per-order, 1 writer</span><span data-v="527" data-max="3242" data-cls="faint"></span><span class="val">527</span>
+              <span>batched, 1 writer</span><span data-v="3242" data-max="3242" data-cls="c2"></span><span class="val">3,242</span>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>100-way entity spread</h2></div>
+            <div class="figs">
+              <div><div class="k">orders/s</div><div class="fig">707 → 1,647</div></div>
+              <div><div class="k">lock-wait p95</div><div class="fig">147 → 3<small>ms</small></div></div>
+            </div>
+            <div class="mrows">
+              <span>orders/s before</span><span data-v="707" data-max="1647" data-cls="faint"></span><span class="val">707</span>
+              <span>orders/s after</span><span data-v="1647" data-max="1647" data-cls="c2"></span><span class="val">1,647</span>
+              <span>lock-wait p95 before</span><span data-v="147" data-max="147" data-cls="c3"></span><span class="val">147 ms</span>
+              <span>lock-wait p95 after</span><span data-v="3" data-max="147" data-cls="c2"></span><span class="val">3 ms</span>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Failure modes</h2><span class="note">correctness under faults</span></div>
+            <div class="todo"><span class="mark good"></span><div class="body"><div class="t">kill -9 of order-service</div>
+              <div class="d">100/100 orders published and applied exactly once</div></div></div>
+            <div class="todo"><span class="mark good"></span><div class="body"><div class="t">10,000 card charges at 20% lost responses</div>
+              <div class="d">exactly one successful charge each, 1,946 timeouts matched</div></div></div>
+            <div class="todo"><span class="mark good"></span><div class="body"><div class="t">Tests</div>
+              <div class="d">360 unit + 292 integration, 0 failures</div></div></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
 
 <script>
 (function () {
   "use strict";
 
   /*
-   * Tokens are held here and nowhere else: not localStorage, not sessionStorage, not the URL, not a cookie. A token
-   * in any of those outlives the tab it was typed into. Each is dropped the moment the service holding it answers
-   * 401 or 403, so a stale credential cannot be replayed by the next click.
+   * Tokens are held here and nowhere else: not localStorage, not sessionStorage, not the URL, not a cookie. Each is
+   * dropped the moment a service holding it answers 401 or 403, so a stale credential cannot be replayed by the next
+   * click. Health endpoints and Grafana are called with no Authorization header at all.
    */
-  var creds = { reader: "", admin: "" };
-  var state = { entity: "", cursor: null, verifying: false };
+  const creds = { reader: "", admin: "" };
+  const state = {};
+  const ui = { tab: "overview", currency: null, attempt: null, run: null, entity: "", cursor: null, verifying: false,
+    live: {}, liveTimer: null, loading: false };
 
-  function $(id) { return document.getElementById(id); }
+  const $ = (id) => document.getElementById(id);
+  const SVGNS = "http://www.w3.org/2000/svg";
 
-  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } }
+  /* ---- DOM helpers: text only, never markup ------------------------------------------------------------------ */
 
-  function el(tag, text, className) {
-    var node = document.createElement(tag);
-    if (text !== undefined && text !== null) { node.textContent = String(text); }
-    if (className) { node.className = className; }
+  function clear(node) {
+    while (node.firstChild) { node.removeChild(node.firstChild); }
     return node;
   }
 
-  /** Appends children and returns the parent, so a row reads as one expression. */
-  function fill(parent, children) {
-    children.forEach(function (child) {
-      if (child !== null && child !== undefined) { parent.appendChild(child); }
-    });
+  function el(tag, text, cls) {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) { node.textContent = String(text); }
+    if (cls) { node.className = cls; }
+    return node;
+  }
+
+  function add(parent) {
+    for (let i = 1; i < arguments.length; i++) {
+      const child = arguments[i];
+      if (child === null || child === undefined || child === false) { continue; }
+      parent.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+    }
     return parent;
   }
 
-  function rowOf(tag, cells) {
-    return fill(el("tr"), cells);
+  function svg(tag, attrs, cls) {
+    const node = document.createElementNS(SVGNS, tag);
+    if (attrs) { Object.keys(attrs).forEach((key) => node.setAttribute(key, String(attrs[key]))); }
+    if (cls) { node.setAttribute("class", cls); }
+    return node;
   }
 
-  /** A table with a sticky header row, wrapped so a wide one scrolls rather than stretching the panel. */
-  function table(headings) {
-    var wrap = el("div", null, "scroll");
-    var node = el("table");
-    var head = el("thead");
-    head.appendChild(fill(el("tr"), headings.map(function (h) { return el("th", h); })));
+  function stext(x, y, text, cls, anchor) {
+    const node = svg("text", { x: x, y: y }, cls);
+    if (anchor) { node.setAttribute("text-anchor", anchor); }
+    node.textContent = String(text);
+    return node;
+  }
+
+  function tip(node, text) {
+    const title = svg("title");
+    title.textContent = text;
+    node.appendChild(title);
+    return node;
+  }
+
+  function empty(host, message, cls) {
+    clear(host);
+    host.appendChild(el("p", message, cls || "empty"));
+  }
+
+  function table(headings, numeric) {
+    const wrap = el("div", null, "scroll");
+    const node = el("table");
+    const head = el("thead");
+    const row = el("tr");
+    headings.forEach((heading, i) => {
+      const th = el("th", heading, numeric && numeric.indexOf(i) >= 0 ? "num" : null);
+      th.scope = "col";
+      row.appendChild(th);
+    });
+    head.appendChild(row);
     node.appendChild(head);
-    var body = el("tbody");
+    const body = el("tbody");
     node.appendChild(body);
     wrap.appendChild(node);
     return { wrap: wrap, body: body };
   }
 
+  function tr(cells) {
+    const row = el("tr");
+    cells.forEach((cell) => row.appendChild(cell));
+    return row;
+  }
+
+  function td(content, cls) {
+    const cell = el("td", null, cls);
+    if (content instanceof Node) { cell.appendChild(content); } else if (content !== null && content !== undefined) {
+      cell.textContent = String(content);
+    }
+    return cell;
+  }
+
   function dl(pairs) {
-    var list = el("dl", null, "kv");
-    pairs.forEach(function (pair) {
+    const list = el("dl", null, "kv");
+    pairs.forEach((pair) => {
       if (pair[1] === undefined || pair[1] === null || pair[1] === "") { return; }
       list.appendChild(el("dt", pair[0]));
-      var dd = el("dd");
-      dd.appendChild(typeof pair[1] === "object" ? pair[1] : el("span", pair[1]));
+      const dd = el("dd");
+      if (pair[1] instanceof Node) { dd.appendChild(pair[1]); } else { dd.textContent = String(pair[1]); }
       list.appendChild(dd);
     });
     return list;
   }
 
-  function empty(host, message) {
-    clear(host);
-    host.appendChild(el("p", message, "empty"));
+  function pill(text, tone, dot) {
+    return el("span", text, "pill" + (tone ? " " + tone : "") + (dot ? " dot" : ""));
   }
 
-  /*
-   * Amounts can exceed Number.MAX_SAFE_INTEGER once balances aggregate, and JSON.parse would silently round them.
-   * Long integer literals are quoted before parsing so they survive as exact digit strings; anything quoted this way
-   * is displayed raw and flagged rather than formatted, because a rounded ledger figure is worse than an ugly one.
-   */
-  function parseJson(text) {
-    return JSON.parse(text.replace(/:\s*(-?\d{16,})(?=\s*[,}\]])/g, ': "$1"'));
+  function linkButton(text, handler) {
+    const button = el("button", text, "link");
+    button.type = "button";
+    button.addEventListener("click", handler);
+    return button;
   }
 
+  function callout(title, detail, tone) {
+    const box = el("div", null, "callout" + (tone ? " " + tone : ""));
+    box.appendChild(el("div", title, "t"));
+    if (detail) { box.appendChild(detail instanceof Node ? detail : el("div", detail, "d")); }
+    return box;
+  }
+
+  /* ---- numbers ------------------------------------------------------------------------------------------------ */
+
+  const EXPONENT = { USD: 2, EUR: 2, JPY: 0, KWD: 3 };
+  const SYMBOL = { USD: "$", EUR: "€", JPY: "¥" };
+
   /*
-   * The value exactly as the API reported it. The server decides the sign convention (ADR-0003) and this page only
-   * colours what it was given: a string here means the number was too large for JavaScript to hold safely, so it is
-   * printed digit for digit and flagged instead of being coerced into a Number.
+   * A minor-unit amount as major units, formatted from its digits. Working on the digit string means a value too large
+   * for a JavaScript Number (kept as a string by parseJson) is formatted exactly rather than rounded, and it is flagged.
    */
-  function amount(value, currency) {
-    var span = el("span");
-    var suffix = currency ? " " + currency : "";
+  function money(value, currency) {
+    if (value === null || value === undefined || value === "") { return "—"; }
+    let digits = String(value);
+    const negative = digits.charAt(0) === "-";
+    if (negative) { digits = digits.slice(1); }
+    const exponent = EXPONENT[currency] === undefined ? 2 : EXPONENT[currency];
+    digits = digits.padStart(exponent + 1, "0");
+    const whole = exponent ? digits.slice(0, -exponent) : digits;
+    const fraction = exponent ? "." + digits.slice(-exponent) : "";
+    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const symbol = SYMBOL[currency];
+    return (negative ? "−" : "") + (symbol || "") + grouped + fraction + (symbol ? "" : " " + (currency || ""));
+  }
+
+  function moneyNode(value, currency, signed) {
+    const span = el("span", money(value, currency));
+    span.title = String(value) + " minor units" + (currency ? " " + currency : "");
+    if (signed) { span.className = Number(value) < 0 ? "neg" : Number(value) > 0 ? "pos" : "muted"; }
     if (typeof value === "string") {
-      span.appendChild(el("span", value + suffix));
-      span.appendChild(document.createTextNode(" "));
-      var flag = el("span", "exact", "pill warn");
+      const flag = pill("exact", "warn");
       flag.title = "Beyond JavaScript's safe integer range; shown as raw digits, never rounded.";
-      span.appendChild(flag);
-      return span;
+      return add(el("span"), span, " ", flag);
     }
-    if (value === null || value === undefined) {
-      return el("span", "—", "muted");
-    }
-    span.appendChild(el("span", value + suffix, value < 0 ? "neg" : value > 0 ? "pos" : "muted"));
     return span;
   }
 
-  function amountCell(value, currency) {
-    return fill(el("td", null, "num"), [amount(value, currency)]);
+  function int(value) {
+    if (value === null || value === undefined) { return "—"; }
+    return typeof value === "string" ? value : Number(value).toLocaleString("en-US");
   }
 
-  /* ---- transport -------------------------------------------------------------------------------------------- */
+  function num(value) { return typeof value === "string" ? Number(value) : (value || 0); }
+
+  function seconds(value) {
+    if (value === null || value === undefined) { return "—"; }
+    const s = Number(value);
+    if (s < 1) { return (s * 1000).toFixed(0) + " ms"; }
+    if (s < 120) { return s.toFixed(1) + " s"; }
+    if (s < 7200) { return (s / 60).toFixed(1) + " min"; }
+    return (s / 3600).toFixed(1) + " h";
+  }
+
+  function ago(iso) {
+    const at = Date.parse(iso);
+    if (isNaN(at)) { return iso || "—"; }
+    const s = Math.round((Date.now() - at) / 1000);
+    if (s < 5) { return "just now"; }
+    if (s < 60) { return s + " s ago"; }
+    if (s < 3600) { return Math.round(s / 60) + " min ago"; }
+    if (s < 172800) { return Math.round(s / 3600) + " h ago"; }
+    return Math.round(s / 86400) + " d ago";
+  }
+
+  function timeCell(iso) {
+    const cell = td(ago(iso), "muted");
+    cell.title = iso || "";
+    return cell;
+  }
+
+  function short(id) { return id ? String(id).slice(0, 8) + "…" : "—"; }
+
+  /** A long identifier shortened in the cell, whole in its tooltip. */
+  function idCell(id) {
+    const cell = td(short(id), "mono");
+    cell.title = id || "";
+    return cell;
+  }
+
+  /* ---- status vocabulary ------------------------------------------------------------------------------------- */
+
+  const TONE = { SUCCEEDED: "good", SETTLED: "good", COMPLETED: "good", PAID: "good", UP: "good",
+    DECLINED: "bad", FAILED: "bad", RETURNED: "bad", REFUSED: "bad", FAILED_VALIDATION: "bad", UNEXPLAINED: "bad",
+    DOWN: "bad", UNKNOWN: "warn", NEEDS_REVIEW: "warn", OPEN: "warn", SKIPPED_NO_TOKEN: "warn",
+    CREATED: "info", SUBMITTING: "info", PENDING: "info", RUNNING: "info", SKIPPED_IN_FLIGHT: "info" };
+
+  function tone(status) { return TONE[status] || "faint"; }
+
+  // One colour per status, so a donut of eleven statuses still reads; the tone above stays the semantic one.
+  const STATUS_ORDER = ["SUCCEEDED", "SETTLED", "PENDING", "SUBMITTING", "CREATED", "UNKNOWN", "NEEDS_REVIEW",
+    "DECLINED", "FAILED", "RETURNED", "CANCELLED"];
+  const STATUS_COLOUR = { SUCCEEDED: "good", SETTLED: "c6", PENDING: "c1", SUBMITTING: "c7", CREATED: "faint",
+    UNKNOWN: "warn", NEEDS_REVIEW: "c5", DECLINED: "bad", FAILED: "c8", RETURNED: "c3", CANCELLED: "faint" };
+  const OUTCOME_ORDER = ["PAID", "SKIPPED_IN_FLIGHT", "SKIPPED_NO_TOKEN", "SKIPPED_BELOW_MINIMUM", "SKIPPED_NO_BALANCE"];
+  const OUTCOME_COLOUR = { PAID: "good", SKIPPED_IN_FLIGHT: "c1", SKIPPED_NO_TOKEN: "warn",
+    SKIPPED_BELOW_MINIMUM: "faint", SKIPPED_NO_BALANCE: "c7" };
+  const BREAK_COLOUR = { MISSING_IN_LEDGER: "c3", MISSING_IN_REPORT: "warn", AMOUNT_MISMATCH: "c5",
+    DUPLICATE_LINE: "c8", KIND_MISMATCH: "c1", CURRENCY_MISMATCH: "c6", TIMING: "c7", LINE_WITHOUT_SUCCESS: "c4",
+    REPORT_ARITHMETIC: "bad" };
+
+  /* ---- chart primitives: SVG geometry, HTML text ------------------------------------------------------------- */
+
+  /** A horizontal bar of stacked parts, each a fraction of `total`. Scales to its container; no text inside. */
+  function stackBar(parts, total, cls) {
+    const node = svg("svg", { viewBox: "0 0 100 10", preserveAspectRatio: "none", "aria-hidden": "true" },
+      "bar" + (cls ? " " + cls : ""));
+    node.appendChild(svg("rect", { x: 0, y: 0, width: 100, height: 10 }, "track"));
+    let x = 0;
+    parts.forEach((part) => {
+      const value = num(part.value);
+      if (!value || !(total > 0)) { return; }
+      const width = value / total * 100;
+      const rect = svg("rect", { x: x.toFixed(3), y: 0, width: Math.max(width, 0.6).toFixed(3), height: 10 },
+        "f-" + part.cls);
+      if (part.title) { tip(rect, part.title); }
+      node.appendChild(rect);
+      x += width;
+    });
+    return node;
+  }
+
+  /** Label | bar | value rows. `rows`: {label, sub, value, display, cls, parts}. */
+  function hbars(rows, max) {
+    const grid = el("div", null, "hbars");
+    const top = max || Math.max.apply(null, rows.map((r) => num(r.value)).concat([1]));
+    rows.forEach((row) => {
+      const label = el("span", row.label, "lbl");
+      label.title = row.label + (row.sub ? " " + row.sub : "");
+      if (row.sub) { label.appendChild(el("small", row.sub)); }
+      grid.appendChild(label);
+      grid.appendChild(stackBar(row.parts || [{ value: row.value, cls: row.cls || "c1", title: row.label }], top));
+      const value = el("span", row.display !== undefined ? row.display : int(row.value), "val");
+      if (row.extra) { value.appendChild(el("small", row.extra)); }
+      grid.appendChild(value);
+    });
+    return grid;
+  }
+
+  function legend(items) {
+    const box = el("div", null, "legend");
+    items.forEach((item) => {
+      const entry = el("span");
+      entry.appendChild(el("i", null, "b-" + item.cls));
+      entry.appendChild(document.createTextNode(item.label));
+      if (item.value !== undefined) { entry.appendChild(el("b", item.value)); }
+      box.appendChild(entry);
+    });
+    return box;
+  }
+
+  /** A donut of segments {label, value, cls}, with the total in the middle. */
+  function donut(segments, centre, caption) {
+    const size = 168, cx = 84, r = 62, width = 20, circumference = 2 * Math.PI * r;
+    const total = segments.reduce((sum, s) => sum + num(s.value), 0);
+    const node = svg("svg", { viewBox: "0 0 " + size + " " + size, role: "img",
+      "aria-label": caption + ": " + segments.map((s) => s.label + " " + s.value).join(", ") }, "donut");
+    node.appendChild(svg("circle", { cx: cx, cy: cx, r: r, "stroke-width": width }, "ring"));
+    let offset = 0;
+    const gap = segments.filter((s) => num(s.value) > 0).length > 1 ? 1.5 : 0;
+    segments.forEach((segment) => {
+      const value = num(segment.value);
+      if (!value || !total) { return; }
+      const length = value / total * circumference;
+      const arc = svg("circle", { cx: cx, cy: cx, r: r, "stroke-width": width,
+        "stroke-dasharray": Math.max(length - gap, 0.5).toFixed(2) + " " + circumference.toFixed(2),
+        "stroke-dashoffset": (-offset).toFixed(2), transform: "rotate(-90 " + cx + " " + cx + ")" },
+        "seg s-" + segment.cls);
+      tip(arc, segment.label + ": " + int(segment.value));
+      node.appendChild(arc);
+      offset += length;
+    });
+    node.appendChild(stext(cx, cx + 6, centre, "cv", "middle"));
+    node.appendChild(stext(cx, cx + 24, caption.toUpperCase(), "cl", "middle"));
+    return node;
+  }
+
+  /**
+   * A sparkline over points {t, v}. Geometry stretches to the container (non-scaling stroke keeps the line crisp); a
+   * NaN, which histogram_quantile returns for a window with no observations, breaks the line rather than drawing zero.
+   */
+  function sparkline(series, opts) {
+    const W = 300, H = 60;
+    const node = svg("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", role: "img",
+      "aria-label": opts.label }, "spark" + (opts.tall ? " tall" : ""));
+    const all = [];
+    series.forEach((s) => s.points.forEach((p) => { if (isFinite(p.v)) { all.push(p); } }));
+    node.appendChild(svg("line", { x1: 0, y1: H - 0.5, x2: W, y2: H - 0.5, "vector-effect": "non-scaling-stroke" }, "base"));
+    if (all.length === 0) { return node; }
+    const t0 = opts.from, t1 = opts.to;
+    const top = Math.max.apply(null, all.map((p) => p.v).concat([opts.floor || 0])) || 1;
+    const x = (t) => ((t - t0) / Math.max(t1 - t0, 1)) * W;
+    const y = (v) => H - 2 - (v / top) * (H - 6);
+    series.forEach((s) => {
+      let line = "", area = "", run = [];
+      const flush = () => {
+        if (run.length === 0) { return; }
+        line += "M" + run.map((p) => x(p.t).toFixed(1) + "," + y(p.v).toFixed(1)).join("L");
+        area += "M" + x(run[0].t).toFixed(1) + "," + H + "L" + run.map((p) => x(p.t).toFixed(1) + "," + y(p.v).toFixed(1)).join("L")
+          + "L" + x(run[run.length - 1].t).toFixed(1) + "," + H + "Z";
+        run = [];
+      };
+      s.points.forEach((p) => { if (isFinite(p.v)) { run.push(p); } else { flush(); } });
+      flush();
+      if (!opts.noArea) { node.appendChild(svg("path", { d: area }, "area f-" + s.cls)); }
+      node.appendChild(svg("path", { d: line, "vector-effect": "non-scaling-stroke" }, "line s-" + s.cls));
+    });
+    return node;
+  }
+
+  /* ---- transport ------------------------------------------------------------------------------------------------ */
 
   /*
-   * Every call carries exactly one token, and a 401/403 drops that token rather than all of them: an expired admin
-   * token should not log an operator out of the ledger panels they were reading.
+   * Long integer literals are quoted before parsing so they survive as exact digit strings; JSON.parse would otherwise
+   * round a balance beyond 2^53 silently.
    */
-  function api(path, options, which) {
-    var role = which || "reader";
-    var opts = options || {};
-    if (!creds[role]) {
-      return Promise.reject(new Error("enter the " + role + " token"));
+  function parseJson(text) {
+    return JSON.parse(text.replace(/:\s*(-?\d{16,})(?=\s*[,}\]])/g, ": \"$1\""));
+  }
+
+  const PROXY_HINT = "this path is served by the one-origin proxy. Open the Explorer at 127.0.0.1:8080/explorer.html "
+    + "(docker-compose.demo.yml) rather than on ledger-service's own port.";
+
+  function httpError(status, text) {
+    let detail = text ? text.slice(0, 200) : "";
+    try {
+      const problem = JSON.parse(text);
+      detail = (problem.code ? problem.code + ": " : "") + (problem.detail || problem.title || "");
+    } catch (ignored) { /* not a problem document */ }
+    const error = new Error("HTTP " + status + (detail ? " · " + detail : ""));
+    error.status = status;
+    return error;
+  }
+
+  function dropToken(role) {
+    creds[role] = "";
+    $(role === "admin" ? "admin-token" : "token").value = "";
+  }
+
+  /** One call, carrying exactly one token (or none). A 401/403 drops that token and no other. */
+  async function call(path, role, options) {
+    const init = Object.assign({ cache: "no-store", credentials: "omit" }, options || {});
+    const headers = { Accept: "application/json" };
+    if (role) {
+      if (!creds[role]) { throw new Error("enter the " + role + " token"); }
+      headers.Authorization = "Bearer " + creds[role];
     }
-    opts.headers = { "Authorization": "Bearer " + creds[role] };
-    return fetch(path, opts).then(function (response) {
-      if (response.status === 401 || response.status === 403) {
-        creds[role] = "";
-        $(role === "admin" ? "admin-token" : "token").value = "";
-        throw new Error("not authorised — enter the " + role + " token again");
+    init.headers = headers;
+    const response = await fetch(path, init);
+    if (role && (response.status === 401 || response.status === 403)) {
+      dropToken(role);
+      const error = new Error("not authorised · enter the " + role + " token again");
+      error.status = response.status;
+      throw error;
+    }
+    const text = await response.text();
+    if (!response.ok) { throw httpError(response.status, text); }
+    return text ? parseJson(text) : null;
+  }
+
+  function explain(error) {
+    return error.status === 404 ? error.message + " · " + PROXY_HINT : error.message;
+  }
+
+  const SOURCES = {
+    invariants: ["/v1/invariants", "reader"],
+    freshness: ["/v1/freshness", "reader"],
+    accounts: ["/v1/accounts/summary", "reader"],
+    orders: ["/orders/v1/money-orders/summary", "reader"],
+    outbox: ["/orders/v1/outbox/stats", "reader"],
+    attemptTotals: ["/instruments/v1/payment-attempts/summary", "reader"],
+    attempts: ["/instruments/v1/payment-attempts?limit=100", "reader"],
+    payoutAttempts: ["/instruments/v1/payment-attempts?kind=PAYOUT&limit=50", "reader"],
+    reconRuns: ["/instruments/v1/reconciliation-runs?limit=30", "reader"],
+    payoutRuns: ["/instruments/v1/payout-runs?limit=30", "reader"],
+    providers: ["/providers/admin/summary", "admin"]
+  };
+
+  function value(name) { return state[name] && state[name].ok ? state[name].value : null; }
+
+  /** Renders why a panel has nothing to show, and says so, or returns false when every source it needs is loaded. */
+  function unavailable(host, names) {
+    for (let i = 0; i < names.length; i++) {
+      const s = state[names[i]];
+      if (!s) {
+        empty(host, SOURCES[names[i]][1] === "admin" ? "Enter the admin token to load provider ground truth."
+          : "Enter the reader token to load this panel.");
+        return true;
       }
-      return response.text().then(function (text) {
-        if (!response.ok) {
-          throw new Error("HTTP " + response.status + (text ? ": " + text.slice(0, 200) : ""));
-        }
-        return parseJson(text);
-      });
+      if (!s.ok) {
+        empty(host, explain(s.error), "empty err");
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function load(name) {
+    const source = SOURCES[name];
+    try {
+      state[name] = { ok: true, value: await call(source[0], source[1]) };
+    } catch (error) {
+      state[name] = { ok: false, error: error };
+    }
+  }
+
+  async function refresh() {
+    if (ui.loading) { return; }
+    ui.loading = true;
+    $("refresh").disabled = true;
+    document.querySelectorAll("[data-page]").forEach((page) => page.classList.add("stale"));
+    const names = Object.keys(SOURCES).filter((name) => creds[SOURCES[name][1]]);
+    Object.keys(SOURCES).forEach((name) => { if (names.indexOf(name) < 0) { delete state[name]; } });
+    try {
+      await Promise.all([loadHealth(), loadLive()].concat(names.map(load)));
+      renderAll();
+      $("as-of").textContent = "· as of " + new Date().toLocaleTimeString();
+    } finally {
+      document.querySelectorAll("[data-page]").forEach((page) => page.classList.remove("stale"));
+      $("refresh").disabled = false;
+      ui.loading = false;
+    }
+  }
+
+  function renderAll() {
+    const steps = [renderOverview, renderFlow, renderPayments, renderRecon, renderPayouts, renderProviders,
+      renderCounts, renderEntityList];
+    steps.forEach((step) => {
+      try { step(); } catch (error) {
+        // A render bug must cost one panel, not the page; the console says which.
+        console.error("render failed", step.name, error);
+      }
     });
   }
 
-  /*
-   * instrument-service and fake-providers are different origins from ledger-service, and this page's CSP is
-   * connect-src 'self' — which is the right policy and deliberately not widened. The reverse proxy in
-   * docker-compose.demo.yml puts every service under one origin, where these prefixed paths resolve. Opened directly
-   * on ledger-service's own port they 404, and the panels say so rather than failing mysteriously.
-   */
-  var INSTRUMENTS = "/instruments";
-  var PROVIDERS = "/providers";
+  /* ---- shared derivations ------------------------------------------------------------------------------------ */
 
-  var PROXY_HINT = "not found here. ledger-service answers 404 for this path too, so this may be the wrong origin "
-    + "rather than a missing record: open the Explorer through the proxy (make up-proxy, then "
-    + "127.0.0.1:8080/explorer.html).";
-
-  function report(node, error, hint) {
-    node.textContent = hint && error.message.indexOf("404") >= 0 ? hint : error.message;
+  function mainCurrency() {
+    if (ui.currency) { return ui.currency; }
+    const orders = value("orders");
+    const totals = {};
+    if (orders) {
+      orders.types.forEach((t) => { totals[t.currency] = (totals[t.currency] || 0) + num(t.volume_minor); });
+    }
+    const accounts = value("accounts");
+    if (accounts) { accounts.currency_totals.forEach((t) => { if (!(t.currency in totals)) { totals[t.currency] = 0; } }); }
+    const ranked = Object.keys(totals).sort((a, b) => totals[b] - totals[a]);
+    return ranked[0] || "USD";
   }
 
-  var UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-
-  /* ---- system overview -------------------------------------------------------------------------------------- */
-
-  function tile(key, value, className, sub) {
-    var box = el("div", null, "tile" + (className === "bad" ? " bad" : className === "warn" ? " warn" : ""));
-    box.appendChild(el("div", key, "k"));
-    box.appendChild(fill(el("div", null, "v"), [el("span", value, className ? "pill " + className : null)]));
-    if (sub) { box.appendChild(el("div", sub, "sub")); }
-    return box;
+  function attemptTotals(filter) {
+    const totals = value("attemptTotals");
+    if (!totals) { return []; }
+    return totals.totals.filter(filter || (() => true));
   }
 
-  function finding(what, detail, level) {
-    var box = el("div", null, "finding" + (level === "warn" ? " warn" : ""));
-    box.appendChild(el("div", what, "what"));
-    if (detail) { box.appendChild(el("div", detail, "detail")); }
-    return box;
+  function sumBy(rows, key, field) {
+    const out = {};
+    rows.forEach((row) => { out[row[key]] = (out[row[key]] || 0) + num(row[field]); });
+    return out;
   }
 
-  /** Names the invariants that actually failed. "VIOLATED" alone sends an operator to the logs to find out which. */
+  function classBalance(kind, account, currency) {
+    const accounts = value("accounts");
+    if (!accounts) { return null; }
+    return accounts.classes.find((c) => c.entity_kind === kind && c.account === account && c.currency === currency)
+      || null;
+  }
+
   function brokenInvariants(invariants) {
-    var broken = [];
+    const broken = [];
     if ((invariants.i2_non_zero_currencies || []).length > 0) {
-      broken.push(["I2 — global sum is not zero",
-        "currencies: " + invariants.i2_non_zero_currencies.join(", ")]);
+      broken.push(["I2: the global sum is not zero", "currencies: " + invariants.i2_non_zero_currencies.join(", ")]);
     }
     if ((invariants.i3_violations || []).length > 0) {
-      broken.push(["I3 — balances disagree with the sum of their deltas",
-        invariants.i3_violations.slice(0, 8).join(" · ")
-          + (invariants.i3_violations.length > 8 ? " … " + invariants.i3_violations.length + " total" : "")]);
+      broken.push(["I3: balances disagree with the sum of their deltas",
+        invariants.i3_violations.slice(0, 6).join(" · ") + (invariants.i3_violations.length > 6
+          ? " … " + invariants.i3_violations.length + " total" : "")]);
     }
     if ((invariants.i4_violations || []).length > 0) {
-      broken.push(["I4 — changelog sequence has a gap",
-        invariants.i4_violations.slice(0, 8).join(" · ")
-          + (invariants.i4_violations.length > 8 ? " … " + invariants.i4_violations.length + " total" : "")]);
+      broken.push(["I4: a changelog sequence has a gap",
+        invariants.i4_violations.slice(0, 6).join(" · ") + (invariants.i4_violations.length > 6
+          ? " … " + invariants.i4_violations.length + " total" : "")]);
     }
     return broken;
   }
 
-  function loadOverview() {
-    $("overview-error").textContent = "";
-    var tiles = $("overview-tiles");
-    tiles.classList.add("stale");
-
-    // Both reads are wanted together: a consistent ledger that stopped applying an hour ago is not a healthy one.
-    Promise.all([api("/v1/invariants"), api("/v1/freshness")]).then(function (results) {
-      renderOverview(results[0], results[1]);
-    }).catch(function (error) {
-      tiles.classList.remove("stale");
-      $("overview-error").textContent = error.message;
-    });
+  /** Everything worth an operator's attention, most severe first. Shared by the overview and the nav badge. */
+  function attentionItems() {
+    const items = [];
+    const invariants = value("invariants");
+    const freshness = value("freshness");
+    if (invariants) {
+      brokenInvariants(invariants).forEach((b) => items.push({ level: "bad", title: b[0], detail: b[1] }));
+      (invariants.non_zero_clearing_balances || []).forEach((b) => items.push({ level: "warn",
+        title: b.entity_id + " " + b.account + " holds " + money(b.signed_minor, b.currency),
+        detail: "Collected by card and not yet settled by the provider, plus whatever a reconciliation left behind: "
+          + "a settled day with breaks leaves its difference here instead of adjusting it away.", tab: "recon",
+        action: "Reconciliation" }));
+      if (invariants.unresolved_quarantined_count > 0) {
+        items.push({ level: "warn", title: invariants.unresolved_quarantined_count + " quarantined money order(s)",
+          detail: "Held back rather than applied; each needs an operator decision." });
+      }
+    }
+    if (freshness) {
+      if (freshness.listener_paused) {
+        items.push({ level: "bad", title: "The ledger's apply listener is paused",
+          detail: "Nothing is being applied. Balances are correct as far as they go and then simply stop." });
+      }
+      if (freshness.status !== "ok") {
+        items.push({ level: "bad", title: "Consumer lag cannot be measured", detail: freshness.error || "" });
+      }
+      const lagging = Object.keys(freshness.partition_lag || {}).filter((k) => freshness.partition_lag[k] > 0);
+      if (lagging.length > 0) {
+        items.push({ level: "warn", title: "The ledger is behind on " + lagging.length + " partition(s)",
+          detail: lagging.map((k) => "p" + k + ": " + freshness.partition_lag[k]).join(" · ") });
+      }
+    }
+    const stuck = attemptTotals((t) => t.status === "UNKNOWN" || t.status === "NEEDS_REVIEW");
+    if (stuck.length > 0) {
+      const n = stuck.reduce((sum, t) => sum + num(t.attempts), 0);
+      items.push({ level: "warn", title: n + " attempt(s) in UNKNOWN or NEEDS_REVIEW",
+        detail: "Outcomes the provider has not confirmed yet; the resolver owns them.", tab: "payments", action: "Payments" });
+    }
+    const runs = value("reconRuns");
+    if (runs && runs.length > 0) {
+      const withBreaks = runs.filter((r) => r.breaks_found > 0);
+      if (withBreaks.length > 0) {
+        const breaks = withBreaks.reduce((sum, r) => sum + r.breaks_found, 0);
+        items.push({ level: "warn", title: breaks + " reconciliation break(s) across " + withBreaks.length + " run(s)",
+          detail: typesOf(withBreaks),
+          tab: "recon", action: "Reconciliation" });
+      }
+    }
+    const payoutRuns = value("payoutRuns");
+    if (payoutRuns && payoutRuns.length > 0 && payoutRuns[0].status === "REFUSED") {
+      items.push({ level: "warn", title: "The latest payout run was refused: " + payoutRuns[0].refusal_code,
+        detail: "A refused run creates no payouts; retry with a fresh key once the pipeline has caught up.",
+        tab: "payouts", action: "Payouts" });
+    }
+    const outbox = value("outbox");
+    if (outbox && outbox.unpublished_count > 0) {
+      items.push({ level: "info", title: outbox.unpublished_count + " order(s) waiting in the outbox",
+        detail: "oldest " + seconds(outbox.oldest_unpublished_age_seconds) + "; published once Kafka acknowledges" });
+    }
+    const providers = value("providers");
+    if (providers && providers.webhook_pending > 0) {
+      items.push({ level: "info", title: providers.webhook_pending + " provider webhook(s) awaiting delivery",
+        detail: "The simulated providers redeliver until acknowledged.", tab: "providers", action: "Providers" });
+    }
+    const rank = { bad: 0, warn: 1, info: 2 };
+    return items.sort((a, b) => rank[a.level] - rank[b.level]);
   }
 
-  function renderOverview(invariants, freshness) {
-    var tiles = $("overview-tiles");
-    var findings = $("overview-findings");
-    clear(tiles);
-    clear(findings);
-    tiles.classList.remove("stale");
+  function typesOf(runs) {
+    const counts = {};
+    runs.forEach((r) => Object.keys(r.breaks_by_type || {}).forEach((type) => {
+      counts[type] = (counts[type] || 0) + num(r.breaks_by_type[type]);
+    }));
+    return Object.keys(counts).sort().map((type) => type + " × " + counts[type]).join(" · ");
+  }
 
-    var broken = brokenInvariants(invariants);
-    tiles.appendChild(tile("invariants",
-      invariants.consistent ? "consistent" : "VIOLATED",
-      invariants.consistent ? "ok" : "bad",
-      invariants.consistent ? "I2, I3 and I4 hold" : broken.length + " failing"));
+  /* ---- overview ------------------------------------------------------------------------------------------------ */
 
-    var quarantined = invariants.unresolved_quarantined_count;
-    tiles.appendChild(tile("quarantined", quarantined, quarantined > 0 ? "bad" : "ok",
-      quarantined > 0 ? "orders an operator has not resolved" : "nothing held back"));
+  function kpi(key, text, sub, level, tab) {
+    const box = el("div", null, "kpi" + (level ? " " + level : "") + (tab ? " clickable" : ""));
+    box.appendChild(el("div", key, "k"));
+    box.appendChild(text instanceof Node ? add(el("div", null, "v"), text) : el("div", text, "v"));
+    if (sub) { box.appendChild(el("div", sub, "s")); }
+    if (tab) {
+      box.tabIndex = 0;
+      box.setAttribute("role", "link");
+      box.addEventListener("click", () => show(tab));
+      box.addEventListener("keydown", (event) => { if (event.key === "Enter") { show(tab); } });
+    }
+    return box;
+  }
 
-    var clearing = invariants.non_zero_clearing_balances || [];
-    tiles.appendChild(tile("clearing non-zero", clearing.length, clearing.length > 0 ? "warn" : "ok",
-      clearing.length > 0 ? "money in flight or a stuck settlement" : "every clearing account is flat"));
+  function renderOverview() {
+    const kpis = clear($("ov-kpis"));
+    const prompt = clear($("ov-prompt"));
+    if (!creds.reader) {
+      prompt.appendChild(callout("Enter the reader token (top right) to load the ledger, orders and payments.",
+        "Service health, live metrics and the measured results need no token.", "info"));
+    }
+    const currency = mainCurrency();
+    const orders = value("orders");
+    const invariants = value("invariants");
+    const accounts = value("accounts");
+    const freshness = value("freshness");
 
-    if (freshness.status === "ok") {
-      var lag = freshness.total_lag_records;
-      tiles.appendChild(tile("consumer lag", lag + " records", lag > 0 ? "warn" : "ok", "behind across all partitions"));
-      tiles.appendChild(tile("oldest unapplied",
-        freshness.oldest_unapplied_age_seconds === null || freshness.oldest_unapplied_age_seconds === undefined
-          ? "nothing pending" : freshness.oldest_unapplied_age_seconds + "s",
-        "ok", "age of the oldest record not yet applied"));
-    } else {
+    if (orders) {
+      const total = orders.types.reduce((sum, t) => sum + num(t.orders), 0);
+      const unbalanced = orders.types.reduce((sum, t) => sum + num(t.unbalanced_orders), 0);
+      kpis.appendChild(kpi("Money orders", int(total), unbalanced === 0 ? "every one sums to zero"
+        : unbalanced + " do not sum to zero", unbalanced === 0 ? "good" : "bad", "flow"));
+      const commerce = orders.types.filter((t) => t.type === "COMMERCE" && t.currency === currency);
+      const volume = commerce.reduce((sum, t) => sum + num(t.volume_minor), 0);
+      kpis.appendChild(kpi("Trip volume", money(volume, currency),
+        int(commerce.reduce((sum, t) => sum + num(t.orders), 0)) + " trips booked", null, "flow"));
+    }
+    if (accounts) {
+      const totals = accounts.currency_totals;
+      const allZero = totals.every((t) => num(t.signed_minor) === 0);
+      const n = accounts.classes.reduce((sum, c) => sum + num(c.accounts), 0);
+      const mine = totals.find((t) => t.currency === currency) || totals[0];
+      kpis.appendChild(kpi("Global sum (I2)", mine ? money(mine.signed_minor, mine.currency) : "—",
+        (allZero ? "debits equal credits across " : "NOT zero across ") + int(n) + " accounts",
+        allZero ? "good" : "bad", "flow"));
+    }
+    if (invariants) {
+      const broken = brokenInvariants(invariants);
+      kpis.appendChild(kpi("Ledger invariants", invariants.consistent ? "Consistent" : "Violated",
+        invariants.consistent ? "I2 · I3 · I4 hold in one snapshot" : broken.length + " failing",
+        invariants.consistent ? "good" : "bad"));
+    }
+    const charges = attemptTotals((t) => t.kind === "CHARGE" && t.currency === currency);
+    if (value("attemptTotals")) {
+      const byStatus = sumBy(charges, "status", "attempts");
+      const collected = charges.filter((t) => t.status === "SUCCEEDED").reduce((s, t) => s + num(t.amount_minor), 0);
+      const all = Object.keys(byStatus).reduce((s, k) => s + byStatus[k], 0);
+      kpis.appendChild(kpi("Charges collected", money(collected, currency),
+        int(byStatus.SUCCEEDED || 0) + " of " + int(all) + " succeeded", null, "payments"));
+    }
+    if (invariants) {
+      const clearing = invariants.non_zero_clearing_balances || [];
+      const residual = clearing.filter((b) => b.currency === currency).reduce((s, b) => s + num(b.signed_minor), 0);
+      kpis.appendChild(kpi("Held in clearing", money(residual, currency),
+        clearing.length === 0 ? "every clearing account is flat" : "not yet settled, or a recon residual",
+        clearing.length ? "warn" : "good", "recon"));
+      kpis.appendChild(kpi("Quarantined", int(invariants.unresolved_quarantined_count),
+        invariants.unresolved_quarantined_count > 0 ? "orders held back" : "nothing held back",
+        invariants.unresolved_quarantined_count > 0 ? "warn" : "good"));
+    }
+    if (freshness) {
+      kpis.appendChild(freshness.status === "ok"
+        ? kpi("Consumer lag", int(freshness.total_lag_records) + " rec",
+          "oldest unapplied " + seconds(freshness.oldest_unapplied_age_seconds)
+            + (freshness.listener_paused ? " · listener PAUSED" : " · listener running"),
+          freshness.total_lag_records > 0 || freshness.listener_paused ? "warn" : "good")
+        : kpi("Consumer lag", "unmeasurable", freshness.error || "the measurement failed", "bad"));
+    }
+    ["orders", "accounts", "invariants", "freshness", "attemptTotals"].forEach((name) => {
+      if (state[name] && !state[name].ok) {
+        kpis.appendChild(kpi(name, "error", explain(state[name].error), "bad"));
+      }
+    });
+
+    renderAttention();
+    renderLag();
+    renderPipeline();
+  }
+
+  function renderAttention() {
+    const host = clear($("ov-attention"));
+    if (!creds.reader) { empty(host, "Enter the reader token to evaluate the ledger."); $("ov-attn-note").textContent = ""; return; }
+    const items = attentionItems();
+    const invariants = value("invariants");
+    $("ov-attn-note").textContent = items.length ? items.length + " item(s)" : "";
+    if (items.length === 0) {
+      host.appendChild(item("good", "Nothing needs attention", "Invariants hold, clearing accounts are flat and the "
+        + "pipeline is caught up."));
+    }
+    items.forEach((i) => host.appendChild(item(i.level, i.title, i.detail, i.tab, i.action)));
+    // I5 is never claimed here: rehashing every changelog cannot meet the audit-read budget, so the endpoint says so and
+    // this page repeats it rather than letting a green row imply a check nobody ran.
+    if (invariants && invariants.i5 && !invariants.i5.evaluated) {
+      host.appendChild(item("info", "I5 (hash chain) is verified per entity, not here", invariants.i5.reason,
+        "ledger", "Ledger explorer"));
+    }
+  }
+
+  function item(level, title, detail, tab, action) {
+    const row = el("div", null, "todo");
+    row.appendChild(el("span", null, "mark " + level));
+    const body = el("div", null, "body");
+    body.appendChild(el("div", title, "t"));
+    if (detail) { body.appendChild(el("div", detail, "d")); }
+    row.appendChild(body);
+    if (tab) { row.appendChild(linkButton(action + " →", () => show(tab))); }
+    return row;
+  }
+
+  function renderLag() {
+    const host = clear($("ov-lag"));
+    if (unavailable(host, ["freshness"])) { return; }
+    const freshness = value("freshness");
+    if (freshness.status !== "ok") {
       // Fail closed, exactly as the endpoint does: no number at all beats a reassuring zero.
-      tiles.appendChild(tile("consumer lag", "unmeasurable", "bad", freshness.error || "the measurement failed"));
+      host.appendChild(callout("Lag is unmeasurable", freshness.error || "the measurement failed", "bad"));
+      return;
     }
-
-    tiles.appendChild(tile("apply listener", freshness.listener_paused ? "PAUSED" : "running",
-      freshness.listener_paused ? "bad" : "ok",
-      freshness.listener_paused ? "stopped after an exhausted or unclassified failure" : "consuming money orders"));
-
-    broken.forEach(function (entry) {
-      findings.appendChild(finding(entry[0], entry[1]));
+    const partitions = Object.keys(freshness.partition_lag || {}).sort((a, b) => a - b);
+    const top = Math.max.apply(null, partitions.map((k) => freshness.partition_lag[k]).concat([1]));
+    const cols = el("div", null, "cols");
+    cols.setAttribute("role", "img");
+    cols.setAttribute("aria-label", "consumer lag per partition: " + partitions.map((k) => "p" + k + " "
+      + freshness.partition_lag[k]).join(", "));
+    partitions.forEach((k) => {
+      const lag = freshness.partition_lag[k];
+      const col = el("div", null, "col");
+      col.appendChild(el("span", int(lag), "cv"));
+      const bar = svg("svg", { viewBox: "0 0 10 100", preserveAspectRatio: "none", "aria-hidden": "true" }, "vbar");
+      bar.appendChild(svg("rect", { x: 0, y: 0, width: 10, height: 100 }, "track"));
+      const h = lag > 0 ? Math.max(lag / top * 100, 3) : 1.5;
+      bar.appendChild(tip(svg("rect", { x: 0, y: (100 - h).toFixed(2), width: 10, height: h.toFixed(2) },
+        lag > 0 ? "f-warn" : "f-good"), "partition " + k + ": " + lag + " records behind"));
+      col.appendChild(bar);
+      col.appendChild(el("span", "p" + k, "cl"));
+      cols.appendChild(col);
     });
-
-    if (freshness.listener_paused) {
-      findings.appendChild(finding("The apply listener is paused",
-        "Nothing is being applied. Balances are correct as far as they go and then simply stop."));
-    }
-
-    if (quarantined > 0) {
-      findings.appendChild(finding(quarantined + " quarantined money order(s) unresolved",
-        "Held back rather than applied; each needs an operator decision.", "warn"));
-    }
-
-    // One stuck partition is the failure this surfaces: a total hides it behind the partitions that are keeping up.
-    var partitions = Object.keys(freshness.partition_lag || {}).filter(function (key) {
-      return freshness.partition_lag[key] > 0;
-    });
-    if (partitions.length > 0) {
-      findings.appendChild(finding("Lag is not evenly spread",
-        partitions.map(function (key) { return "p" + key + ": " + freshness.partition_lag[key]; }).join(" · "),
-        "warn"));
-    }
-
-    if (clearing.length > 0) {
-      var clearingTable = table(["entity", "account", "currency", "signed"]);
-      clearing.forEach(function (balance) {
-        clearingTable.body.appendChild(rowOf("tr", [
-          el("td", balance.entity_id),
-          el("td", balance.account),
-          el("td", balance.currency),
-          amountCell(balance.signed_minor, "")
-        ]));
-      });
-      var section = el("div");
-      section.appendChild(el("div", "Clearing accounts that have not returned to zero", "what"));
-      section.appendChild(clearingTable.wrap);
-      findings.appendChild(section);
-    }
-
-    // I5 is never claimed here: rehashing every changelog cannot meet the audit-read budget, so the endpoint says
-    // so and this page repeats it rather than letting a green row imply a check nobody ran.
-    if (invariants.i5 && !invariants.i5.evaluated) {
-      findings.appendChild(finding("I5 (hash chain) is not evaluated by this endpoint",
-        invariants.i5.reason + " Use Verify chain on an entity below.", "warn"));
-    }
-
-    $("overview-at").textContent = freshness.computed_at ? "as of " + freshness.computed_at : "";
+    host.appendChild(cols);
+    host.appendChild(el("p", (freshness.total_lag_records === 0 ? "All " + partitions.length
+      + " partitions caught up. " : int(freshness.total_lag_records) + " records behind. ")
+      + "Measured " + ago(freshness.computed_at) + ".", "note"));
   }
 
-  /* ---- entity ----------------------------------------------------------------------------------------------- */
+  function renderPipeline() {
+    const host = clear($("ov-pipeline"));
+    if (unavailable(host, ["freshness", "outbox"])) { return; }
+    const freshness = value("freshness");
+    const outbox = value("outbox");
+    const stages = [
+      { k: "order-service outbox", v: int(outbox.unpublished_count) + " waiting",
+        s: "oldest " + seconds(outbox.oldest_unpublished_age_seconds), level: outbox.unpublished_count > 0 ? "warn" : "good" },
+      { k: "Kafka · money-orders", v: Object.keys(freshness.partition_lag || {}).length + " partitions",
+        s: "keyed by entity, so one entity's orders stay in order", level: "good" },
+      { k: "ledger apply", v: freshness.status === "ok" ? int(freshness.total_lag_records) + " behind" : "unmeasurable",
+        s: freshness.listener_paused ? "listener PAUSED" : "oldest unapplied " + seconds(freshness.oldest_unapplied_age_seconds),
+        level: freshness.status !== "ok" || freshness.listener_paused ? "bad" : freshness.total_lag_records > 0 ? "warn" : "good" }
+    ];
+    stages.forEach((stage, i) => host.appendChild(item(stage.level, (i + 1) + " · " + stage.k + ": " + stage.v, stage.s)));
+    host.appendChild(el("p", "Payout runs refuse when outbox age + unapplied age + the instruments outbox age exceed 5 s.",
+      "note"));
+  }
 
-  var ENTITY_PATTERN = /^(rider|driver|platform|provider):[A-Za-z0-9_-]{1,64}$/;
+  /* ---- health ----------------------------------------------------------------------------------------------------- */
 
-  function resetEntity() {
-    clear($("verify-result"));
-    clear($("balances"));
-    clear($("changelog"));
-    clear($("order-detail"));
-    $("changelog-controls").hidden = true;
+  const HEALTH = [
+    { name: "ledger-service", path: "/actuator/health" },
+    { name: "order-service", path: "/orders/actuator/health" },
+    { name: "instrument-service", path: "/instruments/actuator/health" },
+    { name: "fake-providers", path: "/providers/actuator/health" },
+    { name: "grafana · otel-lgtm", path: "/grafana/api/health" },
+    { name: "proxy · nginx", path: "/healthz", text: true }
+  ];
+
+  async function loadHealth() {
+    const results = await Promise.all(HEALTH.map(async (h) => {
+      const started = performance.now();
+      try {
+        const response = await fetch(h.path, { cache: "no-store", credentials: "omit" });
+        const ms = performance.now() - started;
+        let status = response.ok ? "UP" : "DOWN";
+        if (!h.text) {
+          try {
+            const body = await response.json();
+            if (body.status) { status = body.status; } else if (body.database) { status = body.database === "ok" ? "UP" : "DOWN"; }
+          } catch (ignored) { status = response.ok ? "UP" : "DOWN"; }
+        }
+        return { h: h, status: status, ms: ms, code: response.status };
+      } catch (error) {
+        return { h: h, status: "DOWN", ms: null, code: null, error: error.message };
+      }
+    }));
+    state.health = results;
+    renderHealth();
+  }
+
+  function renderHealth() {
+    const host = clear($("ov-health"));
+    const results = state.health || [];
+    results.forEach((r) => {
+      const row = el("div", null, "svc-row");
+      const name = el("div");
+      name.appendChild(el("div", r.h.name, "name"));
+      name.appendChild(el("div", r.h.path + (r.code && r.code !== 200 ? " · HTTP " + r.code : ""), "meta"));
+      row.appendChild(name);
+      row.appendChild(el("span", r.ms !== null ? r.ms.toFixed(0) + " ms" : "—", "ms"));
+      row.appendChild(pill(r.status, tone(r.status), true));
+      host.appendChild(row);
+    });
+    const up = results.filter((r) => r.status === "UP").length;
+    $("env-dot").className = "dot " + (results.length && up === results.length ? "good" : "bad");
+  }
+
+  /* ---- money flow ------------------------------------------------------------------------------------------------ */
+
+  const FLOW_W = 1100, FLOW_H = 440, NODE_W = 160, NODE_H = 70;
+  const FLOW_NODES = [
+    { id: "rr", kind: "rider", account: "receivable", title: "Rider receivable", x: 10, y: 176 },
+    { id: "dp", kind: "driver", account: "payable", title: "Driver payable", x: 320, y: 36 },
+    { id: "pr", kind: "platform", account: "revenue", title: "Platform revenue", x: 320, y: 186 },
+    { id: "pc", kind: "provider", account: "clearing", title: "Provider clearing", x: 320, y: 336 },
+    { id: "po", kind: "provider", account: "payout_clearing", title: "Payout clearing", x: 630, y: 36 },
+    { id: "cash", kind: "platform", account: "cash", title: "Platform cash", x: 630, y: 256 },
+    { id: "fees", kind: "platform", account: "processing_fees", title: "Processing fees", x: 630, y: 360 },
+    { id: "bank", external: true, title: "Driver banks", sub: "outside the ledger", x: 930, y: 36 }
+  ];
+  // Each arrow is one reason's leg on one account, drawn along the value chain from where the money was to where it went.
+  const FLOW_EDGES = [
+    { from: "rr", to: "dp", reason: "trip.completed", kind: "driver", account: "payable", cls: "c1" },
+    { from: "rr", to: "pr", reason: "trip.completed", kind: "platform", account: "revenue", cls: "c1" },
+    { from: "rr", to: "pc", reason: "charge.succeeded", kind: "provider", account: "clearing", cls: "c2" },
+    { from: "pc", to: "cash", reason: "settlement.received", kind: "platform", account: "cash", cls: "c7" },
+    { from: "pc", to: "fees", reason: "settlement.received", kind: "platform", account: "processing_fees", cls: "c7" },
+    { from: "dp", to: "po", reason: "payout.accepted", kind: "provider", account: "payout_clearing", cls: "c5" },
+    { from: "po", to: "bank", reason: "payout.settled", kind: "provider", account: "payout_clearing", cls: "c5" },
+    { from: "pc", to: "rr", reason: "refund.succeeded", kind: "provider", account: "clearing", cls: "c3", back: true },
+    { from: "po", to: "dp", reason: "payout.failed", kind: "provider", account: "payout_clearing", cls: "c3", back: true },
+    { from: "bank", to: "dp", reason: "payout.returned", kind: "platform", account: "cash", cls: "c3", back: true }
+  ];
+
+  function legAmount(legs, edge, currency) {
+    return legs.filter((l) => l.reason === edge.reason && l.entity_kind === edge.kind && l.account === edge.account
+      && l.currency === currency).reduce((sum, l) => sum + Math.abs(num(l.signed_minor)), 0);
+  }
+
+  function bezierPoint(p0, p1, p2, p3, t) {
+    const u = 1 - t;
+    return {
+      x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+      y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y
+    };
+  }
+
+  function renderFlow() {
+    const currencySelect = $("flow-currency");
+    const host = clear($("flow-diagram"));
+    if (unavailable(host, ["orders", "accounts"])) {
+      ["flow-types", "flow-zero", "flow-balances"].forEach((id) => unavailable(clear($(id)), ["orders", "accounts"]));
+      return;
+    }
+    const orders = value("orders");
+    const accounts = value("accounts");
+    const currency = mainCurrency();
+    const currencies = accounts.currency_totals.map((t) => t.currency);
+    clear(currencySelect);
+    currencies.forEach((c) => { const o = el("option", c); o.value = c; o.selected = c === currency; currencySelect.appendChild(o); });
+    currencySelect.disabled = currencies.length < 2;
+
+    const node = svg("svg", { viewBox: "0 0 " + FLOW_W + " " + FLOW_H, role: "img",
+      "aria-label": "Money flow between account classes in " + currency }, "flow");
+    const byId = {};
+    FLOW_NODES.forEach((n) => { byId[n.id] = n; });
+    const amounts = FLOW_EDGES.map((e) => legAmount(orders.legs, e, currency));
+    const top = Math.max.apply(null, amounts.concat([1]));
+
+    // Ports: every edge leaving (or entering) a node gets its own slot, so parallel arrows do not overlap.
+    const outs = {}, ins = {};
+    FLOW_EDGES.forEach((e, i) => {
+      if (e.back) { return; }
+      (outs[e.from] = outs[e.from] || []).push(i);
+      (ins[e.to] = ins[e.to] || []).push(i);
+    });
+    const slot = (list, i) => {
+      const k = list.indexOf(i), n = list.length;
+      return n === 1 ? 0 : (k - (n - 1) / 2) * (NODE_H * 0.55 / Math.max(n - 1, 1));
+    };
+
+    const edgeLayer = svg("g"), labelLayer = svg("g"), nodeLayer = svg("g");
+    FLOW_EDGES.forEach((e, i) => {
+      const amount = amounts[i];
+      if (e.back && amount === 0) { return; }
+      const a = byId[e.from], b = byId[e.to];
+      let p0, p1, p2, p3;
+      if (!e.back) {
+        p0 = { x: a.x + NODE_W, y: a.y + NODE_H / 2 + slot(outs[e.from], i) };
+        p3 = { x: b.x, y: b.y + NODE_H / 2 + slot(ins[e.to], i) };
+        const dx = (p3.x - p0.x) * 0.5;
+        p1 = { x: p0.x + dx, y: p0.y };
+        p2 = { x: p3.x - dx, y: p3.y };
+      } else {
+        p0 = { x: a.x + NODE_W * 0.35, y: a.y + NODE_H };
+        p3 = { x: b.x + NODE_W * 0.65, y: b.y + NODE_H };
+        p1 = { x: p0.x, y: p0.y + 46 };
+        p2 = { x: p3.x, y: p3.y + 46 };
+      }
+      const d = "M" + p0.x + "," + p0.y + " C" + p1.x + "," + p1.y + " " + p2.x + "," + p2.y + " " + p3.x + "," + p3.y;
+      const width = amount > 0 ? 2.5 + 15 * Math.sqrt(amount / top) : 1.4;
+      const path = svg("path", { d: d, "stroke-width": width.toFixed(1) },
+        "flow-edge s-" + e.cls + (amount === 0 ? " none" : "") + (e.back ? " back" : ""));
+      tip(path, e.reason + ": " + money(amount, currency) + " (" + b.title + (e.back ? ", reversal" : "") + ")");
+      edgeLayer.appendChild(path);
+      if (amount > 0 && !e.back) { edgeLayer.appendChild(svg("path", { d: d }, "flow-ants")); }
+
+      const mid = bezierPoint(p0, p1, p2, p3, 0.5);
+      const label = svg("g", null, "flow-label" + (amount === 0 ? " none" : ""));
+      const reasonText = e.reason;
+      const amountText = amount === 0 ? "none yet" : money(amount, currency);
+      const w = Math.max(reasonText.length, amountText.length) * 6.2 + 12;
+      label.appendChild(svg("rect", { x: (mid.x - w / 2).toFixed(1), y: (mid.y - 16).toFixed(1), width: w.toFixed(1),
+        height: 32, rx: 4 }));
+      label.appendChild(stext(mid.x.toFixed(1), (mid.y - 3).toFixed(1), reasonText, "lr", "middle"));
+      label.appendChild(stext(mid.x.toFixed(1), (mid.y + 11).toFixed(1), amountText, "la", "middle"));
+      labelLayer.appendChild(label);
+    });
+
+    FLOW_NODES.forEach((n) => {
+      const g = svg("g", null, "flow-node");
+      let balanceText, hot = false;
+      if (n.external) {
+        g.setAttribute("class", "flow-node ext");
+        const paid = amounts[FLOW_EDGES.findIndex((e) => e.to === "bank")];
+        balanceText = paid ? money(paid, currency) + " paid" : "nothing paid yet";
+      } else {
+        const balance = classBalance(n.kind, n.account, currency);
+        balanceText = balance ? money(balance.presented_minor, currency) : money(0, currency);
+        hot = /clearing/.test(n.account) && balance && num(balance.signed_minor) !== 0;
+        if (hot) { g.setAttribute("class", "flow-node hot"); }
+        tip(g, n.kind + " · " + n.account + ": " + (balance ? int(balance.accounts) + " account(s), signed "
+          + balance.signed_minor + " minor units, " + balance.normal_side.toLowerCase() + "-normal" : "no accounts yet"));
+      }
+      g.appendChild(svg("rect", { x: n.x, y: n.y, width: NODE_W, height: NODE_H, rx: 7 }));
+      g.appendChild(stext(n.x + 12, n.y + 20, n.title, "nt"));
+      const cls = n.external ? null : classBalance(n.kind, n.account, currency);
+      g.appendChild(stext(n.x + 12, n.y + 35, n.external ? n.sub : cls ? int(cls.accounts) + " account"
+        + (num(cls.accounts) === 1 ? "" : "s") + " · " + cls.normal_side.toLowerCase() : "no accounts yet", "ns"));
+      g.appendChild(stext(n.x + 12, n.y + 58, balanceText, "nv" + (hot ? " warn" : "")));
+      nodeLayer.appendChild(g);
+    });
+    node.appendChild(edgeLayer);
+    node.appendChild(nodeLayer);
+    node.appendChild(labelLayer);
+    const scroll = el("div", null, "flow-scroll");
+    scroll.appendChild(node);
+    host.appendChild(scroll);
+    host.appendChild(legend([
+      { cls: "c1", label: "trip booked (COMMERCE)" }, { cls: "c2", label: "card collected (COLLECTION)" },
+      { cls: "c7", label: "provider settled (SETTLEMENT)" }, { cls: "c5", label: "driver paid (DISBURSEMENT)" },
+      { cls: "c3", label: "reversals: refund, failed or returned payout" }]));
+    host.appendChild(el("p", "Box figures are ledger balances on each account's normal side; arrow figures are the sum "
+      + "of that order reason's entries on the target account, from order-service. Highlighted: a clearing account that "
+      + "has not returned to zero.", "note"));
+
+    renderOrderTypes(orders, currency);
+    renderZeroSum(orders, currency);
+    renderClassBalances(accounts, currency);
+  }
+
+  const TYPE_COLOUR = { COMMERCE: "c1", COLLECTION: "c2", SETTLEMENT: "c7", DISBURSEMENT: "c5", REFUND: "c3" };
+
+  function renderOrderTypes(orders, currency) {
+    const host = clear($("flow-types"));
+    const rows = orders.types.filter((t) => t.currency === currency)
+      .sort((a, b) => num(b.orders) - num(a.orders))
+      .map((t) => ({ label: t.type, sub: t.reason, value: t.orders, cls: TYPE_COLOUR[t.type] || "c1",
+        display: int(t.orders), extra: money(t.volume_minor, currency) }));
+    if (rows.length === 0) { empty(host, "No orders in " + currency + " yet."); return; }
+    host.appendChild(hbars(rows));
+    host.appendChild(el("p", "Bars: order count. Right: gross volume (the sum of the debit entries). Only COMMERCE "
+      + "is accepted over the API; every other type is produced from a provider event.", "note"));
+  }
+
+  function renderZeroSum(orders, currency) {
+    const host = clear($("flow-zero"));
+    const groups = {};
+    orders.legs.filter((l) => l.currency === currency).forEach((l) => {
+      const key = l.type + " " + l.reason;
+      const g = groups[key] = groups[key] || { type: l.type, reason: l.reason, debit: 0, credit: 0 };
+      const v = num(l.signed_minor);
+      if (v > 0) { g.debit += v; } else { g.credit -= v; }
+    });
+    const unbalanced = {};
+    orders.types.filter((t) => t.currency === currency).forEach((t) => { unbalanced[t.type + " " + t.reason] = t.unbalanced_orders; });
+    const keys = Object.keys(groups);
+    if (keys.length === 0) { empty(host, "No orders in " + currency + " yet."); return; }
+    const top = Math.max.apply(null, keys.map((k) => Math.max(groups[k].debit, groups[k].credit)).concat([1]));
+    const grid = el("div", null, "mirror");
+    ["reason", "credits", "", "debits", "unbalanced"].forEach((h, i) => {
+      const cell = el("span", h, "hdr");
+      if (i === 1) { cell.style.textAlign = "right"; }
+      grid.appendChild(cell);
+    });
+    keys.sort().forEach((k) => {
+      const g = groups[k];
+      const label = el("span", g.reason);
+      label.title = g.type;
+      grid.appendChild(label);
+      grid.appendChild(el("span", money(g.credit, currency), "val l"));
+      const bar = svg("svg", { viewBox: "0 0 200 12", preserveAspectRatio: "none", role: "img",
+        "aria-label": g.reason + ": credits " + g.credit + ", debits " + g.debit }, "mbar");
+      const cw = g.credit / top * 96, dw = g.debit / top * 96;
+      bar.appendChild(svg("rect", { x: (100 - cw).toFixed(2), y: 1, width: cw.toFixed(2), height: 10 }, "f-c3"));
+      bar.appendChild(svg("rect", { x: 100, y: 1, width: dw.toFixed(2), height: 10 }, "f-c2"));
+      bar.appendChild(svg("line", { x1: 100, y1: 0, x2: 100, y2: 12, "vector-effect": "non-scaling-stroke" }, "axis"));
+      grid.appendChild(bar);
+      grid.appendChild(el("span", money(g.debit, currency), "val"));
+      const n = unbalanced[k];
+      grid.appendChild(pill(n === undefined ? "—" : n === 0 ? "0 · Σ = 0" : n + " unbalanced", n === 0 ? "good" : "bad"));
+    });
+    host.appendChild(add(el("div", null, "scroll"), grid));
+    host.appendChild(el("p", "Each reason's debits and credits are equal because every one of its orders nets to zero; "
+      + "the right column is order-service's own recount of orders that do not (it must be 0).", "note"));
+  }
+
+  function renderClassBalances(accounts, currency) {
+    const host = clear($("flow-balances"));
+    const classes = accounts.classes.filter((c) => c.currency === currency)
+      .sort((a, b) => num(b.signed_minor) - num(a.signed_minor));
+    if (classes.length === 0) { empty(host, "No balances in " + currency + " yet."); return; }
+    const top = Math.max.apply(null, classes.map((c) => Math.abs(num(c.signed_minor))).concat([1]));
+    const grid = el("div", null, "mirror");
+    ["account class", "credit balance", "", "debit balance", "accounts"].forEach((h, i) => {
+      const cell = el("span", h, "hdr");
+      if (i === 1) { cell.style.textAlign = "right"; }
+      grid.appendChild(cell);
+    });
+    classes.forEach((c) => {
+      const v = num(c.signed_minor);
+      grid.appendChild(el("span", c.entity_kind + " · " + c.account));
+      grid.appendChild(add(el("span", null, "val l"), v < 0 ? moneyNode(c.presented_minor, currency) : el("span", "", "muted")));
+      const bar = svg("svg", { viewBox: "0 0 200 12", preserveAspectRatio: "none", role: "img",
+        "aria-label": c.entity_kind + " " + c.account + ": signed " + c.signed_minor }, "mbar");
+      const w = Math.abs(v) / top * 96;
+      bar.appendChild(svg("rect", { x: v < 0 ? (100 - w).toFixed(2) : 100, y: 1, width: Math.max(w, v === 0 ? 0 : 0.8).toFixed(2),
+        height: 10 }, v < 0 ? "f-c3" : "f-c2"));
+      bar.appendChild(svg("line", { x1: 100, y1: 0, x2: 100, y2: 12, "vector-effect": "non-scaling-stroke" }, "axis"));
+      grid.appendChild(bar);
+      grid.appendChild(add(el("span", null, "val"), v >= 0 ? moneyNode(c.presented_minor, currency) : el("span", "", "muted")));
+      grid.appendChild(el("span", int(c.accounts), "val muted"));
+    });
+    host.appendChild(add(el("div", null, "scroll"), grid));
+    const total = accounts.currency_totals.find((t) => t.currency === currency);
+    const zero = total && num(total.signed_minor) === 0;
+    host.appendChild(add(el("div", null, "row foot"),
+      pill(zero ? "I2 holds" : "I2 VIOLATED", zero ? "good" : "bad", true),
+      el("span", "Sum of every signed balance in " + currency + ", computed by ledger-service from the same snapshot: "
+        + (total ? money(total.signed_minor, currency) + " (" + total.signed_minor + " minor units)" : "—") + ".", "note")));
+  }
+
+  /* ---- ledger explorer ------------------------------------------------------------------------------------------- */
+
+  const ENTITY_PATTERN = /^(rider|driver|platform|provider):[A-Za-z0-9_-]{1,64}$/;
+  const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+  function renderEntityList() {
+    const list = clear($("entity-list"));
+    const seen = new Set(["platform:main"]);
+    const invariants = value("invariants");
+    if (invariants) { (invariants.non_zero_clearing_balances || []).forEach((b) => seen.add(b.entity_id)); }
+    (value("attempts") || []).concat(value("payoutAttempts") || []).forEach((a) => seen.add(a.entity_id));
+    Array.from(seen).slice(0, 200).forEach((id) => { const o = el("option"); o.value = id; list.appendChild(o); });
+  }
+
+  function openEntity(id) {
+    $("entity").value = id;
+    show("ledger");
+    lookup();
   }
 
   function lookup() {
-    var id = $("entity").value.trim();
+    const id = $("entity").value.trim();
     $("entity-error").textContent = "";
-    resetEntity();
-
+    clear($("verify-result"));
     if (!ENTITY_PATTERN.test(id)) {
       // Exact-id lookup only; search is deferred (§0.3 C15). The server's own 404 is still shown as "not found".
       $("entity-error").textContent = "enter an exact entity id, such as rider:R1";
       return;
     }
-    state.entity = id;
-    state.cursor = null;
-
-    api("/v1/entities/" + encodeURIComponent(id) + "/balances").then(function (balances) {
+    ui.entity = id;
+    ui.cursor = null;
+    empty($("balances"), "loading…");
+    empty($("changelog"), "loading…");
+    call("/v1/entities/" + encodeURIComponent(id) + "/balances", "reader").then((balances) => {
       renderBalances(balances);
-      loadChangelog();
-    }).catch(function (error) {
-      $("entity-error").textContent =
-        error.message.indexOf("404") >= 0 ? "not found: " + id : error.message;
+      loadChangelog(true);
+    }).catch((error) => {
+      empty($("balances"), "—");
+      empty($("changelog"), "—");
+      $("entity-error").textContent = error.status === 404 ? "not found: " + id : error.message;
     });
   }
 
   function renderBalances(balances) {
-    var host = $("balances");
-    clear(host);
-
-    host.appendChild(fill(el("header"), [
-      el("h2", "Balances"),
-      el("span", balances.kind + " · as of sequence " + balances.as_of_seq, "panel-note")
-    ]));
-
+    const host = clear($("balances"));
+    $("balances-note").textContent = balances.entity_id + " · " + balances.kind + " · as of seq " + balances.as_of_seq;
     if (!balances.accounts || balances.accounts.length === 0) {
-      host.appendChild(el("p", "no balances — this entity holds no accounts yet", "empty"));
+      empty(host, "no balances: this entity holds no accounts yet");
       return;
     }
-
-    var view = table(["account", "currency", "normal side", "balance (normal side)", "stored (signed)"]);
-    balances.accounts.forEach(function (account) {
-      view.body.appendChild(rowOf("tr", [
-        el("td", account.account),
-        el("td", account.currency),
-        el("td", account.normal_side.toLowerCase(), "muted"),
+    const view = table(["account", "normal side", "balance", "stored (signed)"], [2, 3]);
+    balances.accounts.forEach((account) => {
+      view.body.appendChild(tr([
+        td(account.account + " · " + account.currency),
+        td(account.normal_side.toLowerCase(), "muted"),
         // Shown exactly as returned. The server decides the sign convention (ADR-0003); this page only displays it.
-        amountCell(account.presented_minor, account.currency),
-        amountCell(account.signed_minor, account.currency)
+        td(moneyNode(account.presented_minor, account.currency, true), "num"),
+        td(moneyNode(account.signed_minor, account.currency), "num")
       ]));
     });
     host.appendChild(view.wrap);
   }
 
-  /* ---- changelog -------------------------------------------------------------------------------------------- */
-
-  function loadChangelog() {
-    var path = "/v1/entities/" + encodeURIComponent(state.entity) + "/changelog"
-      + (state.cursor === null ? "" : "?after_seq=" + state.cursor);
-
+  function loadChangelog(first) {
+    const path = "/v1/entities/" + encodeURIComponent(ui.entity) + "/changelog"
+      + (ui.cursor === null ? "" : "?after_seq=" + ui.cursor);
     $("changelog-controls").hidden = false;
     $("changelog-note").textContent = "loading…";
     $("next-page").disabled = true;
-
-    api(path).then(function (page) {
-      renderChangelogPage(page);
-      state.cursor = page.next_after_seq === undefined || page.next_after_seq === null ? null : page.next_after_seq;
-      $("next-page").disabled = state.cursor === null;
-      $("changelog-note").textContent = state.cursor === null ? "end of changelog" : "";
-    }).catch(function (error) {
+    call(path, "reader").then((page) => {
+      renderChangelogPage(page, first);
+      ui.cursor = page.next_after_seq === undefined || page.next_after_seq === null ? null : page.next_after_seq;
+      $("next-page").disabled = ui.cursor === null;
+      $("changelog-note").textContent = ui.cursor === null ? "end of changelog" : "more rows after seq " + ui.cursor;
+    }).catch((error) => {
       $("changelog-note").textContent = "";
-      var retry = el("button", "Retry", "secondary");
-      retry.addEventListener("click", loadChangelog);
-      $("changelog").appendChild(fill(el("div", null, "row"), [el("span", error.message, "err"), retry]));
+      const retry = el("button", "Retry", "btn");
+      retry.type = "button";
+      retry.addEventListener("click", () => loadChangelog(first));
+      $("changelog").appendChild(add(el("div", null, "row"), el("span", error.message, "err"), retry));
     });
   }
 
-  function renderChangelogPage(page) {
-    var host = $("changelog");
-    var body = host.querySelector("tbody");
-
+  function renderChangelogPage(page, first) {
+    const host = $("changelog");
+    let body = first ? null : host.querySelector("tbody");
     if (!body) {
       clear(host);
-      host.appendChild(fill(el("header"), [
-        el("h2", "Changelog"),
-        el("span", "every row carries the money order that caused it", "panel-note")
-      ]));
       if (!page.rows || page.rows.length === 0) {
-        host.appendChild(el("p", "no entries — this entity has no ledger activity", "empty"));
+        empty(host, "no entries: this entity has no ledger activity");
         $("changelog-controls").hidden = true;
         return;
       }
-      var view = table(["seq", "account", "currency", "delta", "balance after", "recorded", "source key", ""]);
+      const view = table(["seq", "account", "delta", "balance after", "recorded", "source", "idempotency key", ""],
+        [0, 2, 3]);
+      view.wrap.classList.add("tall");
       host.appendChild(view.wrap);
       body = view.body;
     }
-
-    (page.rows || []).forEach(function (row) {
-      var open = el("button", "order", "link");
-      open.addEventListener("click", function () { showOrder(row); });
-
-      body.appendChild(rowOf("tr", [
-        el("td", row.seq),
-        el("td", row.account),
-        el("td", row.currency),
-        amountCell(row.delta_minor, row.currency),
-        amountCell(row.balance_after_minor, row.currency),
-        el("td", row.recorded_at, "muted"),
+    (page.rows || []).forEach((row) => {
+      const open = linkButton("order", () => showOrder(row.order_id, row));
+      body.appendChild(tr([
+        td(row.seq, "num"),
+        td(row.account + " · " + row.currency),
+        td(moneyNode(row.delta_minor, row.currency, true), "num"),
+        td(moneyNode(row.balance_after_minor, row.currency), "num"),
+        timeCell(row.recorded_at),
+        td(row.source ? row.source.system : "", "muted"),
         // M6 (a): the link back to the source. textContent means an idempotency key full of markup stays text.
-        el("td", row.source ? row.source.idempotency_key : "", "wrap"),
-        fill(el("td"), [open])
+        td(row.source ? row.source.idempotency_key : "", "wrap mono"),
+        td(open)
       ]));
     });
   }
 
   /*
-   * Option (b) of D09-4: show the order id and a copyable request, with no cross-origin call. Through the proxy the
-   * order is one hop away, but the page still does not fetch it: order-service is reachable there only because the
-   * demo overlay is opt-in, and a panel that works only under an overlay is worse than a command that always works.
+   * The order behind a changelog row, fetched from order-service through the proxy, with its entries summed per
+   * currency: the zero sum is shown, not asserted. Opened on ledger-service's own port the fetch 404s and the panel
+   * falls back to the command that always works.
    */
-  function showOrder(row) {
-    var host = $("order-detail");
-    clear(host);
-
-    host.appendChild(fill(el("header"), [
-      el("h2", "Money order"),
-      el("span", "seq " + row.seq + " · " + row.account, "panel-note")
-    ]));
-    host.appendChild(dl([
-      ["order id", row.order_id],
-      ["source system", row.source ? row.source.system : "—"],
-      ["idempotency key", row.source ? row.source.idempotency_key : "—"]
-    ]));
-    host.appendChild(el("code",
-      "curl -s localhost:8081/v1/money-orders/" + row.order_id + " \\\n"
-      + "  -H 'Authorization: Bearer $ZS_READER_TOKEN'"));
-    host.appendChild(el("div",
-      "order-service is a separate service; this page shows the reference rather than calling it.", "panel-note"));
+  function showOrder(orderId, row) {
+    const host = clear($("order-detail"));
+    $("order-note").textContent = "order " + short(orderId) + (row ? " · caused seq " + row.seq : "");
+    empty(host, "loading…");
+    call("/orders/v1/money-orders/" + encodeURIComponent(orderId), "reader").then((order) => {
+      clear(host);
+      host.appendChild(add(el("div", null, "row"), pill(order.type, "info"), el("span", order.reason, "muted"),
+        el("span", order.order_group_id, "muted")));
+      host.appendChild(dl([["order id", order.order_id], ["source", order.source.system + " / "
+        + order.source.idempotency_key], ["adjusts", order.adjusts_order_id], ["effective", order.effective_at],
+        ["created", order.created_at]]));
+      const view = table(["entity", "account", "amount"], [2]);
+      const sums = {};
+      order.entries.forEach((entry) => {
+        sums[entry.currency] = typeof entry.amount_minor === "string" || typeof sums[entry.currency] === "string"
+          ? "exact digits" : (sums[entry.currency] || 0) + entry.amount_minor;
+        const entity = linkButton(entry.entity_id, () => openEntity(entry.entity_id));
+        view.body.appendChild(tr([td(entity), td(entry.account + " · " + entry.currency),
+          td(moneyNode(entry.amount_minor, entry.currency, true), "num")]));
+      });
+      host.appendChild(view.wrap);
+      Object.keys(sums).forEach((currency) => {
+        const zero = sums[currency] === 0;
+        host.appendChild(add(el("div", null, "row"), pill(zero ? "Σ = 0" : "Σ ≠ 0", zero ? "good" : "bad", true),
+          el("span", "entries in " + currency + " sum to " + (typeof sums[currency] === "number"
+            ? money(sums[currency], currency) : sums[currency]) + " (debit positive, credit negative)", "note")));
+      });
+    }).catch((error) => {
+      clear(host);
+      host.appendChild(el("p", explain(error), "err"));
+      host.appendChild(el("pre", "curl -s 127.0.0.1:8081/v1/money-orders/" + orderId + " \\\n"
+        + "  -H \"Authorization: Bearer $ZS_READER_TOKEN\"", "code"));
+    });
   }
 
-  /* ---- verify ----------------------------------------------------------------------------------------------- */
-
   function verify() {
-    if (state.verifying) { return; }
-    var id = $("entity").value.trim();
+    if (ui.verifying) { return; }
+    const id = $("entity").value.trim();
     if (!ENTITY_PATTERN.test(id)) {
       $("entity-error").textContent = "enter an exact entity id first";
       return;
     }
-    state.verifying = true;
+    ui.verifying = true;
     $("verify").disabled = true;
-
-    var host = $("verify-result");
-    clear(host);
-    host.appendChild(el("span", "verifying — this rebuilds every balance from the changelog…", "muted"));
-
-    var started = Date.now();
-    api("/v1/entities/" + encodeURIComponent(id) + "/verify", { method: "POST" })
-      .then(function (result) {
-        var elapsed = Date.now() - started;
-        clear(host);
-        host.appendChild(fill(el("div", null, "row"), [
-          el("span", result.consistent ? "chain consistent" : "INCONSISTENT",
-            result.consistent ? "pill ok" : "pill bad"),
-          el("span", result.rows_checked + " rows checked · " + elapsed + " ms", "muted")
-        ]));
-        if (!result.consistent) {
-          host.appendChild(finding((result.failure || "check failed") + " at sequence " + result.first_bad_seq,
-            result.detail || ""));
-        }
-      })
-      .catch(function (error) {
-        clear(host);
-        host.appendChild(el("span", error.message, "err"));
-      })
-      .then(function () {
-        state.verifying = false;
-        $("verify").disabled = false;
-      });
+    const host = clear($("verify-result"));
+    host.appendChild(el("p", "verifying: rebuilding every balance from the changelog and rehashing the chain…", "note"));
+    const started = performance.now();
+    call("/v1/entities/" + encodeURIComponent(id) + "/verify", "reader", { method: "POST" }).then((result) => {
+      const elapsed = performance.now() - started;
+      clear(host);
+      host.appendChild(callout(result.consistent ? "Hash chain intact · " + id : "INCONSISTENT · " + id,
+        result.consistent ? int(result.rows_checked) + " changelog rows rehashed and every running balance rebuilt in "
+          + elapsed.toFixed(0) + " ms. Each row's hash covers the previous row's, so an edit anywhere breaks every row after it."
+          : (result.failure || "check failed") + " at sequence " + result.first_bad_seq + ". " + (result.detail || ""),
+        result.consistent ? "good" : "bad"));
+      host.firstChild.style.marginTop = "12px";
+    }).catch((error) => {
+      clear(host);
+      host.appendChild(el("p", error.message, "err"));
+    }).then(() => {
+      ui.verifying = false;
+      $("verify").disabled = false;
+    });
   }
 
-  /* ---- payment attempt -------------------------------------------------------------------------------------- */
+  /* ---- payments ---------------------------------------------------------------------------------------------------- */
 
-  function statusClass(status) {
-    if (status === "SUCCEEDED" || status === "SETTLED") { return "pill ok"; }
-    if (status === "DECLINED" || status === "FAILED" || status === "RETURNED") { return "pill bad"; }
-    if (status === "NEEDS_REVIEW" || status === "UNKNOWN") { return "pill warn"; }
-    return "pill";
+  function statusSegments(rows) {
+    const byStatus = sumBy(rows, "status", "attempts");
+    return STATUS_ORDER.filter((s) => byStatus[s]).map((s) => ({ label: s, value: byStatus[s], cls: STATUS_COLOUR[s] }));
+  }
+
+  function renderPayments() {
+    const kpis = clear($("pay-kpis"));
+    const donutHost = clear($("pay-donut"));
+    const kindsHost = clear($("pay-kinds"));
+    const recentHost = clear($("pay-recent"));
+    if (unavailable(donutHost, ["attemptTotals"])) {
+      unavailable(kindsHost, ["attemptTotals"]);
+      unavailable(recentHost, ["attempts"]);
+      return;
+    }
+    const rows = attemptTotals();
+    const currency = mainCurrency();
+    const total = rows.reduce((s, r) => s + num(r.attempts), 0);
+    const by = sumBy(rows, "status", "attempts");
+    const charges = rows.filter((r) => r.kind === "CHARGE");
+    const chargeCount = charges.reduce((s, r) => s + num(r.attempts), 0);
+    const chargeOk = charges.filter((r) => r.status === "SUCCEEDED").reduce((s, r) => s + num(r.attempts), 0);
+    const collected = charges.filter((r) => r.status === "SUCCEEDED" && r.currency === currency)
+      .reduce((s, r) => s + num(r.amount_minor), 0);
+    kpis.appendChild(kpi("Attempts", int(total), "charges, refunds and payouts"));
+    kpis.appendChild(kpi("Charge success", chargeCount ? (chargeOk / chargeCount * 100).toFixed(1) + "%" : "—",
+      int(chargeOk) + " of " + int(chargeCount) + " charges", chargeCount && chargeOk === chargeCount ? "good" : null));
+    kpis.appendChild(kpi("Collected", money(collected, currency), "succeeded charges in " + currency));
+    kpis.appendChild(kpi("Declined", int((by.DECLINED || 0) + (by.FAILED || 0)), "definitive provider refusals",
+      (by.DECLINED || by.FAILED) ? "bad" : null));
+    kpis.appendChild(kpi("Unknown · review", int((by.UNKNOWN || 0) + (by.NEEDS_REVIEW || 0)),
+      "lost responses the resolver is chasing", (by.UNKNOWN || by.NEEDS_REVIEW) ? "warn" : "good"));
+
+    const segments = statusSegments(rows);
+    const wrap = el("div", null, "donut-wrap");
+    wrap.appendChild(donut(segments, int(total), "attempts"));
+    const side = el("div");
+    side.appendChild(legend(segments.map((s) => ({ cls: s.cls, label: s.label, value: int(s.value) }))));
+    side.firstChild.style.flexDirection = "column";
+    wrap.appendChild(side);
+    donutHost.appendChild(wrap);
+
+    const groups = {};
+    rows.forEach((r) => { const key = r.kind + " · " + r.provider; (groups[key] = groups[key] || []).push(r); });
+    const keys = Object.keys(groups).sort();
+    const max = Math.max.apply(null, keys.map((k) => groups[k].reduce((s, r) => s + num(r.attempts), 0)).concat([1]));
+    kindsHost.appendChild(hbars(keys.map((k) => {
+      const segs = statusSegments(groups[k]);
+      const n = segs.reduce((s, x) => s + x.value, 0);
+      const amount = groups[k].filter((r) => r.currency === currency).reduce((s, r) => s + num(r.amount_minor), 0);
+      return { label: k, value: n, display: int(n), extra: money(amount, currency),
+        parts: segs.map((s) => ({ value: s.value, cls: s.cls, title: s.label + ": " + s.value })) };
+    }), max));
+    kindsHost.appendChild(legend(statusSegments(rows).map((s) => ({ cls: s.cls, label: s.label }))));
+
+    renderAttemptTable(recentHost, "attempts", false);
+    $("pay-recent-note").textContent = value("attempts") ? "newest " + value("attempts").length + " · select one for its history" : "";
+  }
+
+  function renderAttemptTable(host, name, payouts) {
+    if (unavailable(host, [name])) { return; }
+    const list = value(name);
+    if (list.length === 0) { empty(host, payouts ? "No payout attempts yet." : "No attempts yet."); return; }
+    const view = table(payouts ? ["created", "status", "driver", "amount", "bank", "provider ref", "run"]
+      : ["created", "kind", "status", "entity", "amount", "provider", "failure"], payouts ? [3] : [4]);
+    view.wrap.classList.add("tall");
+    list.forEach((a) => {
+      const row = tr(payouts ? [
+        timeCell(a.created_at), td(pill(a.status, tone(a.status), true)), td(a.entity_id, "mono"),
+        td(moneyNode(a.amount_minor, a.currency), "num"), td(a.provider), td(a.provider_ref ? short(a.provider_ref) : "—", "mono"),
+        td(short(a.payout_run_id), "mono")
+      ] : [
+        timeCell(a.created_at), td(a.kind), td(pill(a.status, tone(a.status), true)), td(a.entity_id, "mono"),
+        td(moneyNode(a.amount_minor, a.currency), "num"), td(a.provider), td(a.failure_code || "", "muted")
+      ]);
+      row.className = "clickable" + (ui.attempt === a.attempt_id ? " selected" : "");
+      row.tabIndex = 0;
+      row.dataset.attempt = a.attempt_id;
+      const open = () => { show("payments"); openAttempt(a.attempt_id); };
+      row.addEventListener("click", open);
+      row.addEventListener("keydown", (event) => { if (event.key === "Enter") { open(); } });
+      view.body.appendChild(row);
+    });
+    host.appendChild(view.wrap);
+  }
+
+  function openAttempt(id) {
+    $("attempt").value = id;
+    lookupAttempt();
   }
 
   function lookupAttempt() {
-    var id = $("attempt").value.trim();
+    const id = $("attempt").value.trim();
     $("attempt-error").textContent = "";
-    clear($("attempt-result"));
-
+    const host = clear($("attempt-result"));
     if (!UUID.test(id)) {
       $("attempt-error").textContent = "enter an attempt id (uuid)";
       return;
     }
-
-    api(INSTRUMENTS + "/v1/payment-attempts/" + encodeURIComponent(id)).then(renderAttempt).catch(function (error) {
-      report($("attempt-error"), error, PROXY_HINT);
+    ui.attempt = id;
+    document.querySelectorAll("tr[data-attempt]").forEach((row) => {
+      row.classList.toggle("selected", row.dataset.attempt === id);
+    });
+    empty(host, "loading…");
+    call("/instruments/v1/payment-attempts/" + encodeURIComponent(id), "reader").then((detail) => {
+      renderAttempt(detail);
+      if (creds.admin) { loadAttemptTruth(id, detail.attempt.currency); }
+    }).catch((error) => {
+      clear(host);
+      $("attempt-error").textContent = explain(error);
     });
   }
 
-  /** The contract is AttemptDetail: the attempt and its transitions, which are the audit trail rather than a log. */
+  /** AttemptDetail: the attempt and its transitions, which are the audit trail rather than a log. */
   function renderAttempt(detail) {
-    var host = $("attempt-result");
-    var attempt = detail.attempt;
-    clear(host);
-
-    host.appendChild(fill(el("div", null, "row"), [
-      el("span", attempt.kind, "pill"),
-      el("span", attempt.status, statusClass(attempt.status)),
-      attempt.blocked_on_capture ? el("span", "blocked on capture", "pill warn") : null,
-      fill(el("span"), [amount(attempt.amount_minor, attempt.currency)])
-    ]));
-
+    const host = clear($("attempt-result"));
+    const a = detail.attempt;
+    host.appendChild(add(el("div", null, "row"), pill(a.kind, "info"), pill(a.status, tone(a.status), true),
+      a.blocked_on_capture ? pill("blocked on capture", "warn") : null,
+      el("strong", money(a.amount_minor, a.currency))));
+    const entity = linkButton(a.entity_id, () => openEntity(a.entity_id));
+    const order = a.source_order_id ? linkButton(short(a.source_order_id), () => { show("ledger"); showOrder(a.source_order_id); }) : null;
     host.appendChild(dl([
-      ["entity", attempt.entity_id],
-      ["provider", attempt.provider],
-      ["provider ref", attempt.provider_ref || "none yet"],
-      ["failure code", attempt.failure_code],
-      ["order group", attempt.order_group_id],
-      ["source order", attempt.source_order_id],
-      ["payout run", attempt.payout_run_id],
-      ["version", attempt.version],
-      ["created", attempt.created_at],
-      ["updated", attempt.updated_at]
+      ["attempt", a.attempt_id], ["entity", entity], ["provider", a.provider],
+      ["provider ref", a.provider_ref || "none yet"], ["failure code", a.failure_code], ["order group", a.order_group_id],
+      ["source order", order], ["payout run", a.payout_run_id], ["version", a.version], ["created", a.created_at],
+      ["updated", a.updated_at]
     ]));
-
-    var rows = detail.transitions || [];
-    if (rows.length === 0) {
-      host.appendChild(el("p", "no transitions recorded", "empty"));
-      return;
-    }
-
-    var view = table(["seq", "from", "to", "cause", "at"]);
-    rows.forEach(function (row) {
-      view.body.appendChild(rowOf("tr", [
-        el("td", row.seq),
-        el("td", row.from_status === null || row.from_status === undefined ? "—" : row.from_status, "muted"),
-        fill(el("td"), [el("span", row.to_status, statusClass(row.to_status))]),
-        el("td", row.cause, "wrap"),
-        el("td", row.at, "muted")
-      ]));
+    const rows = detail.transitions || [];
+    host.appendChild(el("h3", "Transition history · " + rows.length));
+    if (rows.length === 0) { host.appendChild(el("p", "no transitions recorded", "empty")); }
+    const list = el("ol", null, "tl");
+    let previous = Date.parse(a.created_at);
+    rows.forEach((row) => {
+      const at = Date.parse(row.at);
+      const li = el("li");
+      const resolver = /resolv|lookup|sweep|recover/i.test(row.cause) || row.to_status === "UNKNOWN";
+      if (resolver) { li.className = "resolver"; }
+      li.appendChild(el("span", null, "node " + tone(row.to_status)));
+      const body = el("div");
+      body.appendChild(add(el("div", null, "row"), pill(row.to_status, tone(row.to_status)),
+        el("span", "from " + (row.from_status || "—") + " · seq " + row.seq, "note")));
+      body.appendChild(el("div", row.cause, "cause"));
+      li.appendChild(body);
+      const when = el("div", (isNaN(at - previous) ? "" : "+" + seconds((at - previous) / 1000)), "when");
+      when.title = row.at;
+      li.appendChild(when);
+      list.appendChild(li);
+      previous = at;
     });
-    host.appendChild(view.wrap);
+    host.appendChild(list);
+    host.appendChild(el("div", null, null)).id = "attempt-truth";
   }
 
-  /* ---- reconciliation breaks -------------------------------------------------------------------------------- */
+  function loadAttemptTruth(id, currency) {
+    const host = $("attempt-truth");
+    if (!host) { return; }
+    call("/providers/admin/truth?client_reference=" + encodeURIComponent(id), "admin").then((truth) => {
+      clear(host);
+      host.appendChild(el("h3", "What the provider recorded"));
+      const rows = (truth.charges || []).map((c) => ["charge " + c.charge_id, c.status, money(c.amount_minor, c.currency)
+        + (c.fee_minor ? " · fee " + money(c.fee_minor, c.currency) : "")])
+        .concat((truth.refunds || []).map((r) => ["refund " + r.refund_id, r.status, money(r.amount_minor, currency)]))
+        .concat((truth.payouts || []).map((p) => ["payout " + p.payout_id, p.status, money(p.amount_minor, p.currency)]));
+      if (rows.length === 0) {
+        host.appendChild(el("p", "The provider holds nothing under this reference: it was never submitted, or the "
+          + "submission never arrived.", "empty"));
+        return;
+      }
+      rows.forEach((r) => host.appendChild(add(el("div", null, "row"), pill(r[1], tone(r[1])), el("strong", r[2]),
+        el("span", r[0], "note"))));
+    }).catch((error) => { clear(host); host.appendChild(el("p", explain(error), "note err")); });
+  }
+
+  /* ---- reconciliation --------------------------------------------------------------------------------------------- */
+
+  function renderRecon() {
+    const kpis = clear($("rec-kpis"));
+    const residualHost = clear($("rec-residual"));
+    const runsHost = clear($("rec-runs"));
+    if (unavailable(runsHost, ["reconRuns"])) { return; }
+    const runs = value("reconRuns");
+    const invariants = value("invariants");
+    const currency = mainCurrency();
+    const matched = runs.reduce((s, r) => s + r.lines_matched, 0);
+    const breaks = runs.reduce((s, r) => s + r.breaks_found, 0);
+    kpis.appendChild(kpi("Runs", int(runs.length), runs.filter((r) => r.settled).length + " settled"));
+    kpis.appendChild(kpi("Lines matched", int(matched), "report lines that agreed with an attempt", "good"));
+    kpis.appendChild(kpi("Breaks", int(breaks), breaks ? typesOf(runs) : "report and ledger agreed", breaks ? "warn" : "good"));
+    if (invariants) {
+      const clearing = (invariants.non_zero_clearing_balances || []).filter((b) => b.account === "clearing");
+      const residual = clearing.filter((b) => b.currency === currency).reduce((s, b) => s + num(b.signed_minor), 0);
+      kpis.appendChild(kpi("Held in clearing", money(residual, currency), clearing.length
+        ? clearing.map((b) => b.entity_id).join(", ") : "every clearing account is flat", residual ? "warn" : "good"));
+      if (clearing.length) {
+        const detail = el("div", null, "d");
+        detail.appendChild(document.createTextNode("Charges collected by card wait on the provider's clearing account "
+          + "until that day's settlement report is reconciled. A settlement is booked exactly as the provider reported "
+          + "it; where the report disagreed with our attempts (a missing line, an amount off by one, a line reported "
+          + "twice) the difference is a typed break below and stays on the clearing account. Now: "));
+        clearing.forEach((b, i) => {
+          if (i) { detail.appendChild(document.createTextNode(", ")); }
+          detail.appendChild(linkButton(b.entity_id + " " + money(b.signed_minor, b.currency), () => openEntity(b.entity_id)));
+        });
+        detail.appendChild(document.createTextNode(". It is surfaced, never adjusted away. The panel below reconciles "
+          + "this balance against order-service, order by order."));
+        residualHost.appendChild(callout("Clearing has not returned to zero", detail, "warn"));
+      }
+    }
+    renderClearingExplained(currency);
+    if (runs.length === 0) { empty(runsHost, "No reconciliation runs yet. An admin starts one with POST /v1/reconciliation-runs."); return; }
+    const view = table(["report date", "provider", "status", "matched vs breaks", "matched", "breaks", "settled", "run", "created"],
+      [4, 5]);
+    runs.forEach((r) => {
+      const total = r.lines_matched + r.breaks_found;
+      const bar = stackBar([{ value: r.lines_matched, cls: "good", title: r.lines_matched + " matched" }]
+        .concat(Object.keys(r.breaks_by_type || {}).sort().map((t) => ({ value: r.breaks_by_type[t],
+          cls: BREAK_COLOUR[t] || "bad", title: t + ": " + r.breaks_by_type[t] }))), total, "fat");
+      const row = tr([td(r.report_date, "mono"), td(r.provider), td(pill(r.status, tone(r.status))), td(bar, "barcell"),
+        td(int(r.lines_matched), "num"), td(int(r.breaks_found), "num"),
+        td(pill(r.settled ? "settled" : "not settled", r.settled ? "good" : "faint")), td(short(r.run_id), "mono"),
+        timeCell(r.created_at)]);
+      row.className = "clickable" + (ui.run === r.run_id ? " selected" : "");
+      row.tabIndex = 0;
+      row.dataset.run = r.run_id;
+      row.addEventListener("click", () => selectRun(r));
+      row.addEventListener("keydown", (event) => { if (event.key === "Enter") { selectRun(r); } });
+      view.body.appendChild(row);
+    });
+    runsHost.appendChild(view.wrap);
+    runsHost.appendChild(legend([{ cls: "good", label: "matched" }].concat(Object.keys(BREAK_COLOUR)
+      .filter((t) => runs.some((r) => r.breaks_by_type && r.breaks_by_type[t]))
+      .map((t) => ({ cls: BREAK_COLOUR[t], label: t })))));
+    const selected = runs.find((r) => r.run_id === ui.run) || runs.find((r) => r.breaks_found > 0) || runs[0];
+    selectRun(selected);
+  }
+
+  const CLEARING_REASONS = { "charge.succeeded": "collected by card", "refund.succeeded": "refunded to riders",
+    "settlement.received": "settled by the provider" };
+
+  /*
+   * Two services, one number. The clearing movements are summed from order-service's stored orders and set against
+   * the balance ledger-service holds. They agree when every order has been applied; a gap is money in the pipeline.
+   */
+  function renderClearingExplained(currency) {
+    const host = clear($("rec-explained"));
+    if (unavailable(host, ["orders", "accounts"])) { return; }
+    const legs = value("orders").legs.filter((l) => l.entity_kind === "provider" && l.account === "clearing"
+      && l.currency === currency);
+    const ledger = classBalance("provider", "clearing", currency);
+    const list = el("div", null, "sums");
+    let total = 0;
+    const line = (label, sub, amount, cls) => {
+      const left = el("span", label, cls);
+      if (sub) { left.appendChild(el("small", sub)); }
+      list.appendChild(left);
+      list.appendChild(add(el("span", null, "val" + (cls ? " " + cls : "")), amount));
+    };
+    legs.forEach((l) => {
+      total += num(l.signed_minor);
+      line(CLEARING_REASONS[l.reason] || l.reason, l.reason + " · " + int(l.entries), moneyNode(l.signed_minor, currency, true));
+    });
+    line("net, from order-service", null, el("span", money(total, currency)), "total");
+    line("held by ledger-service", null, ledger ? moneyNode(ledger.signed_minor, currency) : el("span", "—"), "total");
+    host.appendChild(list);
+    const agrees = ledger && num(ledger.signed_minor) === total;
+    host.appendChild(add(el("div", null, "row foot"), pill(agrees ? "services agree" : "differs", agrees ? "good" : "warn", true),
+      el("span", agrees ? "Every collection, refund and settlement order is applied." : "The difference is orders still "
+        + "in the pipeline, or not yet applied.", "note")));
+  }
+
+  function selectRun(run) {
+    ui.run = run.run_id;
+    document.querySelectorAll("tr[data-run]").forEach((row) => row.classList.toggle("selected", row.dataset.run === run.run_id));
+    $("rec-run-note").textContent = run.provider + " · " + run.report_date;
+    const host = clear($("rec-types"));
+    const types = Object.keys(run.breaks_by_type || {}).sort((a, b) => run.breaks_by_type[b] - run.breaks_by_type[a]);
+    if (types.length === 0) {
+      host.appendChild(callout("Clean run", run.lines_matched + " lines matched and nothing disagreed.", "good"));
+    } else {
+      host.appendChild(hbars(types.map((t) => ({ label: t, value: run.breaks_by_type[t], cls: BREAK_COLOUR[t] || "bad" }))));
+      host.appendChild(el("p", "The type is the point: a missing line is chased with the provider, an amount mismatch is "
+        + "a fee or rounding question, a duplicate line is money claimed twice.", "note"));
+    }
+    lookupBreaks();
+  }
 
   function lookupBreaks() {
-    var id = $("run-id").value.trim();
+    const host = clear($("breaks-result"));
     $("breaks-error").textContent = "";
-    clear($("breaks-result"));
-
-    if (!UUID.test(id)) {
-      // There is no list-runs endpoint, so the run id comes from whoever started the run.
-      $("breaks-error").textContent = "enter a reconciliation run id (uuid)";
-      return;
-    }
-
-    var query = [];
+    if (!ui.run) { empty(host, "Select a run to list its breaks."); return; }
+    const query = [];
     if ($("break-type").value) { query.push("type=" + encodeURIComponent($("break-type").value)); }
     if ($("break-status").value) { query.push("status=" + encodeURIComponent($("break-status").value)); }
-    var path = INSTRUMENTS + "/v1/reconciliation-runs/" + encodeURIComponent(id) + "/breaks"
+    const path = "/instruments/v1/reconciliation-runs/" + encodeURIComponent(ui.run) + "/breaks"
       + (query.length > 0 ? "?" + query.join("&") : "");
-
-    api(path).then(renderBreaks).catch(function (error) {
-      report($("breaks-error"), error, PROXY_HINT);
-    });
+    call(path, "reader").then(renderBreaks).catch((error) => { $("breaks-error").textContent = explain(error); });
   }
 
   function renderBreaks(breaks) {
-    var host = $("breaks-result");
-    clear(host);
-
+    const host = clear($("breaks-result"));
     if (!breaks || breaks.length === 0) {
       // A run with no breaks is the good outcome, and is worth saying plainly rather than as a blank panel.
-      empty(host, "no breaks for this run and filter — the report and the ledger agreed");
+      empty(host, "No breaks for this run and filter: the report and the ledger agreed.");
       return;
     }
-
-    // The type is the point: a missing line is chased with the provider, an amount mismatch is a fee or rounding
-    // question, a duplicate line is money claimed twice. Counting breaks tells an operator none of that.
-    var counts = {};
-    breaks.forEach(function (row) { counts[row.break_type] = (counts[row.break_type] || 0) + 1; });
-    var summary = el("div", null, "row");
-    Object.keys(counts).sort().forEach(function (type) {
-      summary.appendChild(el("span", type + " × " + counts[type], "pill warn"));
-    });
-    host.appendChild(summary);
-
-    var view = table(["id", "type", "status", "currency", "reported", "ledger", "client reference",
-      "provider ref", "detail"]);
-    breaks.forEach(function (row) {
-      view.body.appendChild(rowOf("tr", [
-        el("td", row.break_id),
-        el("td", row.break_type),
-        fill(el("td"), [el("span", row.status, row.status === "UNEXPLAINED" ? "pill bad" : "pill warn")]),
-        el("td", row.currency || "—"),
-        amountCell(row.report_gross_minor, ""),
-        amountCell(row.ledger_gross_minor, ""),
-        el("td", row.client_reference || "—", "wrap"),
-        el("td", row.provider_ref || "—", "wrap"),
-        el("td", row.detail || "", "wrap")
+    const view = table(["id", "type", "status", "reported", "ledger", "client reference", "detail"], [3, 4]);
+    view.wrap.classList.add("tall");
+    breaks.forEach((row) => {
+      const reference = row.attempt_id ? linkButton(short(row.client_reference || row.attempt_id), () => {
+        show("payments");
+        openAttempt(row.attempt_id);
+      }) : el("span", row.client_reference || "—", "mono");
+      view.body.appendChild(tr([
+        td(row.break_id, "mono"), td(pill(row.break_type, "faint")),
+        td(pill(row.status, row.status === "UNEXPLAINED" ? "bad" : "warn")),
+        td(row.report_gross_minor === null || row.report_gross_minor === undefined ? "—"
+          : moneyNode(row.report_gross_minor, row.currency), "num"),
+        td(row.ledger_gross_minor === null || row.ledger_gross_minor === undefined ? "—"
+          : moneyNode(row.ledger_gross_minor, row.currency), "num"),
+        td(reference), td(row.detail || "", "wrap")
       ]));
     });
     host.appendChild(view.wrap);
-    host.appendChild(el("div",
-      "OPEN may still be resolved by a later settlement cycle; UNEXPLAINED will not. A break is left as a residual "
-      + "on the provider's clearing account, never adjusted away.", "panel-note"));
+    host.appendChild(el("p", "OPEN may still be resolved by a later settlement cycle; UNEXPLAINED will not.", "note"));
   }
 
-  /* ---- provider ground truth -------------------------------------------------------------------------------- */
+  /* ---- payouts ------------------------------------------------------------------------------------------------------ */
 
-  function lookupTruth() {
-    var reference = $("truth-ref").value.trim();
-    $("truth-error").textContent = "";
-    clear($("truth-result"));
+  function renderPayouts() {
+    const kpis = clear($("po-kpis"));
+    const runsHost = clear($("po-runs"));
+    const statusHost = clear($("po-status"));
+    const attemptsHost = clear($("po-attempts"));
+    if (unavailable(runsHost, ["payoutRuns"])) { unavailable(statusHost, ["attemptTotals"]); unavailable(attemptsHost, ["payoutAttempts"]); return; }
+    const runs = value("payoutRuns");
+    const currency = mainCurrency();
+    const owed = classBalance("driver", "payable", currency);
+    const payouts = attemptTotals((t) => t.kind === "PAYOUT");
+    const by = sumBy(payouts, "status", "attempts");
+    const paid = runs.filter((r) => r.currency === currency).reduce((s, r) => s + num(r.paid_minor), 0);
+    kpis.appendChild(kpi("Owed to drivers", owed ? money(owed.presented_minor, currency) : "—",
+      owed ? int(owed.accounts) + " driver payable accounts" : "no driver balances yet", null, "flow"));
+    kpis.appendChild(kpi("Paid by runs", money(paid, currency), runs.length + " run(s) · amounts read from the ledger"));
+    kpis.appendChild(kpi("In flight", int((by.CREATED || 0) + (by.SUBMITTING || 0) + (by.PENDING || 0) + (by.UNKNOWN || 0)),
+      "at most one per driver and currency"));
+    kpis.appendChild(kpi("Settled", int(by.SETTLED || 0), "confirmed by the bank", by.SETTLED ? "good" : null));
+    kpis.appendChild(kpi("Returned · failed", int((by.RETURNED || 0) + (by.FAILED || 0)),
+      "money back on the driver's payable", (by.RETURNED || by.FAILED) ? "bad" : null));
 
-    if (!reference) {
-      // Queryable by client reference only: the provider is never told an entity id (CR-S05-02).
-      $("truth-error").textContent = "enter a client_reference — ground truth is not queryable by entity";
-      return;
-    }
-
-    api(PROVIDERS + "/admin/truth?client_reference=" + encodeURIComponent(reference), null, "admin")
-      .then(renderTruth)
-      .catch(function (error) {
-        report($("truth-error"), error, PROXY_HINT + " The admin surface is also absent entirely under the "
-          + "demo-public profile, where a 404 is the intended answer.");
+    if (runs.length === 0) {
+      empty(runsHost, "No payout runs yet. A writer starts one with POST /v1/payout-runs.");
+    } else {
+      const view = table(["created", "status", "drivers by outcome", "paid", "attempts", "currency", "refusal", "run"], [3, 4]);
+      runs.forEach((r) => {
+        const total = Object.keys(r.outcomes || {}).reduce((s, k) => s + num(r.outcomes[k]), 0);
+        const parts = OUTCOME_ORDER.filter((o) => r.outcomes && r.outcomes[o]).map((o) => ({ value: r.outcomes[o],
+          cls: OUTCOME_COLOUR[o], title: o + ": " + r.outcomes[o] }));
+        view.body.appendChild(tr([timeCell(r.created_at), td(pill(r.status, tone(r.status), true)),
+          td(total ? stackBar(parts, total, "fat") : el("span", "no drivers considered", "muted"), "barcell"),
+          td(moneyNode(r.paid_minor, r.currency), "num"), td(int(r.attempts_created), "num"), td(r.currency),
+          td(r.refusal_code || "", r.refusal_code ? "err" : "muted"), td(short(r.run_id), "mono")]));
       });
-  }
-
-  function renderTruth(truth) {
-    var host = $("truth-result");
-    clear(host);
-
-    var charges = truth.charges || [];
-    var refunds = truth.refunds || [];
-    var payouts = truth.payouts || [];
-
-    if (charges.length === 0 && refunds.length === 0 && payouts.length === 0) {
-      empty(host, "the provider holds nothing under this client reference — nothing was ever submitted to it, "
-        + "or it was submitted under a different reference");
+      runsHost.appendChild(view.wrap);
+      runsHost.appendChild(legend(OUTCOME_ORDER.map((o) => ({ cls: OUTCOME_COLOUR[o], label: o }))));
     }
 
-    if (charges.length > 0) {
-      var chargeView = table(["charge", "status", "amount", "fee", "refunded", "decline"]);
-      charges.forEach(function (row) {
-        chargeView.body.appendChild(rowOf("tr", [
-          el("td", row.charge_id),
-          fill(el("td"), [el("span", row.status, statusClass(row.status))]),
-          amountCell(row.amount_minor, row.currency),
-          amountCell(row.fee_minor, row.currency),
-          amountCell(row.refunded_minor, row.currency),
-          el("td", row.decline_code || "—", "muted")
-        ]));
-      });
-      host.appendChild(el("h2", "Charges"));
-      host.appendChild(chargeView.wrap);
-    }
-
-    if (refunds.length > 0) {
-      var refundView = table(["refund", "charge", "status", "amount", "failure"]);
-      refunds.forEach(function (row) {
-        refundView.body.appendChild(rowOf("tr", [
-          el("td", row.refund_id),
-          el("td", row.charge_id),
-          fill(el("td"), [el("span", row.status, statusClass(row.status))]),
-          amountCell(row.amount_minor, ""),
-          el("td", row.failure_code || "—", "muted")
-        ]));
-      });
-      host.appendChild(el("h2", "Refunds"));
-      host.appendChild(refundView.wrap);
-    }
-
-    if (payouts.length > 0) {
-      var payoutView = table(["payout", "status", "amount", "accepted", "settled", "returned", "return code"]);
-      payouts.forEach(function (row) {
-        payoutView.body.appendChild(rowOf("tr", [
-          el("td", row.payout_id),
-          fill(el("td"), [el("span", row.status, statusClass(row.status))]),
-          amountCell(row.amount_minor, row.currency),
-          el("td", row.accepted_at || "—", "muted"),
-          el("td", row.settled_at || "—", "muted"),
-          el("td", row.returned_at || "—", "muted"),
-          el("td", row.return_code || "—", "muted")
-        ]));
-      });
-      host.appendChild(el("h2", "Payouts"));
-      host.appendChild(payoutView.wrap);
-    }
-
-    var queue = truth.webhook_queue;
-    if (queue) {
-      host.appendChild(fill(el("header"), [
-        el("h2", "Webhook queue"),
-        el("span", queue.pending + " pending delivery", "panel-note")
-      ]));
-      var deliveries = queue.deliveries || [];
-      if (deliveries.length === 0) {
-        host.appendChild(el("p", "nothing waiting to be delivered", "empty"));
-      } else {
-        var queueView = table(["event", "type", "provider ref", "attempts", "last status", "held", "next attempt"]);
-        deliveries.forEach(function (row) {
-          queueView.body.appendChild(rowOf("tr", [
-            el("td", row.event_id),
-            el("td", row.event_type),
-            el("td", row.provider_ref || "—"),
-            el("td", row.attempts, "num"),
-            el("td", row.last_status === null || row.last_status === undefined ? "—" : row.last_status),
-            fill(el("td"), [row.held ? el("span", "held", "pill warn") : el("span", "no", "muted")]),
-            el("td", row.next_attempt_at || "—", "muted")
-          ]));
-        });
-        host.appendChild(queueView.wrap);
+    if (!unavailable(statusHost, ["attemptTotals"])) {
+      const segments = statusSegments(payouts);
+      if (segments.length === 0) { empty(statusHost, "No payout attempts yet."); } else {
+        const wrap = el("div", null, "donut-wrap");
+        wrap.appendChild(donut(segments, int(segments.reduce((s, x) => s + x.value, 0)), "payouts"));
+        const side = legend(segments.map((s) => ({ cls: s.cls, label: s.label, value: int(s.value) })));
+        side.style.flexDirection = "column";
+        wrap.appendChild(side);
+        statusHost.appendChild(wrap);
       }
     }
-
-    // Injected faults explain an attempt that looks wrong: an UNKNOWN outcome usually means the provider committed
-    // and the answer was lost, which is visible here and nowhere else.
-    var faultCounts = truth.fault_counts || {};
-    var faultTypes = Object.keys(faultCounts);
-    if (faultTypes.length > 0) {
-      host.appendChild(el("h2", "Faults injected"));
-      var faultRow = el("div", null, "row");
-      faultTypes.sort().forEach(function (type) {
-        faultRow.appendChild(el("span", type + " × " + faultCounts[type], "pill warn"));
-      });
-      host.appendChild(faultRow);
-    }
-
-    host.appendChild(el("div",
-      "This is the provider's own record, not ours. Where it disagrees with the attempt above, the disagreement is "
-      + "the finding (I7).", "panel-note"));
+    renderAttemptTable(attemptsHost, "payoutAttempts", true);
   }
 
-  /* ---- wiring ----------------------------------------------------------------------------------------------- */
+  /* ---- providers ------------------------------------------------------------------------------------------------- */
 
-  function onEnter(id, handler) {
-    $(id).addEventListener("keydown", function (event) {
-      if (event.key === "Enter") { handler(); }
+  function renderProviders() {
+    const prompt = clear($("prov-prompt"));
+    const kpis = clear($("prov-kpis"));
+    const hosts = ["prov-charges", "prov-payouts", "prov-faults", "prov-profiles"].map((id) => clear($(id)));
+    if (!creds.admin) {
+      prompt.appendChild(callout("Enter the admin token (top right) to read provider ground truth.",
+        "The admin surface can inject faults and dumps every charge, so it needs the admin role and does not exist at "
+        + "all under the demo-public profile.", "info"));
+    }
+    if (hosts.some((h) => unavailable(h, ["providers"]))) { hosts.forEach((h) => unavailable(h, ["providers"])); return; }
+    const p = value("providers");
+    const currency = mainCurrency();
+    const sumCount = (rows) => rows.reduce((s, r) => s + num(r.count), 0);
+    const sumAmount = (rows) => rows.filter((r) => !r.currency || r.currency === currency).reduce((s, r) => s + num(r.amount_minor), 0);
+    const faults = Object.keys(p.fault_counts || {}).reduce((s, k) => s + num(p.fault_counts[k]), 0);
+    kpis.appendChild(kpi("FakeCard charges", int(sumCount(p.charges)), money(sumAmount(p.charges.filter((r) =>
+      r.status === "SUCCEEDED")), currency) + " succeeded"));
+    kpis.appendChild(kpi("FakeCard refunds", int(sumCount(p.refunds)), money(sumAmount(p.refunds), currency)));
+    kpis.appendChild(kpi("FakeBank payouts", int(sumCount(p.payouts)), money(sumAmount(p.payouts), currency)));
+    kpis.appendChild(kpi("Faults injected", int(faults), Object.keys(p.fault_counts || {}).length + " kinds, each logged once",
+      faults ? "warn" : null));
+    kpis.appendChild(kpi("Webhooks pending", int(p.webhook_pending), "redelivered until acknowledged",
+      p.webhook_pending ? "warn" : "good"));
+
+    const bars = (rows, empt) => {
+      if (rows.length === 0) { return el("p", empt, "empty"); }
+      return hbars(rows.map((r) => ({ label: r.status, sub: r.currency || "", value: r.count, cls: STATUS_COLOUR[r.status] || "c1",
+        display: int(r.count), extra: money(r.amount_minor, r.currency || currency) })));
+    };
+    hosts[0].appendChild(bars(p.charges, "FakeCard holds no charges."));
+    if (p.refunds.length) { hosts[0].appendChild(el("h3", "Refunds")); hosts[0].appendChild(bars(p.refunds, "")); }
+    hosts[1].appendChild(bars(p.payouts, "FakeBank holds no payouts yet."));
+    const faultKeys = Object.keys(p.fault_counts || {}).sort((a, b) => p.fault_counts[b] - p.fault_counts[a]);
+    hosts[2].appendChild(faultKeys.length ? hbars(faultKeys.map((k, i) => ({ label: k, value: p.fault_counts[k],
+      cls: ["warn", "c5", "c3", "c7", "c1", "c6"][i % 6] }))) : el("p", "No faults injected.", "empty"));
+
+    const providers = Object.keys(p.profiles || {}).sort();
+    const knobs = [];
+    providers.forEach((name) => Object.keys(p.profiles[name]).forEach((k) => { if (knobs.indexOf(k) < 0) { knobs.push(k); } }));
+    const view = table(["knob"].concat(providers), providers.map((_, i) => i + 1));
+    knobs.forEach((k) => {
+      view.body.appendChild(tr([td(k, "mono")].concat(providers.map((name) => {
+        const v = p.profiles[name][k];
+        const active = k !== "seed" && v !== null && v !== undefined && Number(v) !== 0;
+        return td(active ? pill(String(v), "warn") : el("span", v === null || v === undefined ? "—" : String(v), "muted"), "num");
+      }))));
+    });
+    view.wrap.classList.add("compact");
+    hosts[3].appendChild(view.wrap);
+    const picks = clear($("truth-picks"));
+    const recent = (value("attempts") || []).slice(0, 3).concat((value("payoutAttempts") || []).slice(0, 3));
+    if (recent.length) {
+      picks.appendChild(el("span", "recent:", "note"));
+      recent.forEach((a) => picks.appendChild(linkButton(a.kind.toLowerCase() + " " + short(a.attempt_id), () => {
+        $("truth-ref").value = a.attempt_id;
+        lookupTruth();
+      })));
+    }
+    const anyActive = providers.some((name) => knobs.some((k) => k !== "seed" && Number(p.profiles[name][k]) > 0));
+    hosts[3].appendChild(el("p", anyActive ? "Faults are being injected right now." : "No fault is active: every rate is "
+      + "zero. The recorded runs switched knobs on for their duration and restored this profile afterwards.", "note"));
+  }
+
+  function lookupTruth() {
+    const reference = $("truth-ref").value.trim();
+    $("truth-error").textContent = "";
+    const host = clear($("truth-result"));
+    if (!reference) {
+      // Queryable by client reference only: the provider is never told an entity id (CR-S05-02).
+      $("truth-error").textContent = "enter a client_reference: ground truth is not queryable by entity";
+      return;
+    }
+    call("/providers/admin/truth?client_reference=" + encodeURIComponent(reference), "admin").then((truth) => {
+      const records = (truth.charges || []).length + (truth.refunds || []).length + (truth.payouts || []).length;
+      if (records === 0) {
+        empty(host, "The provider holds nothing under this reference: nothing was ever submitted to it, or it was "
+          + "submitted under a different reference.");
+      }
+      if ((truth.charges || []).length) {
+        const view = table(["charge", "status", "amount", "fee", "refunded", "decline"], [2, 3, 4]);
+        truth.charges.forEach((c) => view.body.appendChild(tr([idCell(c.charge_id), td(pill(c.status, tone(c.status))),
+          td(moneyNode(c.amount_minor, c.currency), "num"), td(moneyNode(c.fee_minor, c.currency), "num"),
+          td(moneyNode(c.refunded_minor, c.currency), "num"), td(c.decline_code || "—", "muted")])));
+        host.appendChild(view.wrap);
+      }
+      if ((truth.payouts || []).length) {
+        const view = table(["payout", "status", "amount", "accepted", "settled", "returned", "code"], [2]);
+        truth.payouts.forEach((x) => view.body.appendChild(tr([idCell(x.payout_id), td(pill(x.status, tone(x.status))),
+          td(moneyNode(x.amount_minor, x.currency), "num"), timeCell(x.accepted_at), timeCell(x.settled_at),
+          timeCell(x.returned_at), td(x.return_code || "—", "muted")])));
+        host.appendChild(view.wrap);
+      }
+      if ((truth.refunds || []).length) {
+        const view = table(["refund", "charge", "status", "amount", "failure"], [3]);
+        truth.refunds.forEach((x) => view.body.appendChild(tr([idCell(x.refund_id), idCell(x.charge_id),
+          td(pill(x.status, tone(x.status))), td(moneyNode(x.amount_minor, ""), "num"), td(x.failure_code || "—", "muted")])));
+        host.appendChild(view.wrap);
+      }
+      host.appendChild(el("p", "The provider's own record. Where it disagrees with the attempt, the disagreement is the "
+        + "finding (I7).", "note"));
+    }).catch((error) => {
+      $("truth-error").textContent = explain(error) + (error.status === 404 ? " The admin surface is also absent "
+        + "entirely under the demo-public profile, where a 404 is the intended answer." : "");
     });
   }
 
-  $("token").addEventListener("input", function (event) {
-    // Kept in a variable for the lifetime of the page only: never storage, never the URL, never a cookie.
-    creds.reader = event.target.value;
-  });
-  $("admin-token").addEventListener("input", function (event) {
-    creds.admin = event.target.value;
-  });
-  // The overview is what an operator wants first, so a typed token loads it without a second click — on Enter or on
-  // leaving the field, never per keystroke, because /v1/invariants takes a snapshot that is costly to repeat.
-  $("token").addEventListener("change", function () { if (creds.reader) { loadOverview(); } });
-  onEnter("token", loadOverview);
+  /* ---- live metrics: Prometheus through Grafana, same origin, no token -------------------------------------------- */
 
-  $("refresh-overview").addEventListener("click", loadOverview);
+  const METRICS = [
+    { id: "applied", title: "Orders applied", unit: "/min", cls: "c1", digits: 1,
+      q: "sum(rate(ledger_orders_applied_total[2m])) * 60" },
+    { id: "e2e", title: "Order → ledger latency p95", unit: "ms", cls: "c5", digits: 1,
+      q: "histogram_quantile(0.95, sum by (le) (rate(order_to_apply_milliseconds_bucket[5m])))" },
+    { id: "apply", title: "Ledger apply p95", unit: "ms", cls: "c6", digits: 1,
+      q: "histogram_quantile(0.95, sum by (le) (rate(ledger_apply_milliseconds_bucket[5m])))" },
+    { id: "lock", title: "Entity lock wait p95", unit: "ms", cls: "c4", digits: 1,
+      q: "histogram_quantile(0.95, sum by (le) (rate(ledger_lock_wait_milliseconds_bucket[5m])))" },
+    { id: "outbox", title: "Oldest unpublished outbox row", unit: "s", cls: "c7", digits: 0,
+      q: "max(outbox_oldest_unpublished_seconds)" },
+    { id: "policy", title: "Orders seen by the collection policy", unit: "/min", cls: "c2", digits: 1,
+      q: "sum(rate(instrument_policy_orders_total[2m])) * 60" },
+    { id: "unknown", title: "Oldest UNKNOWN attempt", unit: "s", cls: "warn", digits: 0,
+      q: "max(unknown_attempts_oldest_seconds)" },
+    { id: "review", title: "Attempts needing review", unit: "", cls: "c8", digits: 0,
+      q: "max(attempts_needs_review)" },
+    { id: "http", title: "HTTP requests by service", unit: "/min", multi: true, digits: 1,
+      q: "sum by (job) (rate(http_server_requests_milliseconds_count[2m])) * 60" }
+  ];
+  const SERIES_COLOURS = ["c1", "c2", "c7", "c5", "c6", "c3", "c4", "c8"];
+
+  /** The Prometheus datasource's uid, looked up once; otel-lgtm names it "prometheus", which is the fallback. */
+  async function prometheusUid() {
+    if (state.promUid) { return state.promUid; }
+    try {
+      const sources = await call("/grafana/api/datasources", null);
+      const prometheus = (sources || []).find((s) => s.type === "prometheus");
+      state.promUid = prometheus ? prometheus.uid : "prometheus";
+    } catch (ignored) {
+      return "prometheus";
+    }
+    return state.promUid;
+  }
+
+  async function loadLive() {
+    const minutes = Number($("live-window").value) || 60;
+    const end = Math.floor(Date.now() / 1000), start = end - minutes * 60;
+    const step = Math.max(15, Math.round(minutes * 60 / 120));
+    try {
+      const uid = await prometheusUid();
+      const base = "/grafana/api/datasources/proxy/uid/" + encodeURIComponent(uid) + "/api/v1/query_range?";
+      const results = await Promise.all(METRICS.map((m) => call(base + new URLSearchParams({ query: m.q, start: start,
+        end: end, step: step }).toString(), null).then((r) => r.data.result, (e) => e)));
+      ui.live = { from: start, to: end, results: results, error: null };
+    } catch (error) {
+      ui.live = { error: error };
+    }
+    $("live-at").textContent = "updated " + new Date().toLocaleTimeString();
+    renderLive();
+    renderThroughput();
+  }
+
+  function seriesOf(result) {
+    return result.map((s) => ({ name: s.metric.job || s.metric.service_name || "", points: s.values.map((v) => ({
+      t: Number(v[0]), v: Number(v[1]) })) }));
+  }
+
+  function lastFinite(points) {
+    for (let i = points.length - 1; i >= 0; i--) { if (isFinite(points[i].v)) { return points[i].v; } }
+    return NaN;
+  }
+
+  /** "now" when the newest sample is current, otherwise how old it is: a p95 over an idle window is NaN, not zero. */
+  function lastSampleAge(series) {
+    let newest = 0;
+    series.forEach((s) => s.points.forEach((p) => { if (isFinite(p.v) && p.t > newest) { newest = p.t; } }));
+    if (!newest) { return "no samples"; }
+    const age = ui.live.to - newest;
+    return age < 150 ? "now" : "last sample " + seconds(age) + " ago";
+  }
+
+  function renderLive() {
+    const grid = clear($("live-grid"));
+    const errorHost = clear($("live-error"));
+    if (ui.live.error) {
+      errorHost.appendChild(callout("Grafana is not reachable from this origin", explain(ui.live.error), "bad"));
+      return;
+    }
+    METRICS.forEach((m, i) => {
+      const card = el("section", null, "panel spark-card");
+      card.appendChild(add(el("div", null, "panel-head"), el("h2", m.title)));
+      const result = ui.live.results[i];
+      if (result instanceof Error) {
+        card.appendChild(el("p", result.message, "empty err"));
+        grid.appendChild(card);
+        return;
+      }
+      const series = seriesOf(result).map((s, k) => ({ name: s.name, points: s.points,
+        cls: m.multi ? SERIES_COLOURS[k % SERIES_COLOURS.length] : m.cls }));
+      const values = [];
+      series.forEach((s) => s.points.forEach((p) => { if (isFinite(p.v)) { values.push(p.v); } }));
+      const now = m.multi ? series.reduce((sum, s) => sum + (isFinite(lastFinite(s.points)) ? lastFinite(s.points) : 0), 0)
+        : series.length ? lastFinite(series[0].points) : NaN;
+      const big = el("div", isFinite(now) ? now.toFixed(m.digits) : "no data", "big");
+      if (isFinite(now) && m.unit) { big.appendChild(el("small", m.unit + (m.multi ? " total" : ""))); }
+      card.appendChild(big);
+      card.appendChild(sparkline(series, { from: ui.live.from, to: ui.live.to, label: m.title, tall: m.multi,
+        noArea: m.multi }));
+      const meta = el("div", null, "spark-meta");
+      meta.appendChild(el("span", values.length ? "min " + Math.min.apply(null, values).toFixed(m.digits) + " · max "
+        + Math.max.apply(null, values).toFixed(m.digits) : "no samples in this window"));
+      meta.appendChild(el("span", lastSampleAge(series)));
+      card.appendChild(meta);
+      if (m.multi) { card.appendChild(legend(series.map((s) => ({ cls: s.cls, label: s.name,
+        value: isFinite(lastFinite(s.points)) ? lastFinite(s.points).toFixed(m.digits) : "—" })))); }
+      card.appendChild(el("div", m.q, "promql"));
+      grid.appendChild(card);
+    });
+  }
+
+  function renderThroughput() {
+    const host = clear($("ov-throughput"));
+    if (ui.live.error) { empty(host, "Prometheus unreachable: " + explain(ui.live.error), "empty err"); return; }
+    const result = ui.live.results && ui.live.results[0];
+    if (!result || result instanceof Error) { empty(host, result ? result.message : "loading…"); return; }
+    const series = seriesOf(result).map((s) => ({ points: s.points, cls: "c1" }));
+    const now = series.length ? lastFinite(series[0].points) : NaN;
+    const values = [];
+    series.forEach((s) => s.points.forEach((p) => { if (isFinite(p.v)) { values.push(p.v); } }));
+    const big = el("div", isFinite(now) ? now.toFixed(1) : "0", "big");
+    big.appendChild(el("small", "orders/min now"));
+    const card = el("div", null, "spark-card");
+    card.appendChild(big);
+    card.appendChild(sparkline(series, { from: ui.live.from, to: ui.live.to, label: "orders applied per minute" }));
+    const meta = el("div", null, "spark-meta");
+    meta.appendChild(el("span", values.length ? "peak " + Math.max.apply(null, values).toFixed(1) + "/min" : "no samples"));
+    meta.appendChild(linkButton("Live metrics →", () => show("live")));
+    card.appendChild(meta);
+    host.appendChild(card);
+  }
+
+  function scheduleLive() {
+    if (ui.liveTimer) { clearInterval(ui.liveTimer); ui.liveTimer = null; }
+    if (ui.tab === "live" && $("live-auto").checked) {
+      // Grafana only, and only while this tab is open and visible: nothing that takes a ledger snapshot ever polls.
+      ui.liveTimer = setInterval(() => { if (document.visibilityState === "visible") { loadLive(); } }, 15000);
+    }
+  }
+
+  /* ---- measured results: bars from the static figures in the markup ------------------------------------------------ */
+
+  function renderMeasured() {
+    document.querySelectorAll("#tab-results [data-v]").forEach((span) => {
+      const v = Number(span.getAttribute("data-v")), max = Number(span.getAttribute("data-max"));
+      span.appendChild(stackBar([{ value: v, cls: span.getAttribute("data-cls") }], max, "fat"));
+    });
+  }
+
+  /* ---- navigation, badges, wiring ------------------------------------------------------------------------------------ */
+
+  const TABS = ["overview", "flow", "ledger", "payments", "recon", "payouts", "providers", "live", "results"];
+  const ICONS = {
+    overview: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+    flow: "M3 7h12M11 3l4 4-4 4M21 17H9M13 13l-4 4 4 4",
+    ledger: "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11",
+    payments: "M3 6h18v12H3zM3 10h18M7 15h4",
+    recon: "M12 4v16M6 20h12M4 8h16M4 8l-2.5 6a2.5 2.5 0 0 0 5 0zM20 8l-2.5 6a2.5 2.5 0 0 0 5 0z",
+    payouts: "M12 15V3M7 8l5-5 5 5M4 21h16",
+    providers: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01",
+    live: "M3 12h4l3-8 4 16 3-8h4",
+    results: "M5 21V4M5 4h12l-2 4 2 4H5"
+  };
+
+  function show(tab) {
+    if (TABS.indexOf(tab) < 0) { tab = "overview"; }
+    ui.tab = tab;
+    document.querySelectorAll("[data-page]").forEach((page) => { page.hidden = page.id !== "tab-" + tab; });
+    document.querySelectorAll(".nav button").forEach((button) => {
+      if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
+    });
+    if (location.hash !== "#" + tab) { history.replaceState(null, "", "#" + tab); }
+    scheduleLive();
+    window.scrollTo(0, 0);
+  }
+
+  function badge(id, text, level) {
+    const node = $(id);
+    node.hidden = !text;
+    node.textContent = text || "";
+    node.className = "count" + (level ? " " + level : "");
+  }
+
+  function renderCounts() {
+    const items = creds.reader ? attentionItems() : [];
+    const severe = items.filter((i) => i.level !== "info");
+    badge("count-overview", severe.length ? String(severe.length) : "", severe.some((i) => i.level === "bad") ? "bad" : "warn");
+    const stuck = attemptTotals((t) => t.status === "UNKNOWN" || t.status === "NEEDS_REVIEW").reduce((s, t) => s + num(t.attempts), 0);
+    badge("count-payments", stuck ? String(stuck) : "", "warn");
+    const runs = value("reconRuns") || [];
+    const breaks = runs.reduce((s, r) => s + r.breaks_found, 0);
+    badge("count-recon", breaks ? String(breaks) : "", "warn");
+    const inflight = attemptTotals((t) => t.kind === "PAYOUT" && ["CREATED", "SUBMITTING", "PENDING", "UNKNOWN"]
+      .indexOf(t.status) >= 0).reduce((s, t) => s + num(t.attempts), 0);
+    badge("count-payouts", inflight ? String(inflight) : "", "");
+    const providers = value("providers");
+    badge("count-providers", providers && providers.webhook_pending ? String(providers.webhook_pending) : "", "warn");
+  }
+
+  function onEnter(id, handler) {
+    $(id).addEventListener("keydown", (event) => { if (event.key === "Enter") { handler(); } });
+  }
+
+  document.querySelectorAll(".nav button").forEach((button) => {
+    const icon = svg("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+    icon.appendChild(svg("path", { d: ICONS[button.dataset.icon] }));
+    button.insertBefore(icon, button.firstChild);
+    button.addEventListener("click", () => show(button.dataset.tab));
+  });
+
+  $("token").addEventListener("input", (event) => {
+    // Kept in a variable for the lifetime of the page only: never storage, never the URL, never a cookie.
+    creds.reader = event.target.value.trim();
+  });
+  $("admin-token").addEventListener("input", (event) => { creds.admin = event.target.value.trim(); });
+  // A typed token loads the dashboard on Enter or on leaving the field, never per keystroke: /v1/invariants takes a
+  // snapshot that is costly to repeat.
+  $("token").addEventListener("change", () => { if (creds.reader) { refresh(); } });
+  $("admin-token").addEventListener("change", () => { if (creds.admin) { refresh(); } });
+  $("refresh").addEventListener("click", refresh);
+  $("theme").addEventListener("click", () => {
+    const current = document.documentElement.dataset.theme
+      || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.dataset.theme = current === "dark" ? "light" : "dark";
+  });
   $("lookup").addEventListener("click", lookup);
   onEnter("entity", lookup);
   $("verify").addEventListener("click", verify);
-  $("next-page").addEventListener("click", loadChangelog);
+  $("next-page").addEventListener("click", () => loadChangelog(false));
   $("lookup-attempt").addEventListener("click", lookupAttempt);
   onEnter("attempt", lookupAttempt);
-  $("lookup-breaks").addEventListener("click", lookupBreaks);
-  onEnter("run-id", lookupBreaks);
+  $("break-type").addEventListener("change", lookupBreaks);
+  $("break-status").addEventListener("change", lookupBreaks);
   $("lookup-truth").addEventListener("click", lookupTruth);
   onEnter("truth-ref", lookupTruth);
-
-  empty($("overview-tiles"), "enter a reader token to load the ledger's state");
+  $("flow-currency").addEventListener("change", (event) => { ui.currency = event.target.value; renderAll(); });
+  $("live-window").addEventListener("change", loadLive);
+  $("live-auto").addEventListener("change", scheduleLive);
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
 
   if (location.protocol === "file:") {
-    $("origin-note").textContent =
-      "opened from disk — open this page through the ledger-service URL instead, or its API calls cannot work";
+    $("origin-note").textContent = "opened from disk: open this page through the proxy URL instead, or no call can work";
     $("origin-note").className = "err";
   } else {
-    $("origin-note").textContent = location.origin;
+    $("origin-note").textContent = location.host;
   }
+  renderMeasured();
+  show(location.hash.slice(1) || "overview");
+  renderAll();
+  loadHealth();
+  loadLive();
 })();
 </script>
 </body>

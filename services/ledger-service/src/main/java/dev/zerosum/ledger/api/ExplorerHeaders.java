@@ -108,6 +108,9 @@ class ExplorerHeaders {
                 http.setHeader("X-Content-Type-Options", "nosniff");
                 http.setHeader("X-Frame-Options", "DENY");
                 http.setHeader("Referrer-Policy", "no-referrer");
+                // Revalidate on every load: a browser holding an earlier build of the page after a redeploy would show
+                // yesterday's dashboard against today's API.
+                http.setHeader("Cache-Control", "no-cache");
             }
             chain.doFilter(request, response);
         }
