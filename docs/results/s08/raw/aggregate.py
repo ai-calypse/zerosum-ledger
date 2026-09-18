@@ -72,6 +72,35 @@ def m8b(pattern, title):
     print()
 
 
+def latencies(pattern, title):
+    """Seconds from an attempt's SUBMITTING transition to its settling one, per outcome path, from the CSVs."""
+    import csv
+    import gzip
+    from datetime import datetime
+
+    def t(s):
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+    by = {}
+    for f in sorted(glob.glob(os.path.join(HERE, pattern))):
+        for r in csv.DictReader(gzip.open(f, "rt")):
+            if r["settled_at"] == "null" or r["submitting_at"] == "null":
+                continue
+            by.setdefault(r["path"], []).append((t(r["settled_at"]) - t(r["submitting_at"])).total_seconds())
+            if r["unknown_at"] != "null":
+                by.setdefault("submit -> UNKNOWN", []).append(
+                    (t(r["unknown_at"]) - t(r["submitting_at"])).total_seconds())
+    if not by:
+        return
+    print(f"### {title}: seconds from SUBMITTING to settled\n")
+    print("| Path | n | min | p50 | p95 | p99 | max |\n|---|---|---|---|---|---|---|")
+    for k, v in sorted(by.items()):
+        v.sort()
+        q = lambda p: v[min(len(v) - 1, int(p * len(v)))]
+        print(f"| {k} | {len(v):,} | {v[0]:.3f} | {q(0.5):.3f} | {q(0.95):.3f} | {q(0.99):.3f} | {v[-1]:.3f} |")
+    print()
+
+
 def text(name, title):
     path = os.path.join(HERE, name)
     if os.path.exists(path):
@@ -82,6 +111,8 @@ def text(name, title):
 if __name__ == "__main__":
     m4a()
     m8b("m8b-chunk*.json", "M8(b) - timeout_after_commit_rate=0.2 (as specified)")
+    latencies("m8b-chunk*-attempts.csv.gz", "M8(b) as specified")
     m8b("m8b-resolver*.json", "M8(b) supplementary - plus webhook_drop_rate=1.0 (forces the UNKNOWN resolver)")
+    latencies("m8b-resolver*-attempts.csv.gz", "M8(b) supplementary")
     text("a2-outbox-ablation.txt", "A2 emulated")
     text("a4-zero-sum-trigger-ablation.txt", "A4 partial")
