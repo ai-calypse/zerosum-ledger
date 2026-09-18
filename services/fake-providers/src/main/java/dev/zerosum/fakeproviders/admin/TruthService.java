@@ -1,6 +1,9 @@
 package dev.zerosum.fakeproviders.admin;
 
 import dev.zerosum.fakeproviders.admin.AdminApi.Delivery;
+import dev.zerosum.fakeproviders.admin.AdminApi.StatusTotal;
+import dev.zerosum.fakeproviders.admin.AdminApi.Summary;
+import java.util.Map;
 import dev.zerosum.fakeproviders.admin.AdminApi.Truth;
 import dev.zerosum.fakeproviders.admin.AdminApi.WebhookQueue;
 import dev.zerosum.fakeproviders.bank.FakeBankApi.PayoutResponse;
@@ -38,6 +41,26 @@ class TruthService {
     Truth truth(String clientReference) {
         return new Truth(clientReference, charges(clientReference), refunds(clientReference), payouts(clientReference),
                 faults.counts(), faults.entries(), queue());
+    }
+
+    /**
+     * The same tables {@link #truth} reads, counted rather than listed, so the dashboard can show a provider holding
+     * ten thousand charges without shipping them. Sums are cast back to bigint so an overflow fails the read.
+     */
+    Summary summary(Map<String, Map<String, Object>> profiles) {
+        return new Summary(totals("card_charges", "currency"), totals("card_refunds", "NULL"),
+                totals("bank_payouts", "currency"), faults.counts(),
+                db.sql("SELECT count(*) FROM provider_events WHERE delivered_at IS NULL").query(Integer.class).single(),
+                profiles);
+    }
+
+    private List<StatusTotal> totals(String table, String currency) {
+        // Both arguments are literals from this class, never request input.
+        return db.sql("SELECT status, " + currency + " AS currency, count(*), sum(amount_minor)::bigint FROM " + table
+                        + " GROUP BY 1, 2 ORDER BY 1, 2")
+                .query((rs, rowNum) -> new StatusTotal(rs.getString(1),
+                        rs.getString(2) == null ? null : rs.getString(2).strip(), rs.getLong(3), rs.getLong(4)))
+                .list();
     }
 
     private List<ChargeResponse> charges(String reference) {

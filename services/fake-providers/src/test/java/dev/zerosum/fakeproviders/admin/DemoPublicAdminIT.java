@@ -26,6 +26,7 @@ class DemoPublicAdminIT extends FakeProvidersIT {
     void adminEndpointsAreAbsent() {
         assertThat(put("/admin/faults/fakecard", Map.of("http_500_rate", 1), ADMIN_TOKEN).status()).isEqualTo(404);
         assertThat(get("/admin/truth", ADMIN_TOKEN).status()).isEqualTo(404);
+        assertThat(get("/admin/summary", ADMIN_TOKEN).status()).isEqualTo(404);
     }
 
     @Test

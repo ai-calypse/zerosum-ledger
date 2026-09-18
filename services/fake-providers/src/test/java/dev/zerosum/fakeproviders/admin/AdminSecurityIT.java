@@ -148,6 +148,40 @@ class AdminSecurityIT extends FakeProvidersIT {
         assertThat(truth.faults()).extracting(FaultLog.Entry::seed).contains(5L);
     }
 
+    @Test
+    @DisplayName("the summary counts truth by status and shows each provider's active profile, admin only")
+    void summaryCountsTruthAndShowsTheActiveProfile() {
+        assertThat(get("/admin/summary", null).status()).isEqualTo(401);
+        assertThat(get("/admin/summary", READER_TOKEN).status()).isEqualTo(403);
+
+        AdminApi.Summary before = get("/admin/summary", ADMIN_TOKEN).as(AdminApi.Summary.class);
+        post("/fakecard/v1/charges", new ChargeRequest("sum-" + UUID.randomUUID(), MagicTokens.CARD_OK, 1_200L, "USD"),
+                null);
+        post("/fakecard/v1/charges", new ChargeRequest("sum-" + UUID.randomUUID(),
+                MagicTokens.CARD_DECLINE_INSUFFICIENT_FUNDS, 800L, "USD"), null);
+        assertThat(put("/admin/faults/fakecard", Map.of("webhook_drop_rate", 0.25, "seed", 11), ADMIN_TOKEN).status())
+                .isEqualTo(200);
+
+        AdminApi.Summary after = get("/admin/summary", ADMIN_TOKEN).as(AdminApi.Summary.class);
+        assertThat(count(after, "SUCCEEDED") - count(before, "SUCCEEDED")).isEqualTo(1);
+        assertThat(count(after, "DECLINED") - count(before, "DECLINED")).isEqualTo(1);
+        assertThat(amount(after, "SUCCEEDED") - amount(before, "SUCCEEDED")).isEqualTo(1_200L);
+        assertThat(after.profiles()).containsOnlyKeys("fakebank", "fakecard");
+        assertThat(((Number) after.profiles().get("fakecard").get("webhook_drop_rate")).doubleValue()).isEqualTo(0.25);
+        assertThat(((Number) after.profiles().get("fakecard").get("seed")).longValue()).isEqualTo(11L);
+        assertThat(((Number) after.profiles().get("fakebank").get("webhook_drop_rate")).doubleValue()).isZero();
+    }
+
+    private static long count(AdminApi.Summary summary, String status) {
+        return summary.charges().stream().filter(t -> t.status().equals(status)).mapToLong(AdminApi.StatusTotal::count)
+                .sum();
+    }
+
+    private static long amount(AdminApi.Summary summary, String status) {
+        return summary.charges().stream().filter(t -> t.status().equals(status))
+                .mapToLong(AdminApi.StatusTotal::amount_minor).sum();
+    }
+
     private Truth truth(String clientReference) {
         String path = clientReference == null ? "/admin/truth" : "/admin/truth?client_reference=" + clientReference;
         return get(path, ADMIN_TOKEN).as(Truth.class);

@@ -24,6 +24,18 @@ public final class AdminApi {
             WebhookQueue webhook_queue) {
     }
 
+    /**
+     * Provider-side truth in aggregate, for the S09 dashboard: what each simulated provider holds counted by status,
+     * what was injected, what is still owed a delivery, and the fault profile each provider is running now.
+     */
+    public record Summary(List<StatusTotal> charges, List<StatusTotal> refunds, List<StatusTotal> payouts,
+            Map<String, Long> fault_counts, int webhook_pending, Map<String, Map<String, Object>> profiles) {
+    }
+
+    /** Rows of one status and currency: how many, and the money they carry. */
+    public record StatusTotal(String status, String currency, long count, long amount_minor) {
+    }
+
     /** Redelivery-queue status (§0.3 E3): what quiesce has to wait for. */
     public record WebhookQueue(int pending, List<Delivery> deliveries) {
     }

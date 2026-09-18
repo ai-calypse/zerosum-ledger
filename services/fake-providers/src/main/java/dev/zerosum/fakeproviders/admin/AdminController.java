@@ -84,6 +84,20 @@ class AdminController {
         return truth.truth(clientReference);
     }
 
+    /**
+     * Ground truth counted rather than listed, plus each provider's active fault profile (S09 dashboard).
+     *
+     * <p>Admin, like the rest of this surface, and absent under {@code demo-public} with it: the profile says which
+     * faults are being injected, which is exactly what a public prober should not learn.
+     */
+    @GetMapping("/summary")
+    AdminApi.Summary summary(HttpServletRequest request) {
+        requireAdmin(request);
+        var active = new java.util.TreeMap<String, Map<String, Object>>();
+        FaultProfiles.PROVIDERS.forEach(provider -> active.put(provider, profiles.knobs(provider).toMap()));
+        return truth.summary(active);
+    }
+
     private static Principal requireAdmin(HttpServletRequest request) {
         Principal principal = TokenAuthFilter.principal(request)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
