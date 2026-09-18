@@ -135,6 +135,10 @@ into the running system. The full integration suites below were run with `ZS_KAF
 did not override `ZS_OTLP_METRICS_URL`, so their metrics may have been pushed into the live Prometheus under the same
 job names; the Live metrics charts for that window can include test traffic.
 
+**Since fixed at the root** (`ee4be74`): the shared build convention now gives every test task
+`ZS_KAFKA_BOOTSTRAP=127.0.0.1:1` and `ZS_OTLP_METRICS_URL=http://127.0.0.1:1/v1/metrics`, so none of the contexts listed
+above can reach a running stack any more, whether pinned individually or not.
+
 ## Test results
 
 Full `integrationTest` suites of the four services touched, run 09:32–09:47 UTC with `--rerun`, counts summed from

@@ -130,18 +130,18 @@ promoted while its last hop ran against a stub.
 | Layer | Count | What it runs against |
 |---|---|---|
 | Unit | 360 (0 failed, 1 skipped) | No containers |
-| Integration | 292 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
+| Integration | 303 (0 failed, 0 skipped) | Real PostgreSQL and Kafka via Testcontainers |
 | End-to-end | 1 (0 failed) | `MoneyPathE2ETest`, on the running Compose stack |
 | Chaos | 4 (each 0 failed in its recorded run) | The running stack, destructively: `kill -9`, a paused broker, 10,000-charge fault volume, two ablation emulations. Tagged `chaos`, run only by `chaosTest`, never by `make demo`. XML per run in [results/s08/raw/](results/s08/raw/) |
 | Study | measurement runs | Timeboxed performance windows (`studyTest`), output committed as evidence in [results/perf/](results/perf/perf-summary.md) |
 
-Unit and integration counts are from `./gradlew test integrationTest --rerun-tasks` on 2026-09-18 (08:12–08:26 UTC,
-commit `b91c0bc` plus documentation edits), with no Compose stack running, read out of
+Unit and integration counts are from `./gradlew test integrationTest --rerun-tasks` on 2026-09-18 (09:51–10:06 UTC,
+commit `ee4be74`), with no Compose stack running, read out of
 `build/test-results/*/TEST-*.xml` for the thirteen modules in `settings.gradle.kts` rather than from
 `BUILD SUCCESSFUL`: this build sets `failOnNoDiscoveredTests = false`, so a green build is not by itself evidence that
 anything ran. Earlier figures here went stale repeatedly, because parallel work makes a count true only for the tree it
-was taken on. The last two integration tests added were the operator Explorer's safety-contract test and the CR-S07-01
-regression test.
+was taken on. The eleven most recent integration tests cover the dashboard's read-only endpoints; the two before them are the
+Explorer's safety-contract test and the CR-S07-01 regression test.
 
 The single remaining skip is deliberate, and it is the only one left of four. The adapter contract suite aborts its
 **settlement-report** case on an assumption naming the missing capability — for **FakeBank only**, which genuinely

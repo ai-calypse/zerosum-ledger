@@ -23,12 +23,25 @@ while a chaos run was using the same VM**. They are conservative: that load can 
 | The same, with every provider webhook dropped | 229 of 1,000 attempts went `UNKNOWN`; the resolver settled all 229, one charge each; the slowest was settled 196.6 s after submission (limit: 5 min in `UNKNOWN`) | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
 | Reconciliation against the running FakeCard | 20 / 20 report lines matched, the settlement followed into the ledger, provider clearing back to exactly 0; with report corruption injected, 8 typed breaks and the 146 residual **flagged, not adjusted away** | [reconciliation-live.md](docs/results/s06/reconciliation-live.md) |
 | A defect found by measuring, then fixed | Under hot-account contention, valid orders were quarantined instead of retried. Root-caused, fixed, with a regression test proven to fail without the fix | [CR-S07-01](docs/scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed) |
-| Test suite, force-executed 2026-09-18 | **360 unit + 292 integration** (real PostgreSQL and Kafka via Testcontainers), **0 failures**, 1 deliberate skip; plus end-to-end and chaos layers run against the live stack | [architecture.md](docs/architecture.md#what-the-tests-actually-cover) |
+| Test suite, force-executed 2026-09-18 | **360 unit + 303 integration** (real PostgreSQL and Kafka via Testcontainers), **0 failures**, 1 deliberate skip; plus end-to-end and chaos layers run against the live stack | [architecture.md](docs/architecture.md#what-the-tests-actually-cover) |
 
 Latency covers the outbox → Kafka (12 partitions) → ledger path, timed at both ends on one PostgreSQL clock, and
 excludes the HTTP layer. The "5,000 orders/s batched" design estimate was **not** reached (best: 80 % of it), and
 500 orders/s sustained for 10 minutes was not run. [perf-summary.md](docs/results/perf/perf-summary.md) lists every
 figure that can be quoted, and every one that cannot.
+
+## Operator dashboard
+
+One self-contained page, served through the one-origin proxy at `http://127.0.0.1:8080/explorer.html` (`make up`,
+then `make explorer`). Every figure is read live from the running services: invariants, consumer lag, money flow
+between account classes, payment attempts and their state transitions, reconciliation runs and breaks, payouts,
+provider ground truth, and Prometheus metrics through Grafana. It uses no third-party code: charts are hand-built
+SVG under a hash-based Content Security Policy, and tokens are held in memory only.
+[What each panel shows and how it was verified](docs/results/s09/dashboard.md).
+
+![Overview: summary tiles, invariants, service health, consumer lag and live throughput](docs/images/dashboard-overview.png)
+
+![Money flow: every order type as an arrow between account classes, and a per-reason proof that each nets to zero](docs/images/dashboard-money-flow.png)
 
 ## What it demonstrates
 
