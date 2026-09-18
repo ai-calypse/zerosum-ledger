@@ -1,0 +1,26 @@
+{
+  "study": "S07 batch-size",
+  "run_label": "2026-09-18-quiet-batch-large",
+  "full_study": true,
+  "batch_sizes": "[200, 500]",
+  "batch_writers": "[1]",
+  "entity_counts": "[1, 10, 100, 1000]",
+  "seed": 2412911798385552916,
+  "window_seconds": 45,
+  "warmup_seconds": 20,
+  "repetitions": 3,
+  "payload_pool_size": 20000,
+  "rider_pool": 2000,
+  "driver_pool": 500,
+  "image": "postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+  "durability": "fsync on (D00-3 configuration)",
+  "i5_note": "i5_violations is -1 until the block's whole-ledger chain sweep runs",
+  "runs": [
+    {"measurement": "batch-size", "writers": 1, "batch_size": 200, "entity_count": 1, "repetition": 1, "window_seconds": 45, "window_start_utc": "2026-09-18T22:51:01.217967Z", "window_end_utc": "2026-09-18T22:51:46.300893Z", "applied_orders": 221400, "orders_per_second": 4920.00, "batch_p50_micros": 40588, "batch_p95_micros": 44156, "micros_per_order_at_p50": 202.94, "lock_wait_p50_micros": 492, "lock_wait_p95_micros": 539, "batches": 1107, "duplicates": 0, "quarantined": 0, "deadlock_retries": 0, "lock_timeout_retries": 0, "connection_retries": 0, "retries_exhausted": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true},
+    {"measurement": "batch-size", "writers": 1, "batch_size": 200, "entity_count": 1, "repetition": 2, "window_seconds": 45, "window_start_utc": "2026-09-18T22:52:07.606709Z", "window_end_utc": "2026-09-18T22:52:52.662634Z", "applied_orders": 217800, "orders_per_second": 4840.00, "batch_p50_micros": 40961, "batch_p95_micros": 44608, "micros_per_order_at_p50": 204.81, "lock_wait_p50_micros": 508, "lock_wait_p95_micros": 573, "batches": 1089, "duplicates": 0, "quarantined": 0, "deadlock_retries": 0, "lock_timeout_retries": 0, "connection_retries": 0, "retries_exhausted": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true},
+    {"measurement": "batch-size", "writers": 1, "batch_size": 200, "entity_count": 1, "repetition": 3, "window_seconds": 45, "window_start_utc": "2026-09-18T22:53:15.899549Z", "window_end_utc": "2026-09-18T22:54:00.909873Z", "applied_orders": 219800, "orders_per_second": 4884.44, "batch_p50_micros": 40446, "batch_p95_micros": 44715, "micros_per_order_at_p50": 202.23, "lock_wait_p50_micros": 506, "lock_wait_p95_micros": 563, "batches": 1099, "duplicates": 0, "quarantined": 0, "deadlock_retries": 0, "lock_timeout_retries": 0, "connection_retries": 0, "retries_exhausted": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true},
+    {"measurement": "batch-size", "writers": 1, "batch_size": 500, "entity_count": 1, "repetition": 1, "window_seconds": 45, "window_start_utc": "2026-09-18T22:54:33.362090Z", "window_end_utc": "2026-09-18T22:55:18.450981Z", "applied_orders": 231000, "orders_per_second": 5133.33, "batch_p50_micros": 97214, "batch_p95_micros": 103473, "micros_per_order_at_p50": 194.43, "lock_wait_p50_micros": 767, "lock_wait_p95_micros": 834, "batches": 462, "duplicates": 0, "quarantined": 0, "deadlock_retries": 0, "lock_timeout_retries": 0, "connection_retries": 0, "retries_exhausted": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true},
+    {"measurement": "batch-size", "writers": 1, "batch_size": 500, "entity_count": 1, "repetition": 2, "window_seconds": 45, "window_start_utc": "2026-09-18T22:55:39.859564Z", "window_end_utc": "2026-09-18T22:56:24.894610Z", "applied_orders": 231000, "orders_per_second": 5133.33, "batch_p50_micros": 97261, "batch_p95_micros": 101593, "micros_per_order_at_p50": 194.52, "lock_wait_p50_micros": 781, "lock_wait_p95_micros": 849, "batches": 462, "duplicates": 0, "quarantined": 0, "deadlock_retries": 0, "lock_timeout_retries": 0, "connection_retries": 0, "retries_exhausted": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true},
+    {"measurement": "batch-size", "writers": 1, "batch_size": 500, "entity_count": 1, "repetition": 3, "window_seconds": 45, "window_start_utc": "2026-09-18T22:56:48.192927Z", "window_end_utc": "2026-09-18T22:57:33.231620Z", "applied_orders": 227500, "orders_per_second": 5055.56, "batch_p50_micros": 98204, "batch_p95_micros": 103290, "micros_per_order_at_p50": 196.41, "lock_wait_p50_micros": 789, "lock_wait_p95_micros": 870, "batches": 455, "duplicates": 0, "quarantined": 0, "deadlock_retries": 0, "lock_timeout_retries": 0, "connection_retries": 0, "retries_exhausted": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true}
+  ]
+}
