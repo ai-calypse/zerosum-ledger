@@ -72,6 +72,11 @@ class AttemptEndpointsIT {
         registry.add("zs.auth.reader-token", () -> READER);
         registry.add("zs.auth.admin-token", () -> ADMIN);
         registry.add("zs.auth.writer-tokens", () -> WRITER);
+        // Pinned to an address nothing answers on. With the Compose stack up, localhost:9092 is the LIVE broker: a
+        // payment event this context emits is consumed by the running order-service and booked into the real ledger.
+        // That happened once (S09, docs/results/s09/dashboard.md); the pin makes it impossible.
+        registry.add("spring.kafka.bootstrap-servers", () -> "127.0.0.1:1");
+        registry.add("zs.policy.consumer.enabled", () -> "false");
     }
 
     @Test
