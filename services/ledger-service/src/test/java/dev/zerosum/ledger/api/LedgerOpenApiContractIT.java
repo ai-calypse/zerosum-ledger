@@ -72,6 +72,12 @@ class LedgerOpenApiContractIT extends LedgerApiTestBase {
     }
 
     @Test
+    void theAccountsSummaryResponseValidatesAgainstTheSpecification() {
+        String body = http().get().uri("/v1/accounts/summary").retrieve().body(String.class);
+        assertEquals(List.of(), errors(responseSchemaRef("/v1/accounts/summary"), body));
+    }
+
+    @Test
     void theVerifyResponseValidatesAgainstTheSpecification() {
         String body = http().post().uri("/v1/entities/{id}/verify", "platform:main").retrieve().body(String.class);
         assertEquals(List.of(), errors(postResponseSchemaRef("/v1/entities/{entity_id}/verify"), body));

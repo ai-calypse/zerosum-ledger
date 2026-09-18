@@ -144,6 +144,29 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  # decision: S09 — the operator dashboard (docs/results/s09/dashboard.md)
+  /v1/accounts/summary:
+    get:
+      operationId: getAccountsSummary
+      summary: Balances summed by account class, with per-currency totals
+      description: |
+        Requires the **reader** role. Every stored balance summed by entity kind, account and currency, read in one
+        statement so all classes describe the same snapshot. `currency_totals` is the signed sum of the classes per
+        currency, computed server-side from those same rows: zero is the global zero-sum invariant (I2) holding, and
+        the dashboard shows it rather than adding ledger figures up itself.
+
+        An aggregate beyond the int64 range fails the read rather than being reported wrapped or rounded.
+      tags: [ledger]
+      responses:
+        '200':
+          description: The account classes and their per-currency totals.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountsSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
   # decision: D04-5 — docs/step_04_kafka_pipeline.md#decisions-and-outputs
   /v1/freshness:
     get:
@@ -301,6 +324,56 @@ components:
           type: integer
           format: int64
           description: The stored signed balance, debit positive and credit negative. Returned alongside the presented value so a caller can reconcile without knowing the chart.
+
+    AccountsSummary:
+      type: object
+      additionalProperties: false
+      required: [classes, currency_totals]
+      properties:
+        classes:
+          type: array
+          items: { $ref: '#/components/schemas/AccountClass' }
+        currency_totals:
+          type: array
+          description: Signed sum of every class per currency. Zero means I2 holds for that currency.
+          items: { $ref: '#/components/schemas/CurrencyTotal' }
+
+    AccountClass:
+      type: object
+      additionalProperties: false
+      required: [entity_kind, account, currency, normal_side, accounts, signed_minor, presented_minor]
+      properties:
+        entity_kind:
+          type: string
+          enum: [rider, driver, platform, provider]
+        account: { $ref: '#/components/schemas/AccountCode' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        normal_side:
+          type: string
+          enum: [DEBIT, CREDIT]
+        accounts:
+          type: integer
+          format: int64
+          minimum: 1
+          description: How many accounts of this class exist.
+        signed_minor:
+          type: integer
+          format: int64
+          description: Sum of the stored signed balances, debit positive and credit negative.
+        presented_minor:
+          type: integer
+          format: int64
+          description: The same sum presented on the account's normal side (ADR-0003).
+
+    CurrencyTotal:
+      type: object
+      additionalProperties: false
+      required: [currency, signed_minor]
+      properties:
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        signed_minor:
+          type: integer
+          format: int64
 
     ChangelogPage:
       type: object

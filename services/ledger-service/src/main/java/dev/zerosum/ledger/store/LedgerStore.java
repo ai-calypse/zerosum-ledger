@@ -298,6 +298,27 @@ public class LedgerStore {
                 .list();
     }
 
+    /** One account class: every account of one code and currency held by entities of one kind, summed. */
+    public record AccountClassTotal(String entityKind, String accountCode, String currency, long accounts,
+            long signedMinor) {
+    }
+
+    /**
+     * Stored balances summed by entity kind, account and currency (S09 dashboard). One statement, so every class is read
+     * from the same snapshot and the classes of one currency add up to that currency's I2 total. The sum is cast back to
+     * bigint so an aggregate beyond the int64 range fails the read instead of being reported wrapped or rounded.
+     */
+    public List<AccountClassTotal> accountClassTotals() {
+        return jdbc.sql("""
+                SELECT e.kind, a.account_code, a.currency, count(*) AS accounts, sum(a.balance_minor)::bigint AS signed
+                FROM accounts a JOIN entities e ON e.entity_id = a.entity_id
+                GROUP BY e.kind, a.account_code, a.currency
+                ORDER BY a.currency, e.kind, a.account_code""")
+                .query((rs, rowNumber) -> new AccountClassTotal(rs.getString("kind"), rs.getString("account_code"),
+                        rs.getString("currency").strip(), rs.getLong("accounts"), rs.getLong("signed")))
+                .list();
+    }
+
     /** Every entity ID that has changelog rows, in lock order; used to verify I5 across the whole ledger. */
     public List<String> allEntityIds() {
         return jdbc.sql("SELECT entity_id FROM entities ORDER BY entity_id").query(String.class).list();

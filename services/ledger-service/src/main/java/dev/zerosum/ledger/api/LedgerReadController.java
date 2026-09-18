@@ -1,6 +1,9 @@
 package dev.zerosum.ledger.api;
 
 import dev.zerosum.ledger.api.LedgerReadResponses.AccountBalance;
+import dev.zerosum.ledger.api.LedgerReadResponses.AccountClass;
+import dev.zerosum.ledger.api.LedgerReadResponses.AccountsSummary;
+import dev.zerosum.ledger.api.LedgerReadResponses.CurrencyTotal;
 import dev.zerosum.ledger.api.LedgerReadResponses.Balances;
 import dev.zerosum.ledger.api.LedgerReadResponses.ChangelogPage;
 import dev.zerosum.ledger.api.LedgerReadResponses.ChangelogRow;
@@ -78,4 +81,20 @@ class LedgerReadController {
         return new ChangelogPage(id, body, next);
     }
 
+    /**
+     * Balances by account class for the S09 dashboard. The per-currency totals are summed here, server-side and exact,
+     * from the same snapshot as the classes, so the page never has to add ledger figures up in JavaScript.
+     */
+    @GetMapping("/v1/accounts/summary")
+    AccountsSummary accountsSummary(HttpServletRequest request) {
+        LedgerAuthorization.requireReader(request);
+        List<LedgerStore.AccountClassTotal> totals = store.accountClassTotals();
+        var byCurrency = new java.util.TreeMap<String, Long>();
+        totals.forEach(t -> byCurrency.merge(t.currency(), t.signedMinor(), Math::addExact));
+        return new AccountsSummary(
+                totals.stream().map(t -> new AccountClass(t.entityKind(), t.accountCode(), t.currency(),
+                        ChartOfAccounts.normalSide(t.accountCode()).name(), t.accounts(), t.signedMinor(),
+                        ChartOfAccounts.presentOnNormalSide(t.accountCode(), t.signedMinor()))).toList(),
+                byCurrency.entrySet().stream().map(e -> new CurrencyTotal(e.getKey(), e.getValue())).toList());
+    }
 }

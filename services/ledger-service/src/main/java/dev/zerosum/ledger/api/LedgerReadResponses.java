@@ -24,6 +24,20 @@ final class LedgerReadResponses {
     record AccountBalance(String account, String currency, String normalSide, long presentedMinor, long signedMinor) {
     }
 
+    /**
+     * @param classes        balances summed by entity kind, account and currency
+     * @param currencyTotals the signed sum of every class per currency, from the same snapshot: zero is I2 holding
+     */
+    record AccountsSummary(List<AccountClass> classes, List<CurrencyTotal> currencyTotals) {
+    }
+
+    record AccountClass(String entityKind, String account, String currency, String normalSide, long accounts,
+            long signedMinor, long presentedMinor) {
+    }
+
+    record CurrencyTotal(String currency, long signedMinor) {
+    }
+
     record ChangelogPage(String entityId, List<ChangelogRow> rows, Long nextAfterSeq) {
     }
 
