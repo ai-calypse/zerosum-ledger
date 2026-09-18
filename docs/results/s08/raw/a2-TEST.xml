@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.zerosum.infra.ablation.OutboxAblationE2ETest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-18T08:02:40.214Z" hostname="Mac" time="131.523">
+  <properties/>
+  <testcase name="A2 (emulated): without the outbox row, a crash between commit and publish loses committed orders" classname="dev.zerosum.infra.ablation.OutboxAblationE2ETest" time="131.518"/>
+  <system-out><![CDATA[A2 emulated (outbox rows deleted after a kill -9 between commit and publish)
+| Item | Value |
+|---|---|
+| Git commit SHA | `63a610be25ac750251403f01d2af0011310fca6b`; working tree DIRTY — 2 uncommitted file(s); this result is not reproducible from the SHA alone |
+| Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: JVM OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium), order-service image sha256:6049b4bf815a8bdadefcb9f4a050723e877d7e63dedb4cd08ac4d7d31b899fd7 |
+| Seeds | none (non-generative evidence) |
+| Hardware | Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64 |
+
+| rep | group | orders | unpublished at kill | outbox rows deleted | applied after 20 s | LOST (I6) | ledger self-check while lost | applied after restore | rider after 20 s | rider after restore | invariants after restore |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | trip_a2557bfbfd42 | 20 | 20 | 20 | 18 | 2 | consistent | 20 | 18000 | 20000 | true |
+| 2 | trip_a21486c87122 | 20 | 20 | 20 | 1 | 19 | consistent | 20 | 1000 | 20000 | true |
+| 3 | trip_a22e638e5071 | 20 | 20 | 20 | 6 | 14 | consistent | 20 | 6000 | 20000 | true |
+| 4 | trip_a24cedc03523 | 20 | 20 | 20 | 1 | 19 | consistent | 20 | 1000 | 20000 | true |
+| 5 | trip_a2351f732c02 | 20 | 20 | 20 | 7 | 13 | consistent | 20 | 7000 | 20000 | true |
+
+]]></system-out>
+  <system-err><![CDATA[SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+]]></system-err>
+</testsuite>
