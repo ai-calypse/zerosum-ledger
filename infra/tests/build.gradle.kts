@@ -13,10 +13,16 @@ dependencies {
     // decision: S09 — the e2e tests speak to the running Compose stack over HTTP. The JDK's own HttpClient does the
     // talking, so the only thing added here is a JSON reader for the responses.
     testImplementation(libs.jackson.databind)
+
+    // decision: S08 — the failure-mode tests record M13 (c) provenance with the same code the tools use.
+    testImplementation(project(":libs:evidence"))
 }
 
 tasks.withType<Test>().configureEach {
     systemProperty("zs.rootDir", rootDir.absolutePath)
+    // decision: S08 — run-size knobs for the failure-mode tests (-Dzs.volume.charges=..., -Dzs.crash.repetitions=...).
+    System.getProperties().stringPropertyNames().filter { it.startsWith("zs.") && it != "zs.rootDir" }
+        .forEach { systemProperty(it, System.getProperty(it)) }
     // Files the tests read at runtime: without these inputs Gradle would skip the tests as up-to-date
     // after an init script, image pin or migration change.
     inputs.dir(rootDir.resolve("infra/postgres")).withPathSensitivity(PathSensitivity.RELATIVE)
