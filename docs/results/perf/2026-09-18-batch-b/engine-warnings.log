@@ -1,0 +1,82 @@
+# Engine WARN lines from the run-B test JVM. Times are UTC-07:00 local; add 7 h for UTC.
+# Extracted from build/test-results/studyTest/TEST-dev.zerosum.ledger.perf.ApplyThroughputStudy.xml.
+# statement-timeout errors in the whole run: 122
+# isolations: 61, quarantines: 3
+
+00:38:50.760 [pool-7-thread-13] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:50.921 [pool-7-thread-3] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:51.015 [pool-7-thread-22] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:51.091 [pool-7-thread-25] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:51.342 [pool-7-thread-27] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:55.702 [pool-7-thread-4] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:55.820 [pool-7-thread-18] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:55.852 [pool-7-thread-15] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:56.069 [pool-7-thread-14] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:56.233 [pool-7-thread-10] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:56.365 [pool-7-thread-23] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:56.826 [pool-7-thread-19] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:57.016 [pool-7-thread-6] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:57.439 [pool-7-thread-3] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- quarantining a record after a non-transient failure: UNEXPECTED_DATABASE_ERROR
+00:38:58.021 [pool-7-thread-11] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:58.451 [pool-7-thread-1] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:38:58.560 [pool-7-thread-13] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- quarantining a record after a non-transient failure: UNEXPECTED_DATABASE_ERROR
+00:38:58.703 [pool-7-thread-20] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:07.562 [pool-8-thread-18] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:07.915 [pool-8-thread-32] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:08.288 [pool-8-thread-2] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:09.555 [pool-8-thread-12] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:10.046 [pool-8-thread-30] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:18.591 [pool-8-thread-3] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:18.651 [pool-8-thread-17] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:18.790 [pool-8-thread-13] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:18.814 [pool-8-thread-20] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:19.226 [pool-8-thread-25] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:19.545 [pool-8-thread-4] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:19.562 [pool-8-thread-32] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- quarantining a record after a non-transient failure: UNEXPECTED_DATABASE_ERROR
+00:39:19.705 [pool-8-thread-1] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:20.072 [pool-8-thread-27] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:25.796 [pool-8-thread-7] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:26.263 [pool-8-thread-21] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:26.624 [pool-8-thread-8] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:27.806 [pool-8-thread-26] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:31.095 [pool-8-thread-14] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:31.903 [pool-8-thread-28] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.045 [pool-8-thread-17] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.047 [pool-8-thread-23] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.225 [pool-8-thread-19] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.344 [pool-8-thread-29] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.433 [pool-8-thread-12] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.793 [pool-8-thread-20] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:32.964 [pool-8-thread-32] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:40.068 [pool-8-thread-24] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:40.568 [pool-8-thread-6] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:40.957 [pool-8-thread-26] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:45.318 [pool-8-thread-31] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:46.348 [pool-8-thread-10] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:39:46.560 [pool-8-thread-11] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:39.659 [pool-10-thread-29] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:39.933 [pool-10-thread-4] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.181 [pool-10-thread-3] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.463 [pool-10-thread-27] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.602 [pool-10-thread-12] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.700 [pool-10-thread-15] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.742 [pool-10-thread-31] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.784 [pool-10-thread-30] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:40:40.840 [pool-10-thread-28] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+00:42:01.647 [pool-12-thread-31] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- non-transient failure in a batch of 100; isolating records one at a time
+
+# First quarantine, with the top of its stack:
+00:38:57.439 [pool-7-thread-3] WARN dev.zerosum.ledger.apply.LedgerApplyEngine -- quarantining a record after a non-transient failure: UNEXPECTED_DATABASE_ERROR
+org.springframework.dao.QueryTimeoutException: PreparedStatementCallback; ERROR: canceling statement due to statement timeout
+	at org.springframework.jdbc.support.SQLStateSQLExceptionTranslator.doTranslate(SQLStateSQLExceptionTranslator.java:150)
+	at org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:102)
+	at org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:111)
+	at org.springframework.jdbc.core.JdbcTemplate.translateException(JdbcTemplate.java:1549)
+	at org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:689)
+	at org.springframework.jdbc.core.JdbcTemplate.query(JdbcTemplate.java:732)
+	at org.springframework.jdbc.core.JdbcTemplate.query(JdbcTemplate.java:752)
+	at org.springframework.jdbc.core.JdbcTemplate.query(JdbcTemplate.java:778)
+	at dev.zerosum.ledger.store.LedgerStore.lockEntities(LedgerStore.java:135)
+	at dev.zerosum.ledger.apply.LedgerApplyEngine$Attempt.applyOrders(LedgerApplyEngine.java:234)
+	at dev.zerosum.ledger.apply.LedgerApplyEngine$Attempt.run(LedgerApplyEngine.java:206)
+	at dev.zerosum.ledger.apply.LedgerApplyEngine.lambda$apply$0(LedgerApplyEngine.java:76)
