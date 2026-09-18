@@ -162,13 +162,17 @@ provenance block: hardware, pinned versions, the git SHA and whether the working
 # a named scenario, N seeded runs, through the real order API (needs the stack up)
 ./gradlew :tools:simulator:run --args="--scenario w1-trip-completed --runs 5 --seed 4242"
 
-# the ledger's invariants, read as the read-only `verifier` role
-./gradlew :tools:verifier:run --args="--jdbc-url jdbc:postgresql://127.0.0.1:5432/ledger --out docs/results/m13"
+# the invariants, read as the read-only `verifier` role from all four service databases
+./gradlew :tools:verifier:run --args="--jdbc-url jdbc:postgresql://127.0.0.1:5432/ledger \
+  --orders-jdbc-url jdbc:postgresql://127.0.0.1:5432/orders \
+  --instruments-jdbc-url jdbc:postgresql://127.0.0.1:5432/instruments \
+  --providers-jdbc-url jdbc:postgresql://127.0.0.1:5432/fakeproviders --out docs/results/m13"
 ```
 
 The same seed produces byte-identical orders, so re-running one is a replay rather than a duplicate. The verifier
-**exits non-zero and names the invariant** (I2, I3 or I4) when the books do not balance, and reports separately when
-it could not connect at all — "could not connect" is not evidence that the books balance.
+checks I1, I2, I3, I4, I6, I6b, I7, I10 and I12 (`--checks` narrows it); a check whose database URL is omitted is
+reported `SKIPPED`, never passed. It **exits non-zero and names the invariant** when one is violated, and reports
+separately when it could not connect at all — "could not connect" is not evidence that the books balance.
 
 ### 5. Observability
 

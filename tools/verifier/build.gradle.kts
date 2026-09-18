@@ -28,6 +28,7 @@ tasks.withType<Test>().configureEach {
     systemProperty("zs.rootDir", rootDir.absolutePath)
     inputs.dir(rootDir.resolve("infra/postgres")).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(rootDir.resolve("docker-compose.yml")).withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.files(fileTree(rootDir.resolve("services/ledger-service/src/main/resources/db/migration")))
+    // Every service's migrations: the cross-store tests migrate all four databases.
+    inputs.files(fileTree(rootDir.resolve("services")) { include("*/src/main/resources/db/migration/**") })
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
