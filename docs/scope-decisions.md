@@ -585,3 +585,32 @@ important signal — that the agent could not see a feature — is buried in noi
 fast-forward the worktree before the agent starts or state in the brief which commits it will not see. A brief that
 says "S05-T10 is merged, use it" against a tree where it does not exist wastes the agent's judgement on a false
 premise — which is exactly what happened here.
+
+## CR-S07-01 — a statement timeout while queueing for entity locks quarantined valid money (fixed)
+
+**Found:** 2026-09-18, by the S07 batch study ([batched-vs-per-order.md](results/perf/batched-vs-per-order.md)),
+not by any test. **Fixed the same day**, against D02-4.
+
+**What happened.** At 32 writers × 100-order batches, all on one hot entity, the entity-lock
+`SELECT … FOR UPDATE` (`LedgerStore.lockEntities`) exceeded the 5 s `statement_timeout` 122 times. D02-4 classifies
+`57014` as non-transient, so the engine isolated each failing batch record by record, and under the same contention
+**3 valid orders were quarantined** ([engine-warnings.log](results/perf/2026-09-18-batch-b/engine-warnings.log)).
+Nothing was lost and I2–I5 held, but quarantine means an operator must hand-replay money that was never wrong.
+
+**Why the existing guard did not catch it.** `lock_timeout` (2 s) bounds *each* lock wait, not their sum. One
+statement locking many entities can queue behind several holders in turn, each wait under 2 s, and cross 5 s in total.
+The failure then arrives as `57014`, not `55P03`, and the classifier had been told that `57014` means a runaway query.
+
+**Fix.** The engine wraps `lockEntities`: a `57014` raised there becomes `RetryClassifier.LockQueueTimeout`, which is
+transient and counted as a lock-timeout retry. Everywhere else, `57014` stays non-transient: a slow query elsewhere
+would only time out again. Exhausting the retry schedule still raises `RetriesExhaustedException`, so the record is
+redelivered, never quarantined.
+
+**Evidence.** `ApplyLockTimeoutRetryIT.aStatementTimeoutWhileQueueingForLocksIsRetriedNotQuarantined` sets the
+statement timeout (500 ms) below the lock timeout (10 s) and holds one entity lock for 1.5 s. Without the fix it fails
+with the order `QUARANTINED` / `UNEXPECTED_DATABASE_ERROR` (checked by reverting the fix and running it); with the fix
+the order is applied once and nothing is quarantined.
+
+**Exposure before the fix.** None in the deployed topology: the ledger listener is single-threaded, so there is no
+queue of writers on one entity. It would have appeared as soon as listener concurrency was raised. The batch study was
+not re-run after the fix, so its 32 × 100 figure stays marked invalid.

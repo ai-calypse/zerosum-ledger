@@ -87,7 +87,7 @@ public class LedgerApplyEngine {
                 String state = sql == null ? "" : String.valueOf(sql.getSQLState());
                 if ("40P01".equals(state)) {
                     deadlocks++;
-                } else if ("55P03".equals(state)) {
+                } else if ("55P03".equals(state) || failure instanceof RetryClassifier.LockQueueTimeout) {
                     lockTimeouts++;
                 } else {
                     connectionFailures++;
@@ -231,8 +231,19 @@ public class LedgerApplyEngine {
             // shared lock to FOR UPDATE, and two batches sharing an entity then deadlock whatever order they use.
             // Sorted locking (ADR-0005) prevents ordering cycles, never a lock-strength upgrade.
             long lockStart = System.nanoTime();
-            Map<String, EntityRow> locked = store.lockEntities(sortedEntities);
-            lockWaitNanos += System.nanoTime() - lockStart;
+            Map<String, EntityRow> locked;
+            try {
+                locked = store.lockEntities(sortedEntities);
+            } catch (RuntimeException failure) {
+                SQLException sql = classifier.rootSqlException(failure);
+                // CR-S07-01: this statement only looks up rows by primary key, so a timeout here is time spent queueing.
+                if (sql != null && RetryClassifier.STATEMENT_TIMEOUT.equals(sql.getSQLState())) {
+                    throw new RetryClassifier.LockQueueTimeout(failure);
+                }
+                throw failure;
+            } finally {
+                lockWaitNanos += System.nanoTime() - lockStart;
+            }
 
             store.provisionAccounts(List.copyOf(accountKeys), normalSides);
 

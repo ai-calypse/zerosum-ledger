@@ -20,14 +20,32 @@ public class RetryClassifier {
      * failure, lock not available (the {@code lock_timeout} expiry), and the operator-initiated disconnects
      * {@code 57P01} admin shutdown and {@code 57P03} cannot connect now. The last two are added to the master's list
      * because a terminated backend must never cause money to be quarantined; {@code 57014} query canceled (the
-     * statement timeout) stays non-transient.
+     * statement timeout) stays non-transient, except as a {@link LockQueueTimeout} (CR-S07-01).
      */
     public static final Set<String> TRANSIENT_STATES = Set.of("40P01", "40001", "55P03", "57P01", "57P03");
 
     /** decision: D02-4 — every SQLSTATE class retried in full. */
     public static final String TRANSIENT_CONNECTION_CLASS = "08";
 
+    /** decision: CR-S07-01 — {@code 57014} is transient only where the engine has proved it was a lock-queue wait. */
+    public static final String STATEMENT_TIMEOUT = "57014";
+
+    /**
+     * A statement timeout raised while queueing for entity locks (CR-S07-01). {@code lock_timeout} bounds each lock
+     * wait, not their sum: one {@code SELECT ... FOR UPDATE} over many entities can queue behind several holders in
+     * turn, each wait under {@code lock_timeout}, and cross {@code statement_timeout} in total. That is contention,
+     * the same condition as {@code 55P03}, and retrying is right; quarantining it would park valid money.
+     */
+    public static final class LockQueueTimeout extends RuntimeException {
+        public LockQueueTimeout(RuntimeException cause) {
+            super("statement timeout while waiting for entity locks", cause);
+        }
+    }
+
     public boolean isTransient(Throwable failure) {
+        if (failure instanceof LockQueueTimeout) {
+            return true;
+        }
         SQLException sqlException = rootSqlException(failure);
         if (sqlException == null) {
             return false;

@@ -76,6 +76,49 @@ class ApplyLockTimeoutRetryIT {
     }
 
     @Test
+    void aStatementTimeoutWhileQueueingForLocksIsRetriedNotQuarantined() throws Exception {
+        // CR-S07-01. Found by the S07 batch study: at 32 writers x 100-order batches, lock_timeout (per lock) never
+        // fired, but one SELECT ... FOR UPDATE queued behind several holders crossed statement_timeout (57014), and
+        // valid orders were quarantined. A statement timeout shorter than the lock timeout reproduces it with one lock.
+        String entity = "rider:RSTMT";
+        ApplyTestDriver.create(db.dataSource(LedgerTestDatabase.APP))
+                .applyOne(MoneyOrderPayloads.transfer(UUID.randomUUID(), "trip_stmt_seed",
+                        entity, "receivable", "platform:main", "revenue", "USD", 100));
+        UUID orderId = UUID.randomUUID();
+        String payload = MoneyOrderPayloads.transfer(orderId, "trip_stmt_retry",
+                entity, "receivable", "platform:main", "revenue", "USD", 250);
+        LedgerApplyProperties statementFirst = new LedgerApplyProperties(Duration.ofSeconds(10), Duration.ofMillis(500),
+                10, Duration.ofMillis(50), Duration.ofMillis(100), 1);
+
+        try (Connection blocker = db.connect(LedgerTestDatabase.APP)) {
+            blocker.setAutoCommit(false);
+            try (Statement st = blocker.createStatement()) {
+                st.execute("SELECT entity_id FROM entities WHERE entity_id = '" + entity + "' FOR UPDATE");
+            }
+            var executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<ApplyBatchResult> applying = executor.submit(() -> ApplyTestDriver
+                        .create(db.dataSource(LedgerTestDatabase.APP), statementFirst).applyOne(payload));
+                Thread.sleep(1_500);
+                blocker.commit();
+
+                ApplyBatchResult result = applying.get();
+                assertEquals(1, result.countOf(ApplyOutcome.Status.APPLIED), result.outcomes().toString());
+                assertTrue(result.lockTimeoutRetries() >= 1, "counted as a lock-timeout retry: " + result);
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        try (Connection c = db.connect(LedgerTestDatabase.VERIFIER)) {
+            assertEquals(0, LedgerQueries.count(c,
+                    "SELECT count(*) FROM quarantined_orders WHERE order_id = '" + orderId + "'"), "not quarantined");
+            assertEquals(1, LedgerQueries.count(c, "SELECT count(*) FROM applied_orders WHERE order_id = '" + orderId + "'"));
+            assertEquals(350L, LedgerQueries.balances(c).get(entity + "/receivable/USD"));
+        }
+    }
+
+    @Test
     void aLockHeldPastTheWholeScheduleRaisesTheTypedExceptionAndAppliesNothing() throws Exception {
         UUID orderId = UUID.randomUUID();
         String payload = MoneyOrderPayloads.transfer(orderId, "trip_lock_exhausted",
