@@ -130,6 +130,30 @@ class InstrumentApiException extends RuntimeException {
         return new InstrumentApiException(HttpStatus.UNPROCESSABLE_CONTENT, "unsupported_currency", detail);
     }
 
+    /** A list query the service cannot answer as asked: a limit outside 1..500, or an unknown kind (S09). */
+    static InstrumentApiException invalidQuery(String detail) {
+        return new InstrumentApiException(HttpStatus.BAD_REQUEST, "invalid_query", detail);
+    }
+
+    /**
+     * The {@code limit} of a list endpoint: absent means {@code fallback}, anything but an integer in 1..500 is refused
+     * rather than clamped, so a caller never receives a different page size from the one it believes it asked for.
+     */
+    static int requireLimit(String raw, int fallback) {
+        if (raw == null) {
+            return fallback;
+        }
+        try {
+            int limit = Integer.parseInt(raw);
+            if (limit >= 1 && limit <= 500) {
+                return limit;
+            }
+        } catch (NumberFormatException malformed) {
+            // falls through to the refusal below
+        }
+        throw invalidQuery("limit must be an integer between 1 and 500, was " + raw);
+    }
+
     static InstrumentApiException runNotFound(String runId) {
         return new InstrumentApiException(HttpStatus.NOT_FOUND, "reconciliation_run_not_found",
                 "no such reconciliation run: " + runId);

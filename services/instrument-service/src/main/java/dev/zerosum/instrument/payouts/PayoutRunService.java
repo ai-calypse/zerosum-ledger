@@ -341,6 +341,40 @@ public class PayoutRunService {
         return stored.map(Stored::asReplay);
     }
 
+    /**
+     * A stored run as the S09 dashboard lists it: outcome counts and the total of the PAID amounts, folded from the
+     * stored per-driver results rather than returning every driver.
+     */
+    public record RunListing(UUID runId, String currency, String status, String refusalCode, int attemptsCreated,
+            java.time.Instant createdAt, java.time.Instant completedAt, Map<String, Long> outcomes, long paidMinor) {
+    }
+
+    /** The newest runs first, refused ones included: a refusal is a recorded run, and the evidence of why. */
+    public List<RunListing> runs(int limit) {
+        return db.sql("""
+                SELECT run_id, currency, status, refusal_code, attempts_created, created_at, completed_at, results::text
+                  FROM payout_runs
+                 ORDER BY created_at DESC, run_id DESC
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((rs, rowNum) -> {
+                    var outcomes = new java.util.TreeMap<String, Long>();
+                    long paid = 0;
+                    for (DriverOutcome result : parseResults(rs.getString(8))) {
+                        outcomes.merge(result.outcome(), 1L, Long::sum);
+                        if (PAID.equals(result.outcome()) && result.amountMinor() != null) {
+                            paid = Math.addExact(paid, result.amountMinor());
+                        }
+                    }
+                    Timestamp completed = rs.getTimestamp(7);
+                    return new RunListing(rs.getObject(1, UUID.class), rs.getString(2).strip(), rs.getString(3),
+                            rs.getString(4), rs.getInt(5), rs.getTimestamp(6).toInstant(),
+                            completed == null ? null : completed.toInstant(), outcomes, paid);
+                })
+                .list();
+    }
+
     private record Stored(UUID runId, byte[] requestHash, String currency, String status, String refusalCode,
             int attemptsCreated, String results) {
 

@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -34,6 +35,30 @@ class AttemptController {
     /** An attempt and every status it has been through, in sequence order. */
     record AttemptDetail(AttemptQueries.Attempt attempt, List<AttemptQueries.Transition> transitions) {
     }
+
+    /** The newest attempts first, optionally of one kind (S09 dashboard). Reader role. */
+    @GetMapping("/v1/payment-attempts")
+    List<AttemptQueries.Attempt> recent(HttpServletRequest request,
+            @RequestParam(name = "kind", required = false) String kind,
+            @RequestParam(name = "limit", required = false) String limit) {
+        InstrumentAuthorization.require(request, Role.READER);
+        if (kind != null && !KINDS.contains(kind)) {
+            throw InstrumentApiException.invalidQuery("kind must be one of " + KINDS + ", was " + kind);
+        }
+        return attempts.recent(kind, InstrumentApiException.requireLimit(limit, 50));
+    }
+
+    record AttemptsSummary(List<AttemptQueries.StatusTotal> totals) {
+    }
+
+    /** How many attempts are in each status, per kind, provider and currency (S09 dashboard). Reader role. */
+    @GetMapping("/v1/payment-attempts/summary")
+    AttemptsSummary summary(HttpServletRequest request) {
+        InstrumentAuthorization.require(request, Role.READER);
+        return new AttemptsSummary(attempts.statusTotals());
+    }
+
+    private static final java.util.Set<String> KINDS = new java.util.TreeSet<>(List.of("CHARGE", "REFUND", "PAYOUT"));
 
     @GetMapping("/v1/payment-attempts/{attemptId}")
     AttemptDetail read(HttpServletRequest request, @PathVariable String attemptId) {

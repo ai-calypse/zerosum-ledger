@@ -320,6 +320,43 @@ public class ReconciliationService {
                 .list();
     }
 
+    /** A stored run as the S09 dashboard lists it, with its breaks counted by type. */
+    public record RunListing(UUID runId, String provider, LocalDate reportDate, String reportId, String status,
+            int linesMatched, int breaksFound, boolean settled, java.time.Instant createdAt,
+            Map<String, Long> breaksByType) {
+    }
+
+    /** The newest runs first. Breaks are counted with a second grouped read over just the runs returned. */
+    public List<RunListing> runs(int limit) {
+        var runs = db.sql("""
+                SELECT run_id, provider, report_date, report_id, status, lines_matched, breaks_found, settled, created_at
+                  FROM reconciliation_runs
+                 ORDER BY created_at DESC, run_id DESC
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query((rs, rowNum) -> new RunListing(rs.getObject(1, UUID.class), rs.getString(2),
+                        rs.getDate(3).toLocalDate(), rs.getString(4), rs.getString(5), rs.getInt(6), rs.getInt(7),
+                        rs.getBoolean(8), rs.getTimestamp(9).toInstant(), new java.util.TreeMap<>()))
+                .list();
+        if (runs.isEmpty()) {
+            return runs;
+        }
+        record BreakCount(UUID runId, String type, long count) {
+        }
+        var byId = new LinkedHashMap<UUID, RunListing>();
+        runs.forEach(run -> byId.put(run.runId(), run));
+        db.sql("""
+                SELECT run_id, break_type, count(*) FROM reconciliation_breaks
+                 WHERE run_id IN (:runs) GROUP BY run_id, break_type
+                """)
+                .param("runs", List.copyOf(byId.keySet()))
+                .query((rs, rowNum) -> new BreakCount(rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3)))
+                .list()
+                .forEach(count -> byId.get(count.runId()).breaksByType().put(count.type(), count.count()));
+        return runs;
+    }
+
     public boolean runExists(UUID runId) {
         return db.sql("SELECT count(*) FROM reconciliation_runs WHERE run_id = :run")
                 .param("run", runId).query(Long.class).single() > 0;

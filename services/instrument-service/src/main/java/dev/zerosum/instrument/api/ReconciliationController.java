@@ -68,6 +68,14 @@ class ReconciliationController {
                 : ResponseEntity.status(HttpStatus.CREATED).body(run);
     }
 
+    /** The newest runs first, with their breaks counted by type (S09 dashboard). Reader role. */
+    @GetMapping("/v1/reconciliation-runs")
+    List<ReconciliationService.RunListing> runs(HttpServletRequest request,
+            @RequestParam(name = "limit", required = false) String limit) {
+        InstrumentAuthorization.require(request, Role.READER);
+        return reconciliation.runs(InstrumentApiException.requireLimit(limit, 50));
+    }
+
     @GetMapping("/v1/reconciliation-runs/{runId}/breaks")
     List<ReconciliationService.BreakView> breaks(HttpServletRequest request, @PathVariable String runId,
             @RequestParam(name = "type", required = false) String type,

@@ -26,6 +26,54 @@ security:
   - bearerAuth: []
 
 paths:
+  # decision: S09 — the operator dashboard (docs/results/s09/dashboard.md)
+  /v1/payment-attempts:
+    get:
+      operationId: listRecentPaymentAttempts
+      summary: The newest attempts first
+      description: |
+        Requires the **reader** role. The same attempt document as the single read, without its history, newest
+        first. `kind` narrows the list to charges, refunds or payouts. A `limit` outside 1..500 or an unknown `kind`
+        is refused with `invalid_query` rather than clamped or ignored.
+      tags: [payment-attempts]
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [CHARGE, REFUND, PAYOUT] }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Up to `limit` attempts, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Attempt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  # decision: S09 — the operator dashboard (docs/results/s09/dashboard.md)
+  /v1/payment-attempts/summary:
+    get:
+      operationId: getPaymentAttemptsSummary
+      summary: How many attempts are in each status
+      description: |
+        Requires the **reader** role. Every attempt counted by kind, provider, status and currency, with the money
+        they carry, from one grouped statement.
+      tags: [payment-attempts]
+      responses:
+        '200':
+          description: The totals.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttemptsSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
   /v1/payment-attempts/{attempt_id}:
     get:
       operationId: getPaymentAttempt
@@ -172,6 +220,28 @@ paths:
               schema: { $ref: '#/components/schemas/Problem' }
 
   /v1/reconciliation-runs:
+    # decision: S09 — the operator dashboard (docs/results/s09/dashboard.md)
+    get:
+      operationId: listReconciliationRuns
+      summary: The newest reconciliation runs first
+      description: |
+        Requires the **reader** role. Each run with its matched lines, its breaks counted by type, and whether it
+        settled. The breaks themselves are read through `/v1/reconciliation-runs/{run_id}/breaks`.
+      tags: [reconciliation]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Up to `limit` runs, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReconciliationRunListing' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
     post:
       operationId: createReconciliationRun
       summary: Reconcile one provider's closed settlement day
@@ -229,6 +299,29 @@ paths:
               schema: { $ref: '#/components/schemas/Problem' }
 
   /v1/payout-runs:
+    # decision: S09 — the operator dashboard (docs/results/s09/dashboard.md)
+    get:
+      operationId: listPayoutRuns
+      summary: The newest payout runs first
+      description: |
+        Requires the **reader** role: listing runs moves no money. Refused runs are included, because a refusal is
+        a recorded run and the evidence of why nobody was paid. Per-driver results are folded into `outcomes` and
+        `paid_minor` rather than returned whole.
+      tags: [payouts]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Up to `limit` runs, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PayoutRunListing' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
     post:
       operationId: createPayoutRun
       summary: Pay every eligible driver what the ledger says they are owed
@@ -355,6 +448,13 @@ components:
         needs the reader role; cancelling one needs admin.
 
   parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size. Absent means 50; anything but an integer in 1..500 is refused with `invalid_query`.
+      schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+
     AttemptId:
       name: attempt_id
       in: path
@@ -648,6 +748,76 @@ components:
         attempt_id: { $ref: '#/components/schemas/NullableUuid' }
         detail: { type: [string, 'null'] }
 
+    AttemptsSummary:
+      type: object
+      additionalProperties: false
+      required: [totals]
+      properties:
+        totals:
+          type: array
+          items: { $ref: '#/components/schemas/AttemptStatusTotal' }
+
+    AttemptStatusTotal:
+      type: object
+      additionalProperties: false
+      required: [kind, provider, status, currency, attempts, amount_minor]
+      properties:
+        kind: { type: string, enum: [CHARGE, REFUND, PAYOUT] }
+        provider: { type: string }
+        status: { $ref: '#/components/schemas/AttemptStatus' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        attempts: { type: integer, format: int64, minimum: 1 }
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The sum of these attempts' positive magnitudes.
+
+    ReconciliationRunListing:
+      type: object
+      additionalProperties: false
+      required: [run_id, provider, report_date, report_id, status, lines_matched, breaks_found, settled, created_at,
+                 breaks_by_type]
+      properties:
+        run_id: { $ref: '#/components/schemas/Uuid' }
+        provider: { type: string }
+        report_date: { type: string }
+        report_id: { type: string }
+        status: { type: string, enum: [COMPLETED, FAILED_VALIDATION] }
+        lines_matched: { type: integer, minimum: 0 }
+        breaks_found: { type: integer, minimum: 0 }
+        settled: { type: boolean }
+        created_at: { type: string, description: RFC 3339 with a Z offset. }
+        breaks_by_type:
+          type: object
+          description: The run's stored breaks counted by type; empty for a clean run.
+          propertyNames: { $ref: '#/components/schemas/BreakType' }
+          additionalProperties: { type: integer, format: int64, minimum: 1 }
+
+    PayoutRunListing:
+      type: object
+      additionalProperties: false
+      required: [run_id, currency, status, attempts_created, created_at, outcomes, paid_minor]
+      properties:
+        run_id: { $ref: '#/components/schemas/Uuid' }
+        currency: { $ref: '#/components/schemas/CurrencyCode' }
+        status: { type: string, enum: [RUNNING, COMPLETED, REFUSED] }
+        refusal_code: { type: [string, 'null'] }
+        attempts_created: { type: integer, minimum: 0 }
+        created_at: { type: string, description: RFC 3339 with a Z offset. }
+        completed_at: { type: [string, 'null'] }
+        outcomes:
+          type: object
+          description: Drivers the run considered, counted by outcome.
+          propertyNames:
+            enum: [PAID, SKIPPED_IN_FLIGHT, SKIPPED_BELOW_MINIMUM, SKIPPED_NO_BALANCE, SKIPPED_NO_TOKEN]
+          additionalProperties: { type: integer, format: int64, minimum: 1 }
+        paid_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The total of the PAID drivers' amounts, as the ledger reported them when the run read them.
+
     PayoutRunRequest:
       type: object
       additionalProperties: false
@@ -747,5 +917,7 @@ components:
                  reconciliation_run_not_found,
                  # decision: D05-7, D05-11 — payout runs (S05-T10)
                  ledger_stale, payouts_disabled,
+                 # decision: S09 — the dashboard's list endpoints
+                 invalid_query,
                  unauthorized, forbidden, database_unavailable]
           description: Stable machine-readable error code; callers branch on this, never on `title`.

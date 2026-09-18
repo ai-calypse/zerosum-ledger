@@ -7,7 +7,9 @@ import dev.zerosum.money.CurrencyRules;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,6 +67,14 @@ class PayoutRunController {
         return run.replayed()
                 ? ResponseEntity.ok().header("Idempotent-Replayed", "true").body(run)
                 : ResponseEntity.status(HttpStatus.CREATED).body(run);
+    }
+
+    /** The newest runs first, refusals included, with outcome counts (S09 dashboard). Reader role: it moves nothing. */
+    @GetMapping("/v1/payout-runs")
+    java.util.List<PayoutRunService.RunListing> runs(HttpServletRequest request,
+            @RequestParam(name = "limit", required = false) String limit) {
+        InstrumentAuthorization.require(request, Role.READER);
+        return payouts.runs(InstrumentApiException.requireLimit(limit, 50));
     }
 
     private PayoutRunService.RunSummary run(PayoutRunService.Command command) {
