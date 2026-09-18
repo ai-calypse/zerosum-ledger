@@ -708,8 +708,8 @@ svg.flow text { font-family: var(--sans); fill: var(--ink-2); }
           <div>
             <div class="crumbs">Evidence · Measured results</div>
             <h1>Measured results</h1>
-            <p class="sub">Static figures from the recorded runs, not live values. Performance figures were measured on an
-              Apple M4 laptop under concurrent load.</p>
+            <p class="sub">Static figures from the recorded runs, not live values. Performance figures are medians of 3
+              windows on an Apple M4 laptop's Docker VM with nothing else running, durability on.</p>
           </div>
           <span class="stamp">measured 2026-09-18, see docs</span>
         </div>
@@ -717,37 +717,38 @@ svg.flow text { font-family: var(--sans); fill: var(--ink-2); }
           <section class="panel">
             <div class="panel-head"><h2>End-to-end order → ledger latency</h2><span class="note">at 200 orders/s</span></div>
             <div class="figs">
-              <div><div class="k">p50</div><div class="fig">44.3<small>ms</small></div></div>
-              <div><div class="k">p95</div><div class="fig">74.3<small>ms</small></div></div>
-              <div><div class="k">p99</div><div class="fig">79.4<small>ms</small></div></div>
+              <div><div class="k">p50</div><div class="fig">44.2<small>ms</small></div></div>
+              <div><div class="k">p95</div><div class="fig">72.9<small>ms</small></div></div>
+              <div><div class="k">p99</div><div class="fig">77.3<small>ms</small></div></div>
             </div>
             <div class="mrows">
-              <span>p50</span><span data-v="44.3" data-max="79.4" data-cls="c1"></span><span class="val">44.3 ms</span>
-              <span>p95</span><span data-v="74.3" data-max="79.4" data-cls="c1"></span><span class="val">74.3 ms</span>
-              <span>p99</span><span data-v="79.4" data-max="79.4" data-cls="c1"></span><span class="val">79.4 ms</span>
+              <span>p50</span><span data-v="44.2" data-max="77.3" data-cls="c1"></span><span class="val">44.2 ms</span>
+              <span>p95</span><span data-v="72.9" data-max="77.3" data-cls="c1"></span><span class="val">72.9 ms</span>
+              <span>p99</span><span data-v="77.3" data-max="77.3" data-cls="c1"></span><span class="val">77.3 ms</span>
             </div>
-            <p class="note">125,998 orders, 0 missing.</p>
+            <p class="note">Sustained 500 orders/s for 10 minutes: 300,000 orders, 0 missing, p99 76.2 ms, drained 1 s
+              after load stopped.</p>
           </section>
           <section class="panel">
             <div class="panel-head"><h2>Batched apply</h2><span class="note">one hot account</span></div>
-            <div class="figs"><div><div class="k">throughput</div><div class="fig">3,981<small>orders/s</small></div></div></div>
-            <p class="note">32 writers × 50-order batches · ~6× per-order (527 → 3,242 at 1 writer)</p>
+            <div class="figs"><div><div class="k">throughput</div><div class="fig">4,002<small>orders/s</small></div></div></div>
+            <p class="note">100-order transactions, 1 writer · 5.4× per-order (740 → 4,002)</p>
             <div class="mrows">
-              <span>per-order, 1 writer</span><span data-v="527" data-max="3242" data-cls="faint"></span><span class="val">527</span>
-              <span>batched, 1 writer</span><span data-v="3242" data-max="3242" data-cls="c2"></span><span class="val">3,242</span>
+              <span>per-order, 1 writer</span><span data-v="740" data-max="4002" data-cls="faint"></span><span class="val">740</span>
+              <span>batched, 1 writer</span><span data-v="4002" data-max="4002" data-cls="c2"></span><span class="val">4,002</span>
             </div>
           </section>
           <section class="panel">
-            <div class="panel-head"><h2>100-way entity spread</h2></div>
+            <div class="panel-head"><h2>100-way entity spread</h2><span class="note">32 writers, per-order</span></div>
             <div class="figs">
-              <div><div class="k">orders/s</div><div class="fig">707 → 1,647</div></div>
-              <div><div class="k">lock-wait p95</div><div class="fig">147 → 3<small>ms</small></div></div>
+              <div><div class="k">orders/s</div><div class="fig">568 → 1,647</div></div>
+              <div><div class="k">lock-wait p95</div><div class="fig">213 → 2.8<small>ms</small></div></div>
             </div>
             <div class="mrows">
-              <span>orders/s before</span><span data-v="707" data-max="1647" data-cls="faint"></span><span class="val">707</span>
+              <span>orders/s before</span><span data-v="568" data-max="1647" data-cls="faint"></span><span class="val">568</span>
               <span>orders/s after</span><span data-v="1647" data-max="1647" data-cls="c2"></span><span class="val">1,647</span>
-              <span>lock-wait p95 before</span><span data-v="147" data-max="147" data-cls="c3"></span><span class="val">147 ms</span>
-              <span>lock-wait p95 after</span><span data-v="3" data-max="147" data-cls="c2"></span><span class="val">3 ms</span>
+              <span>lock-wait p95 before</span><span data-v="213" data-max="213" data-cls="c3"></span><span class="val">213 ms</span>
+              <span>lock-wait p95 after</span><span data-v="2.8" data-max="213" data-cls="c2"></span><span class="val">2.8 ms</span>
             </div>
           </section>
           <section class="panel">
@@ -757,7 +758,7 @@ svg.flow text { font-family: var(--sans); fill: var(--ink-2); }
             <div class="todo"><span class="mark good"></span><div class="body"><div class="t">10,000 card charges at 20% lost responses</div>
               <div class="d">exactly one successful charge each, 1,946 timeouts matched</div></div></div>
             <div class="todo"><span class="mark good"></span><div class="body"><div class="t">Tests</div>
-              <div class="d">360 unit + 292 integration, 0 failures</div></div></div>
+              <div class="d">360 unit + 303 integration, 0 failures</div></div></div>
           </section>
         </div>
       </section>

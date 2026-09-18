@@ -58,7 +58,7 @@ All ten ADRs are Accepted. See [docs/adr/](adr/).
 Compiled from `docs/results/**`, `docs/scope-decisions.md` and test sources. **Plan text is never evidence.** A
 criterion is MET only where a named test or recorded run demonstrates it.
 
-**32 MET · 7 PARTIAL · 4 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria. One of the four NOT MET is M11(c),
+**32 MET · 8 PARTIAL · 3 NOT MET · 1 UNKNOWN**, of 44 lettered sub-criteria. One of the three NOT MET is M11(c),
 recorded as NOT RUN: neither met nor failed.
 
 S08 moved four rows on measured runs against the live stack, each recomputed from its raw data before it was
@@ -112,7 +112,7 @@ promoted while its last hop ran against a stub.
 | M13(a) One command runs a named scenario | MET | `./gradlew :tools:simulator:run --args="--scenario w1-trip-completed --runs 20 --seed 4242"` against the running stack: 20 seeded runs, 60 orders created and applied, driver balances matched, invariants consistent, **PASS**, on a clean tree ([w1-live-2026-09-18.md](results/m13/w1-live-2026-09-18.md)). The read-only verifier then checked I2–I4 over 61 applied orders: PASS ([verifier-live-2026-09-18.md](results/m13/verifier-live-2026-09-18.md)). `VerifierIT` (6) and `SimulatorStubRunTest` (6) cover the tools themselves |
 | M13(b) Ablations A1–A4 | **NOT MET** | The S08-T03 ablation switches do not exist in `services/` or `libs/`, so no ablation runs as specified. Two are **emulated** and labelled as such ([m13b-ablations.md](results/s08/m13b-ablations.md)): A2 (no outbox, by deleting the crashed orders' outbox rows) lost 67 of 100 committed orders in 5 / 5 runs, and the ledger's own `/v1/invariants` still said consistent — only the cross-database count caught it; A4 (zero-sum triggers disabled in a rolled-back transaction) accepted an order summing to +1 in 5 / 5 runs, rejected with 23514 when enabled. A1 and A3 not run |
 | M13(c) Results record hardware, versions, SHA, seeds | PARTIAL | The convention exists; SP1/SP3 and both M13 results comply. It is now *enforced by code*: `libs/evidence` captures the block — including whether the tree was dirty — and both tools write it, so it cannot be typed in stale. Still a convention, not a check: nothing fails a build for omitting it |
-| M14(a) Fresh clone → W1 in ≤ 10 min | **NOT MET** | Never timed; no timing is claimed anywhere |
+| M14(a) Fresh clone → W1 in ≤ 10 min | PARTIAL | **41.1 s** from `git clone` of the public repo to a completed W1 scenario (`make env`, `make up` until all 8 containers are healthy, one seeded run: PASS) ([fresh-clone.md](results/m14/fresh-clone.md)). **With warm caches**: Gradle compiled all 56 tasks from source, but its dependency cache, the JDK and Docker base images were already present. A cold machine was not timed, which is why this is not MET |
 | M14(b) Architecture doc, ADRs, OpenAPI | MET | This document, 10 ADRs, and **three** OpenAPI specs (`openapi/order-service.yaml`, `ledger-service.yaml`, `instrument-service.yaml`), each checked against the running service by a conformance test |
 | M14(c) Demo video | **NOT MET** | Not recorded |
 

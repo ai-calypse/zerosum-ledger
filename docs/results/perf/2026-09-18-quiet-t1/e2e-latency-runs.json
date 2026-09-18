@@ -1,0 +1,19 @@
+{
+  "study": "S07 end-to-end order-to-apply latency (P2)",
+  "run_label": "2026-09-18-quiet-t1",
+  "full_study": false,
+  "rates": "[500]",
+  "seed": -6851201051138276604,
+  "window_seconds": 600,
+  "warmup_seconds": 30,
+  "repetitions": 1,
+  "appenders": 4,
+  "postgres_image": "postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+  "kafka_image": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+  "partitions": 12,
+  "durability": "fsync on (D00-3 configuration)",
+  "clock": "both ends are PostgreSQL server timestamps from one container: outbox.created_at (orders db) and applied_orders.applied_at (ledger db)",
+  "runs": [
+    {"rate_orders_per_second": 500, "repetition": 1, "window_seconds": 600, "window_start_utc": "2026-09-18T10:18:03.790231Z", "window_end_utc": "2026-09-18T10:28:03.836932Z", "quiesced_utc": "2026-09-18T10:28:04.934106Z", "window_orders": 300000, "measured_orders": 300000, "missing_orders": 0, "appended": 300000, "late_arrivals": 226, "held_the_rate": true, "end_to_end_p50_micros": 43547, "end_to_end_p95_micros": 71604, "end_to_end_p99_micros": 76161, "outbox_stage_p50_micros": 38952, "outbox_stage_p95_micros": 66668, "outbox_stage_p99_micros": 70259, "kafka_apply_p50_micros": 4527, "kafka_apply_p95_micros": 7402, "kafka_apply_p99_micros": 9386, "apply_batches": 9710, "apply_batch_mean_micros": 13612.9, "quarantined": 0, "i2_violations": 0, "i3_violations": 0, "i4_violations": 0, "i5_violations": 0, "valid": true}
+  ]
+}

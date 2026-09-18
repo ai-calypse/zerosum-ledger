@@ -623,3 +623,7 @@ the order is applied once and nothing is quarantined.
 **Exposure before the fix.** None in the deployed topology: the ledger listener is single-threaded, so there is no
 queue of writers on one entity. It would have appeared as soon as listener concurrency was raised. The batch study was
 not re-run after the fix, so its 32 × 100 figure stays marked invalid.
+
+**Confirmed at load, 2026-09-18.** The quiet-machine re-run ([quiet-rerun.md](results/perf/quiet-rerun.md))
+ran 32 writers × 100-order batches on one entity again, with the fix in place. The same lock-queue timeouts occurred
+**12 times; every one was retried, 0 orders were quarantined**, and all three windows were valid.

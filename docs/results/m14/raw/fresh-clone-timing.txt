@@ -1,0 +1,16 @@
+T0 2026-09-18T10:06:58.3NZ clone
+SHA eb8b1636d1e0e11188d02ccfa0fd0de79dbb4131
+T1 2026-09-18T10:06:59.3NZ make env
+T2 2026-09-18T10:07:00.3NZ make up
+T3 2026-09-18T10:07:37.3NZ W1 scenario
+T4 2026-09-18T10:07:39.3NZ done (simulator exit 0)
+clone                                         1.1 s
+make env                                      0.4 s
+make up (build + start + healthy)            37.3 s
+W1 scenario                                   2.2 s
+TOTAL clone -> W1 completed                  41.1 s  (0.69 min)
+ZS-SIM ledger invariants consistent=true unresolved_quarantined=0
+ZS-SIM result PASS
+ZS-SIM wrote /private/tmp/claude-501/-Users-yakshgandhi-Documents-Development-fintech-blogs/8d2f12f4-2483-4d36-9402-1628da230ac5/scratchpad/m14a-out/w1-fresh-clone.json and /private/tmp/claude-501/-Users-yakshgandhi-Documents-Development-fintech-blogs/8d2f12f4-2483-4d36-9402-1628da230ac5/scratchpad/m14a-out/w1-fresh-clone.md
+m14a script exit=0
+containers after teardown:        0

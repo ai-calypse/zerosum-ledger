@@ -1,0 +1,19 @@
+{
+  "tool": "tools/simulator",
+  "scenario": "w1-trip-completed",
+  "scenario_description": "W1 (master §1.4): each run completes trips through the real order API. Every order is a COMMERCE `trip.completed` whose entries are a rider receivable (debit), a driver payable (credit) and platform revenue (credit), summing to zero in the run's currency.",
+  "base_seed": 4242,
+  "runs": 1,
+  "trips_per_run": 3,
+  "commission_bps": 2000,
+  "currency": "USD",
+  "started_at": "2026-09-18T10:07:38.368972Z",
+  "orders_url": "http://127.0.0.1:8081",
+  "ledger_url": "http://127.0.0.1:8082",
+  "run_results": [
+    {"run": 1, "seed": 4273, "created": 3, "replayed": 0, "applied": 3, "passed": true, "orders": [{"idempotency_key": "sim-w1-trip-completed-10b1-0", "order_id": "01a0b3fc-680c-7351-90f9-3fcdffe84ad1", "response": "created", "post_attempts": 1, "awaited_entity": "rider:R0s10b1", "expected_signed_minor": 92953, "applied": true, "observed_apply_millis": 281}, {"idempotency_key": "sim-w1-trip-completed-10b1-1", "order_id": "01a0b3fc-6957-7405-994f-2a468cb3fd3f", "response": "created", "post_attempts": 1, "awaited_entity": "rider:R1s10b1", "expected_signed_minor": 3020, "applied": true, "observed_apply_millis": 260}, {"idempotency_key": "sim-w1-trip-completed-10b1-2", "order_id": "01a0b3fc-6a62-7fd9-b930-ae9f35f225d6", "response": "created", "post_attempts": 1, "awaited_entity": "rider:R2s10b1", "expected_signed_minor": 23798, "applied": true, "observed_apply_millis": 264}], "driver_balance_checks": [{"entity_id": "driver:D0s10b1", "account": "payable", "expected_signed_minor": -95816, "ledger_signed_minor": -95816, "matches": true}]}
+  ],
+  "ledger_invariants": {"consistent":true,"i2_non_zero_currencies":[],"i3_violations":[],"i4_violations":[],"i5":{"evaluated":false,"reason":"I5 is verified per entity through POST /v1/entities/{entity_id}/verify and across the ledger by the S06 verifier; scanning every chain here would exceed the audit-read budget on a large ledger."},"unresolved_quarantined_count":0,"non_zero_clearing_balances":[]},
+  "passed": true,
+  "provenance": {"captured_at": "2026-09-18T10:07:39.408544Z", "git_sha": "eb8b1636d1e0e11188d02ccfa0fd0de79dbb4131", "working_tree": "clean (0 changes)", "versions_document": "docs/adr/0002-stack-and-pinned-versions.md", "java_runtime": "25.0.4.1+1-LTS", "hardware": "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64", "seeds": [4273], "runtime_versions": {"JVM": "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)"}}
+}

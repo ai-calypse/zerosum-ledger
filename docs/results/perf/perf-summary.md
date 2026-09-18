@@ -52,21 +52,18 @@ upper bound. A quiet-machine re-run has not been done.
 
 ## Numbers that can be quoted
 
-Each is median-of-repetitions with its scope. Each is labelled **measured under concurrent load on a shared VM — a
-conservative bound, not a clean figure**. None is a best-of.
+**Superseded by the quiet-machine re-run** ([quiet-rerun.md](quiet-rerun.md), 2026-09-18 10:07–10:56 UTC, nothing else
+on the Docker VM). Quote these; the under-load figures above stay as the record of that run. Each is a median of 3
+windows, durability on, Apple M4 laptop through Docker Desktop.
 
-1. **Order-to-balance latency p95 74 ms (p50 44 ms, p99 79 ms) at 200 orders/s**, across the real transactional outbox →
-   Kafka (12 partitions) → ledger apply path, both ends timed on one PostgreSQL clock, durability on, on an Apple M4
-   laptop's Docker VM. HTTP excluded. Windows 07:06:43–07:10:48 UTC 2026-09-18; overlapped chaos M8(b) chunk 2 — an
-   upper bound on latency.
-2. **Batching the ledger apply gives about 6× the per-order throughput on a single hot account**: 527 → 3,242 orders/s
-   at one writer with 100-order transactions (and 755 → 4,358 in an independent untimestamped run), durability on, same
-   machine. Windows 07:31:22–07:34:18 and 07:46:10–07:49:09 UTC 2026-09-18; overlapped chaos M8(b) chunks 3–5 — lower
-   bounds on throughput.
-3. **Spreading the hot account over 100 sub-accounts raises per-order throughput 2.3× (707 → 1,647 orders/s at 32
-   writers) and cuts lock-wait p95 from 147 ms to 3 ms** — a workload-level emulation of sharding, not implemented
-   sharding; durability on, same machine. Windows 07:17:02–07:19:58 and 07:23:44–07:26:42 UTC 2026-09-18; overlapped
-   chaos M8(b) chunks 2–3 — lower bounds on throughput.
+1. **Order-to-ledger latency p50 44.2 ms, p95 72.9 ms, p99 77.3 ms at 200 orders/s**, across the real transactional
+   outbox → Kafka (12 partitions) → ledger apply path, both ends on one PostgreSQL clock. HTTP excluded.
+2. **Sustained 500 orders/s for 10 minutes: 300,000 orders, 0 missing, p99 76.2 ms, drained 1 s after load stopped**
+   (T1, one 600 s window).
+3. **Batched ledger apply: 4,002 orders/s on a single hot account**, 5.4× per-order (740) at one writer, 100-order
+   transactions.
+4. **Spreading the hot account over 100 sub-accounts: 2.9× throughput (568 → 1,647 orders/s at 32 writers), lock-wait
+   p95 213 → 2.8 ms**. A workload-level emulation of sharding, not implemented sharding.
 
-**Not quotable:** "5,000 orders/s" (not reached); anything from the 2026-09-17 interrupted run on its own (no window
-times); T1 and P1 (not measured).
+**Not quotable:** "5,000 orders/s" (best 4,002, 80 % of it); P1 (not measured); anything from the 2026-09-17
+interrupted run on its own.
