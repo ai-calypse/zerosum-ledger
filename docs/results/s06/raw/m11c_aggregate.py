@@ -65,7 +65,7 @@ for i, r in enumerate(runs, 1):
 
 print('\n### Per run (verifier, cumulative over the stack at the end of the run)\n')
 row('Run', 'Final quiesce s', 'Verifier exit', 'I6 missing/extra/quarantined', 'I6b drift (minor)',
-    'I7 duplicate charges', 'I12 breaks', 'I12 explained', 'I12 unexplained', 'I12 undetected', 'Wall s (first load to verifier)')
+    'I7 duplicate charges', 'I12 breaks', 'I12 explained', 'I12 unexplained', 'I12 undetected', 'Wall s (first load to final quiesce)')
 row(*['---'] * 11)
 for i, r in enumerate(runs, 1):
     s = r['summary']
@@ -82,6 +82,30 @@ for i, r in enumerate(runs, 1):
         '%s/%s/%s' % (m('I6', 'missing_orders'), m('I6', 'extra_applied'), m('I6', 'unresolved_quarantined')),
         m('I6b', 'drift_abs_minor'), m('I7', 'duplicate_charges'), m('I12', 'breaks'), m('I12', 'explained_breaks'),
         m('I12', 'unexplained_breaks'), m('I12', 'undetected_injections'), wall)
+
+print('\n### Faults fired per cycle (FakeCard fault log, this cycle\'s seed, from profile activation)\n')
+KNOBS = ['timeout_after_commit', 'http_500', 'webhook_drop', 'webhook_duplicate', 'webhook_reorder',
+         'report_missing_line', 'report_off_by_one', 'report_duplicate_line']
+row('Run', 'Cycle', *KNOBS)
+row(*['---'] * (2 + len(KNOBS)))
+fault_totals = {k: 0 for k in KNOBS}
+for i, r in enumerate(runs, 1):
+    for c in r['summary']['cycles']:
+        row(i, c['cycle'], *[c['faults_fired'].get(k, 0) for k in KNOBS])
+        for k in KNOBS:
+            fault_totals[k] += c['faults_fired'].get(k, 0)
+row('**Total**', '', *['**%d**' % fault_totals[k] for k in KNOBS])
+
+print('\n### Verifier JSON written by each run\n')
+row('Run', 'File', 'result', 'Checks PASS', 'Checks FAIL/SKIPPED')
+row(*['---'] * 5)
+for i, r in enumerate(runs, 1):
+    name = r['_file'].replace('.json', '-verifier.json')
+    with open(os.path.join(HERE, name)) as f:
+        v = json.load(f)
+    statuses = [c['status'] for c in v['checks']]
+    row(i, name, v['result'], '%d (%s)' % (statuses.count('PASS'), ', '.join(c['id'] for c in v['checks'])),
+        len(statuses) - statuses.count('PASS'))
 
 cycles = [c for r in runs for c in r['summary']['cycles']]
 if cycles:
