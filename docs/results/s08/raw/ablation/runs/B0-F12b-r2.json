@@ -1,0 +1,186 @@
+{
+  "evidence" : "S08-M13b",
+  "label" : "B0-F12b-r2",
+  "cell" : "B0/F12b",
+  "variant" : "B0",
+  "faults" : "F12b",
+  "run" : 2,
+  "seed" : 6544003442478296884,
+  "run_id" : "b0f12br2",
+  "timing_dependent_cell" : false,
+  "switches_requested" : [ "A1", "A2", "A3", "A4", "F3" ],
+  "reset_seconds" : 17.459,
+  "switches_observed" : {
+    "ledger-service" : "ZS-CHAOS service=ledger-service active=[A1, A4]",
+    "order-service" : "ZS-CHAOS service=order-service active=[A2, A4]",
+    "instrument-service" : "ZS-CHAOS service=instrument-service active=[A3, F3]",
+    "order-service zero-sum triggers" : "ZS-CHAOS service=order-service zero-sum-triggers-enabled=false {money_order_entries_zero_sum=false, money_orders_have_entries=false}"
+  },
+  "fakecard_profile" : "{\"timeout_after_commit_rate\":0.2,\"http_500_rate\":0.05,\"webhook_duplicate_rate\":0.3,\"webhook_reorder_rate\":0.3,\"webhook_drop_rate\":0.1,\"seed\":366620468}",
+  "load" : {
+    "workload" : {
+      "trips" : 300,
+      "tripsPerSecond" : 5.0,
+      "riders" : 50,
+      "drivers" : 20,
+      "cards" : true,
+      "bugRate" : 0.01,
+      "resendRate" : 0.0,
+      "keyReuseRate" : 0.0
+    },
+    "started_at" : "2026-09-19T02:08:54.901648Z",
+    "finished_at" : "2026-09-19T02:09:54.717991Z",
+    "generation_seconds" : 59.816,
+    "counts" : {
+      "bug_orders_accepted" : 1,
+      "bug_orders_sent" : 1,
+      "created" : 300,
+      "retried_transport" : 69
+    },
+    "unexpected_statuses" : { }
+  },
+  "fault_actions" : [ {
+    "fault" : "F3",
+    "started_at" : "2026-09-19T02:09:15.223629Z",
+    "hook_fired" : true,
+    "exit_code" : 86,
+    "action" : "arm F3 hook; docker start",
+    "ended_at" : "2026-09-19T02:09:18.380344Z"
+  }, {
+    "fault" : "F1",
+    "started_at" : "2026-09-19T02:09:23.465250Z",
+    "action" : "docker kill -s KILL order-service; docker start",
+    "exit_code" : 137,
+    "ended_at" : "2026-09-19T02:09:23.698689Z"
+  }, {
+    "fault" : "F3",
+    "started_at" : "2026-09-19T02:09:39.541522Z",
+    "hook_fired" : true,
+    "exit_code" : 86,
+    "action" : "arm F3 hook; docker start",
+    "ended_at" : "2026-09-19T02:09:40.725894Z"
+  } ],
+  "fault_injections" : 3,
+  "fault_action_errors" : 0,
+  "quiesce" : {
+    "quiesced" : true,
+    "max_wait_seconds" : 300,
+    "waited_seconds" : 63.023,
+    "recovery_to_zero_lag_seconds" : 59.058,
+    "last_probe" : {
+      "orders_outbox_unpublished" : 0,
+      "instruments_outbox_unpublished" : 0,
+      "consumer_lag" : 0,
+      "attempts_not_terminal" : 0,
+      "webhooks_undelivered" : 0,
+      "orders" : 600,
+      "applied_orders" : 600
+    },
+    "stuck_attempts" : 0
+  },
+  "verifier_exit" : 1,
+  "verifier_checks" : [ {
+    "id" : "I1",
+    "what" : "every money order is zero-sum per currency",
+    "status" : "FAIL",
+    "violations" : 1,
+    "metrics" : {
+      "orders_checked" : 600,
+      "unbalanced_orders" : 1
+    },
+    "sample" : [ "01a0b76d-1cfe-749f-b38c-5809bcf19791: USD sums to -1" ]
+  }, {
+    "id" : "I2",
+    "what" : "global per-currency sum of ledger balances is 0",
+    "status" : "FAIL",
+    "violations" : 1,
+    "metrics" : {
+      "nonzero_currencies" : 1
+    },
+    "sample" : [ "USD" ]
+  }, {
+    "id" : "I3",
+    "what" : "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_mismatched" : 0,
+      "running_sum_rows_wrong" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I4",
+    "what" : "changelog seq is gapless per entity",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "entities_with_gaps" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6",
+    "what" : "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_in_store" : 600,
+      "applied_orders" : 600,
+      "missing_orders" : 0,
+      "extra_applied" : 0,
+      "unresolved_quarantined" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6b",
+    "what" : "every ledger balance = Σ entries for that account across all orders in the order store",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_compared" : 72,
+      "accounts_drifting" : 0,
+      "drift_abs_minor" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I7",
+    "what" : "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed",
+    "status" : "FAIL",
+    "violations" : 20,
+    "metrics" : {
+      "attempts" : 300,
+      "provider_success_records" : 320,
+      "duplicate_charges" : 20,
+      "duplicate_minor" : 50326,
+      "success_without_provider_record" : 0,
+      "provider_success_without_attempt" : 0,
+      "provider_success_on_failed_attempt" : 0
+    },
+    "sample" : [ "CHARGE 01a0b76c-8198-7113-8343-9dbb5701f263 succeeded 2 times", "CHARGE 01a0b76c-83ef-7c42-ad70-78b71cf5f0d3 succeeded 2 times", "CHARGE 01a0b76c-857d-7b14-b537-2d7bf1535d01 succeeded 2 times", "CHARGE 01a0b76c-87d2-7fdc-b68a-e3c8bd9b4e1f succeeded 2 times", "CHARGE 01a0b76c-8894-7793-9047-8eb65c244ebb succeeded 2 times", "CHARGE 01a0b76c-8a3a-7b4e-8069-f5175aba45a1 succeeded 2 times", "CHARGE 01a0b76c-8c82-72d2-bd0d-9003658768a9 succeeded 2 times", "CHARGE 01a0b76c-8e14-73cc-af8c-5119e1c8f385 succeeded 2 times", "CHARGE 01a0b76c-938c-770b-ae89-cffdb3467d9b succeeded 2 times", "CHARGE 01a0b76c-96b7-70bc-bc24-bd5239c7b874 succeeded 2 times" ]
+  } ],
+  "classification" : "VIOLATION",
+  "violated" : [ "I1", "I2", "I7" ],
+  "predicted_class_observed" : true,
+  "provenance" : {
+    "captured_at" : "2026-09-19T02:10:58.481328Z",
+    "git_sha" : "530037d09f58b0233f2147e5d9cfa02d06a78774",
+    "working_tree" : "clean (0 changes)",
+    "versions_document" : "docs/adr/0002-stack-and-pinned-versions.md",
+    "java_runtime" : "25.0.4.1+1-LTS",
+    "hardware" : "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64",
+    "seeds" : [ 6544003442478296884 ],
+    "runtime_versions" : {
+      "ledger-service image" : "sha256:db7f42dffb5ce65d11ad0d01f693f18b6a6e29ccd3f9003bb702b9d1d66c60ed",
+      "JVM" : "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)",
+      "fake-providers image" : "sha256:d2cc2a62e0fd91f8711757593e7d7294bbc8598e7663c9e42b2efc9965519bf3",
+      "order-service image" : "sha256:e9b834eef2d760464c46c94bd9bca94abd40e0534399a5bf2a65f837c1b003f1",
+      "instrument-service image" : "sha256:1f822a4ef644d82cdddd7222ba20bc2f25402c00259c8e5e4bb6117a9ab0e09d"
+    }
+  },
+  "wall_seconds" : 141.348,
+  "window_utc" : {
+    "start" : "2026-09-19T02:08:37.168629Z",
+    "end" : "2026-09-19T02:10:58.516726Z"
+  },
+  "grafana_url" : "http://127.0.0.1:3000/d/zs-flow?from=1789783687168&to=1789783888516",
+  "logs" : "logs/B0-F12b-r2/"
+}

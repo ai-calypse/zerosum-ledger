@@ -1,0 +1,170 @@
+{
+  "evidence" : "S08-M13b",
+  "label" : "pilot-A1-F2-r1",
+  "cell" : "A1/F2",
+  "variant" : "A1",
+  "faults" : "F2",
+  "run" : 1,
+  "seed" : 8437586174679936528,
+  "run_id" : "pilota1f2r1",
+  "timing_dependent_cell" : false,
+  "switches_requested" : [ "A1", "F2" ],
+  "reset_seconds" : 17.69,
+  "switches_observed" : {
+    "ledger-service" : "ZS-CHAOS service=ledger-service active=[A1, F2]",
+    "instrument-service" : "ZS-CHAOS service=instrument-service active=[]",
+    "order-service" : "ZS-CHAOS service=order-service active=[]",
+    "order-service zero-sum triggers" : "ZS-CHAOS service=order-service zero-sum-triggers-enabled=true {money_order_entries_zero_sum=true, money_orders_have_entries=true}"
+  },
+  "fakecard_profile" : "{\"seed\":0}",
+  "load" : {
+    "workload" : {
+      "trips" : 6000,
+      "tripsPerSecond" : 100.0,
+      "riders" : 200,
+      "drivers" : 50,
+      "cards" : false,
+      "bugRate" : 0.0,
+      "resendRate" : 0.0,
+      "keyReuseRate" : 0.0
+    },
+    "started_at" : "2026-09-19T01:04:54.245609Z",
+    "finished_at" : "2026-09-19T01:05:54.240878Z",
+    "generation_seconds" : 59.995,
+    "counts" : {
+      "created" : 6000
+    },
+    "unexpected_statuses" : { }
+  },
+  "fault_actions" : [ {
+    "fault" : "F2",
+    "started_at" : "2026-09-19T01:05:20.824094Z",
+    "action" : "arm F2 hook; docker start",
+    "exit_code" : 86,
+    "hook_fired" : true,
+    "ended_at" : "2026-09-19T01:05:21.442222Z"
+  } ],
+  "fault_injections" : 1,
+  "fault_action_errors" : 0,
+  "quiesce" : {
+    "quiesced" : true,
+    "max_wait_seconds" : 300,
+    "waited_seconds" : 17.542,
+    "recovery_to_zero_lag_seconds" : 13.618,
+    "last_probe" : {
+      "orders_outbox_unpublished" : 0,
+      "instruments_outbox_unpublished" : 0,
+      "consumer_lag" : 0,
+      "attempts_not_terminal" : 0,
+      "webhooks_undelivered" : 0,
+      "orders" : 6000,
+      "applied_orders" : 6000
+    },
+    "stuck_attempts" : 0
+  },
+  "verifier_exit" : 1,
+  "verifier_checks" : [ {
+    "id" : "I1",
+    "what" : "every money order is zero-sum per currency",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_checked" : 6000,
+      "unbalanced_orders" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I2",
+    "what" : "global per-currency sum of ledger balances is 0",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "nonzero_currencies" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I3",
+    "what" : "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_mismatched" : 0,
+      "running_sum_rows_wrong" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I4",
+    "what" : "changelog seq is gapless per entity",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "entities_with_gaps" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6",
+    "what" : "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_in_store" : 6000,
+      "applied_orders" : 6000,
+      "missing_orders" : 0,
+      "extra_applied" : 0,
+      "unresolved_quarantined" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6b",
+    "what" : "every ledger balance = Σ entries for that account across all orders in the order store",
+    "status" : "FAIL",
+    "violations" : 12,
+    "metrics" : {
+      "accounts_compared" : 251,
+      "accounts_drifting" : 12,
+      "drift_abs_minor" : 29184
+    },
+    "sample" : [ "platform:main/revenue/USD ledger=-3274027 orders=-3271111", "driver:pilota1f2r1d41/payable/USD ledger=-267029 orders=-266181", "driver:pilota1f2r1d37/payable/USD ledger=-244203 orders=-242678", "driver:pilota1f2r1d45/payable/USD ledger=-251553 orders=-247102", "driver:pilota1f2r1d44/payable/USD ledger=-231803 orders=-230009", "rider:pilota1f2r1r101/receivable/USD ledger=108468 orders=104646", "rider:pilota1f2r1r10/receivable/USD ledger=66963 orders=65904", "rider:pilota1f2r1r192/receivable/USD ledger=85362 orders=83456", "driver:pilota1f2r1d31/payable/USD ledger=-252004 orders=-248946", "rider:pilota1f2r1r40/receivable/USD ledger=80328 orders=77343" ]
+  }, {
+    "id" : "I7",
+    "what" : "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "attempts" : 0,
+      "provider_success_records" : 0,
+      "duplicate_charges" : 0,
+      "duplicate_minor" : 0,
+      "success_without_provider_record" : 0,
+      "provider_success_without_attempt" : 0,
+      "provider_success_on_failed_attempt" : 0
+    },
+    "sample" : [ ]
+  } ],
+  "classification" : "VIOLATION",
+  "violated" : [ "I6b" ],
+  "predicted_class_observed" : true,
+  "provenance" : {
+    "captured_at" : "2026-09-19T01:06:12.734820Z",
+    "git_sha" : "11dde456ce335ef0d8ac73f03634f4e535466809",
+    "working_tree" : "DIRTY — 4 uncommitted file(s); this result is not reproducible from the SHA alone",
+    "versions_document" : "docs/adr/0002-stack-and-pinned-versions.md",
+    "java_runtime" : "25.0.4.1+1-LTS",
+    "hardware" : "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64",
+    "seeds" : [ 8437586174679936528 ],
+    "runtime_versions" : {
+      "order-service image" : "sha256:95ea359f49625717e3d525bf50708db203cff1f11181ddde1a55620054b09fa8",
+      "fake-providers image" : "sha256:3aa9e122c30bef59b0f61263e99952bc685be49e51bc3ee7aa5626b756dd81a0",
+      "JVM" : "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)",
+      "ledger-service image" : "sha256:ae845a8ddb43b29ffa84cf4e00a3a6ed763adce21fc7fc592be6a04120fc6186",
+      "instrument-service image" : "sha256:d8a6efd39414c091d12e7acb9e9679ee30ec3bd586afba36a0f54d53ead7e0ac"
+    }
+  },
+  "wall_seconds" : 96.508,
+  "window_utc" : {
+    "start" : "2026-09-19T01:04:36.262165Z",
+    "end" : "2026-09-19T01:06:12.771120Z"
+  },
+  "grafana_url" : "http://127.0.0.1:3000/d/zs-flow?from=1789779846262&to=1789780002771",
+  "logs" : "logs/pilot-A1-F2-r1/"
+}

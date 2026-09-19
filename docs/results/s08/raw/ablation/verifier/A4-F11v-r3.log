@@ -1,0 +1,12 @@
+ZS-VERIFY start targets={ledger=jdbc:postgresql://127.0.0.1:5432/ledger, orders=jdbc:postgresql://127.0.0.1:5432/orders, instruments=jdbc:postgresql://127.0.0.1:5432/instruments, providers=jdbc:postgresql://127.0.0.1:5432/fakeproviders} user=verifier at=2026-09-19T02:16:31.518779Z
+ZS-VERIFY session transaction_read_only={ledger=on, orders=on, instruments=on, providers=on} server=PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+ZS-VERIFY scope entities=251 accounts=251 changelog_rows=18000 applied_orders=6000
+ZS-VERIFY I1 every money order is zero-sum per currency: VIOLATED, 64: 01a0b773-38d6-7ac1-ba7a-abf994654d20: USD sums to -1, 01a0b772-9ffc-7aa4-b908-47b9e453fdf5: USD sums to -1, 01a0b772-9c96-708b-ab3e-a4368fe3c061: USD sums to 1, 01a0b772-f68d-7310-bd82-186e172079c9: USD sums to -1, 01a0b772-b2c3-7c2b-b654-88073b181e52: USD sums to -1, 01a0b773-563d-7c8a-8308-1ee0f2c13793: USD sums to 1, 01a0b773-0fe6-7f62-826f-d5be1c6e2909: USD sums to -1, 01a0b773-3fb8-7bcf-ae81-d2a9a3b80fb3: USD sums to 1, 01a0b773-3405-7c88-b212-122584a34447: USD sums to 1, 01a0b772-dc10-7d2b-bab2-5784a3df23d2: USD sums to 1, … (54 more not listed) {orders_checked=6000, unbalanced_orders=64}
+ZS-VERIFY I2 global per-currency sum of ledger balances is 0: OK {nonzero_currencies=0}
+ZS-VERIFY I3 account balance = Σ changelog deltas, and balance_after_minor is a correct running sum: OK {accounts_mismatched=0, running_sum_rows_wrong=0}
+ZS-VERIFY I4 changelog seq is gapless per entity: OK {entities_with_gaps=0}
+ZS-VERIFY I6 order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows: OK {orders_in_store=6000, applied_orders=6000, missing_orders=0, extra_applied=0, unresolved_quarantined=0}
+ZS-VERIFY I6b every ledger balance = Σ entries for that account across all orders in the order store: OK {accounts_compared=251, accounts_drifting=0, drift_abs_minor=0}
+ZS-VERIFY I7 provider ground truth ↔ attempts: one provider success per attempt, none unclaimed: OK {attempts=0, provider_success_records=0, duplicate_charges=0, duplicate_minor=0, success_without_provider_record=0, provider_success_without_attempt=0, provider_success_on_failed_attempt=0}
+ZS-VERIFY result FAIL violated=I1
+ZS-VERIFY wrote /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier/A4-F11v-r3.json and /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier/A4-F11v-r3.md

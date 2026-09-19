@@ -1,0 +1,163 @@
+{
+  "evidence" : "S08-M13b",
+  "label" : "A3-F7-r3",
+  "cell" : "A3/F7",
+  "variant" : "A3",
+  "faults" : "F7",
+  "run" : 3,
+  "seed" : 5067699082402543764,
+  "run_id" : "a3f7r3",
+  "timing_dependent_cell" : false,
+  "switches_requested" : [ "A3" ],
+  "reset_seconds" : 22.467,
+  "switches_observed" : {
+    "ledger-service" : "ZS-CHAOS service=ledger-service active=[]",
+    "order-service" : "ZS-CHAOS service=order-service active=[]",
+    "instrument-service" : "ZS-CHAOS service=instrument-service active=[A3]",
+    "order-service zero-sum triggers" : "ZS-CHAOS service=order-service zero-sum-triggers-enabled=true {money_order_entries_zero_sum=true, money_orders_have_entries=true}"
+  },
+  "fakecard_profile" : "{\"timeout_after_commit_rate\":0.2,\"http_500_rate\":0.05,\"seed\":858601620}",
+  "load" : {
+    "workload" : {
+      "trips" : 200,
+      "tripsPerSecond" : 4.0,
+      "riders" : 50,
+      "drivers" : 20,
+      "cards" : true,
+      "bugRate" : 0.0,
+      "resendRate" : 0.0,
+      "keyReuseRate" : 0.0
+    },
+    "started_at" : "2026-09-19T02:12:41.968773Z",
+    "finished_at" : "2026-09-19T02:13:31.725734Z",
+    "generation_seconds" : 49.756,
+    "counts" : {
+      "created" : 200
+    },
+    "unexpected_statuses" : { }
+  },
+  "fault_actions" : [ ],
+  "fault_injections" : 0,
+  "fault_action_errors" : 0,
+  "quiesce" : {
+    "quiesced" : true,
+    "max_wait_seconds" : 300,
+    "waited_seconds" : 9.305,
+    "recovery_to_zero_lag_seconds" : 1.255,
+    "last_probe" : {
+      "orders_outbox_unpublished" : 0,
+      "instruments_outbox_unpublished" : 0,
+      "consumer_lag" : 0,
+      "attempts_not_terminal" : 0,
+      "webhooks_undelivered" : 0,
+      "orders" : 400,
+      "applied_orders" : 400
+    },
+    "stuck_attempts" : 0
+  },
+  "verifier_exit" : 1,
+  "verifier_checks" : [ {
+    "id" : "I1",
+    "what" : "every money order is zero-sum per currency",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_checked" : 400,
+      "unbalanced_orders" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I2",
+    "what" : "global per-currency sum of ledger balances is 0",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "nonzero_currencies" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I3",
+    "what" : "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_mismatched" : 0,
+      "running_sum_rows_wrong" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I4",
+    "what" : "changelog seq is gapless per entity",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "entities_with_gaps" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6",
+    "what" : "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_in_store" : 400,
+      "applied_orders" : 400,
+      "missing_orders" : 0,
+      "extra_applied" : 0,
+      "unresolved_quarantined" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6b",
+    "what" : "every ledger balance = Σ entries for that account across all orders in the order store",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_compared" : 72,
+      "accounts_drifting" : 0,
+      "drift_abs_minor" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I7",
+    "what" : "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed",
+    "status" : "FAIL",
+    "violations" : 27,
+    "metrics" : {
+      "attempts" : 200,
+      "provider_success_records" : 227,
+      "duplicate_charges" : 27,
+      "duplicate_minor" : 84408,
+      "success_without_provider_record" : 0,
+      "provider_success_without_attempt" : 0,
+      "provider_success_on_failed_attempt" : 0
+    },
+    "sample" : [ "CHARGE 01a0b76f-f998-7c6e-8e4c-cfc558622d12 succeeded 2 times", "CHARGE 01a0b76f-fa75-71b6-a95f-78f739994870 succeeded 2 times", "CHARGE 01a0b76f-fc72-7f94-ad03-e35ae774a06e succeeded 2 times", "CHARGE 01a0b76f-fe66-778c-9030-e2aa2ffe0f64 succeeded 2 times", "CHARGE 01a0b76f-ff3c-74a0-9309-248b3bf6c9fa succeeded 2 times", "CHARGE 01a0b770-0328-737b-8461-0fce79024993 succeeded 2 times", "CHARGE 01a0b770-090b-70b7-889f-9df4327b1a65 succeeded 2 times", "CHARGE 01a0b770-0eeb-7d0e-affa-660706e1443e succeeded 2 times", "CHARGE 01a0b770-14d1-7b61-9f88-ee54bf679476 succeeded 2 times", "CHARGE 01a0b770-1aa8-75f6-b18c-0937d92b9a84 succeeded 2 times" ]
+  } ],
+  "classification" : "VIOLATION",
+  "violated" : [ "I7" ],
+  "predicted_class_observed" : true,
+  "provenance" : {
+    "captured_at" : "2026-09-19T02:13:41.553683Z",
+    "git_sha" : "530037d09f58b0233f2147e5d9cfa02d06a78774",
+    "working_tree" : "clean (0 changes)",
+    "versions_document" : "docs/adr/0002-stack-and-pinned-versions.md",
+    "java_runtime" : "25.0.4.1+1-LTS",
+    "hardware" : "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64",
+    "seeds" : [ 5067699082402543764 ],
+    "runtime_versions" : {
+      "ledger-service image" : "sha256:db7f42dffb5ce65d11ad0d01f693f18b6a6e29ccd3f9003bb702b9d1d66c60ed",
+      "JVM" : "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)",
+      "fake-providers image" : "sha256:d2cc2a62e0fd91f8711757593e7d7294bbc8598e7663c9e42b2efc9965519bf3",
+      "order-service image" : "sha256:e9b834eef2d760464c46c94bd9bca94abd40e0534399a5bf2a65f837c1b003f1",
+      "instrument-service image" : "sha256:1f822a4ef644d82cdddd7222ba20bc2f25402c00259c8e5e4bb6117a9ab0e09d"
+    }
+  },
+  "wall_seconds" : 82.285,
+  "window_utc" : {
+    "start" : "2026-09-19T02:12:19.304306Z",
+    "end" : "2026-09-19T02:13:41.590127Z"
+  },
+  "grafana_url" : "http://127.0.0.1:3000/d/zs-flow?from=1789783909304&to=1789784051590",
+  "logs" : "logs/A3-F7-r3/"
+}

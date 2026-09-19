@@ -1,0 +1,23 @@
+{
+  "tool": "tools/verifier",
+  "label": "B0-F12b-r2",
+  "started_at": "2026-09-19T02:10:58.205518Z",
+  "jdbc_url": "jdbc:postgresql://127.0.0.1:5432/ledger",
+  "targets": {"ledger": "jdbc:postgresql://127.0.0.1:5432/ledger", "orders": "jdbc:postgresql://127.0.0.1:5432/orders", "instruments": "jdbc:postgresql://127.0.0.1:5432/instruments", "providers": "jdbc:postgresql://127.0.0.1:5432/fakeproviders"},
+  "connected_as": "verifier",
+  "session_transaction_read_only": "on",
+  "sessions_transaction_read_only": {"ledger": "on", "orders": "on", "instruments": "on", "providers": "on"},
+  "scope": {"entities": 72, "accounts": 72, "changelog_rows": 1500, "applied_orders": 600, "empty": false},
+  "checks": [
+    {"id": "I1", "what": "every money order is zero-sum per currency", "status": "FAIL", "violations": 1, "metrics": {"orders_checked": 600, "unbalanced_orders": 1}, "sample": ["01a0b76d-1cfe-749f-b38c-5809bcf19791: USD sums to -1"]},
+    {"id": "I2", "what": "global per-currency sum of ledger balances is 0", "status": "FAIL", "violations": 1, "metrics": {"nonzero_currencies": 1}, "sample": ["USD"]},
+    {"id": "I3", "what": "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum", "status": "PASS", "violations": 0, "metrics": {"accounts_mismatched": 0, "running_sum_rows_wrong": 0}, "sample": []},
+    {"id": "I4", "what": "changelog seq is gapless per entity", "status": "PASS", "violations": 0, "metrics": {"entities_with_gaps": 0}, "sample": []},
+    {"id": "I6", "what": "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows", "status": "PASS", "violations": 0, "metrics": {"orders_in_store": 600, "applied_orders": 600, "missing_orders": 0, "extra_applied": 0, "unresolved_quarantined": 0}, "sample": []},
+    {"id": "I6b", "what": "every ledger balance = Σ entries for that account across all orders in the order store", "status": "PASS", "violations": 0, "metrics": {"accounts_compared": 72, "accounts_drifting": 0, "drift_abs_minor": 0}, "sample": []},
+    {"id": "I7", "what": "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed", "status": "FAIL", "violations": 20, "metrics": {"attempts": 300, "provider_success_records": 320, "duplicate_charges": 20, "duplicate_minor": 50326, "success_without_provider_record": 0, "provider_success_without_attempt": 0, "provider_success_on_failed_attempt": 0}, "sample": ["CHARGE 01a0b76c-8198-7113-8343-9dbb5701f263 succeeded 2 times", "CHARGE 01a0b76c-83ef-7c42-ad70-78b71cf5f0d3 succeeded 2 times", "CHARGE 01a0b76c-857d-7b14-b537-2d7bf1535d01 succeeded 2 times", "CHARGE 01a0b76c-87d2-7fdc-b68a-e3c8bd9b4e1f succeeded 2 times", "CHARGE 01a0b76c-8894-7793-9047-8eb65c244ebb succeeded 2 times", "CHARGE 01a0b76c-8a3a-7b4e-8069-f5175aba45a1 succeeded 2 times", "CHARGE 01a0b76c-8c82-72d2-bd0d-9003658768a9 succeeded 2 times", "CHARGE 01a0b76c-8e14-73cc-af8c-5119e1c8f385 succeeded 2 times", "CHARGE 01a0b76c-938c-770b-ae89-cffdb3467d9b succeeded 2 times", "CHARGE 01a0b76c-96b7-70bc-bc24-bd5239c7b874 succeeded 2 times"]}
+  ],
+  "result": "FAIL",
+  "passed": false,
+  "provenance": {"captured_at": "2026-09-19T02:10:58.370601Z", "git_sha": "530037d09f58b0233f2147e5d9cfa02d06a78774", "working_tree": "clean (0 changes)", "versions_document": "docs/adr/0002-stack-and-pinned-versions.md", "java_runtime": "26.0.1+8-34", "hardware": "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64", "seeds": [], "runtime_versions": {"JVM": "Java HotSpot(TM) 64-Bit Server VM 26.0.1 (Oracle Corporation)", "PostgreSQL": "PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"}}
+}

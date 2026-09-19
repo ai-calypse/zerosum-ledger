@@ -1,0 +1,12 @@
+ZS-VERIFY start targets={ledger=jdbc:postgresql://127.0.0.1:5432/ledger, orders=jdbc:postgresql://127.0.0.1:5432/orders, instruments=jdbc:postgresql://127.0.0.1:5432/instruments, providers=jdbc:postgresql://127.0.0.1:5432/fakeproviders} user=verifier at=2026-09-19T01:36:21.506855Z
+ZS-VERIFY session transaction_read_only={ledger=on, orders=on, instruments=on, providers=on} server=PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+ZS-VERIFY scope entities=72 accounts=72 changelog_rows=1000 applied_orders=400
+ZS-VERIFY I1 every money order is zero-sum per currency: OK {orders_checked=400, unbalanced_orders=0}
+ZS-VERIFY I2 global per-currency sum of ledger balances is 0: OK {nonzero_currencies=0}
+ZS-VERIFY I3 account balance = Σ changelog deltas, and balance_after_minor is a correct running sum: OK {accounts_mismatched=0, running_sum_rows_wrong=0}
+ZS-VERIFY I4 changelog seq is gapless per entity: OK {entities_with_gaps=0}
+ZS-VERIFY I6 order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows: OK {orders_in_store=400, applied_orders=400, missing_orders=0, extra_applied=0, unresolved_quarantined=0}
+ZS-VERIFY I6b every ledger balance = Σ entries for that account across all orders in the order store: OK {accounts_compared=72, accounts_drifting=0, drift_abs_minor=0}
+ZS-VERIFY I7 provider ground truth ↔ attempts: one provider success per attempt, none unclaimed: OK {attempts=200, provider_success_records=200, duplicate_charges=0, duplicate_minor=0, success_without_provider_record=0, provider_success_without_attempt=0, provider_success_on_failed_attempt=0}
+ZS-VERIFY result PASS
+ZS-VERIFY wrote /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier/A5-F8c-r2.json and /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier/A5-F8c-r2.md

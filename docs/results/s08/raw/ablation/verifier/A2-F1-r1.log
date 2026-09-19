@@ -1,0 +1,12 @@
+ZS-VERIFY start targets={ledger=jdbc:postgresql://127.0.0.1:5432/ledger, orders=jdbc:postgresql://127.0.0.1:5432/orders, instruments=jdbc:postgresql://127.0.0.1:5432/instruments, providers=jdbc:postgresql://127.0.0.1:5432/fakeproviders} user=verifier at=2026-09-19T01:11:24.130614Z
+ZS-VERIFY session transaction_read_only={ledger=on, orders=on, instruments=on, providers=on} server=PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+ZS-VERIFY scope entities=251 accounts=251 changelog_rows=26994 applied_orders=8998
+ZS-VERIFY I1 every money order is zero-sum per currency: OK {orders_checked=9000, unbalanced_orders=0}
+ZS-VERIFY I2 global per-currency sum of ledger balances is 0: OK {nonzero_currencies=0}
+ZS-VERIFY I3 account balance = Σ changelog deltas, and balance_after_minor is a correct running sum: OK {accounts_mismatched=0, running_sum_rows_wrong=0}
+ZS-VERIFY I4 changelog seq is gapless per entity: OK {entities_with_gaps=0}
+ZS-VERIFY I6 order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows: VIOLATED, 2: not applied: 01a0b736-5fb9-7169-92a3-cb0d5b196e37, not applied: 01a0b736-bf95-7928-9554-75a0d56d64c1 {orders_in_store=9000, applied_orders=8998, missing_orders=2, extra_applied=0, unresolved_quarantined=0}
+ZS-VERIFY I6b every ledger balance = Σ entries for that account across all orders in the order store: VIOLATED, 5: driver:a2f1r1d0/payable/USD ledger=-319072 orders=-321733, rider:a2f1r1r34/receivable/USD ledger=130799 orders=134125, rider:a2f1r1r168/receivable/USD ledger=144484 orders=145394, driver:a2f1r1d3/payable/USD ledger=-433574 orders=-434302, platform:main/revenue/USD ledger=-4968190 orders=-4969037 {accounts_compared=251, accounts_drifting=5, drift_abs_minor=8472}
+ZS-VERIFY I7 provider ground truth ↔ attempts: one provider success per attempt, none unclaimed: OK {attempts=0, provider_success_records=0, duplicate_charges=0, duplicate_minor=0, success_without_provider_record=0, provider_success_without_attempt=0, provider_success_on_failed_attempt=0}
+ZS-VERIFY result FAIL violated=I6,I6b
+ZS-VERIFY wrote /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier/A2-F1-r1.json and /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier/A2-F1-r1.md
