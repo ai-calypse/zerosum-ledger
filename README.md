@@ -16,20 +16,23 @@ recorded in [perf-summary.md](docs/results/perf/perf-summary.md)).
 
 | What | Result | Evidence |
 |---|---|---|
+| API acknowledgement, `POST /v1/money-orders` (k6, constant arrival rate) | **p50 0.94 ms · p95 1.63 ms · p99 2.70 ms at 200 req/s** (gate: p95 ≤ 30 ms); clean to 1,000 req/s (p99 13 ms); 678,829 requests up to 2,000 req/s, every one 201 | [p1-api-ack.md](docs/results/perf/p1-api-ack.md) |
 | Order-to-ledger latency at 200 orders/s | **p50 44 ms · p95 73 ms · p99 77 ms**; 36,000 orders over 3 windows, 0 missing | [quiet-rerun.md](docs/results/perf/quiet-rerun.md) |
 | Sustained load: 500 orders/s for 10 minutes | **300,000 orders, 0 missing**, p99 76 ms, fully drained 1 s after load stopped | [quiet-rerun.md](docs/results/perf/quiet-rerun.md) |
-| Ledger throughput, one hot account, batched apply | **4,002 orders/s** (100-order transactions); **5.4×** per-order (740) | [quiet-rerun.md](docs/results/perf/quiet-rerun.md) |
+| Ledger throughput, batched apply | **5,133 orders/s on one hot account** (500-order transactions); **5,671** with 8 writers × 100-order batches over 100 sub-accounts; 100-order batches 5.4× per-order (740 → 4,002) | [five-thousand.md](docs/results/perf/five-thousand.md) |
 | Hot account spread over 100 sub-accounts | **2.9×** throughput (568 → 1,647 orders/s at 32 writers), lock-wait p95 **213 → 2.8 ms** | [quiet-rerun.md](docs/results/perf/quiet-rerun.md) |
 | `kill -9` of order-service between commit and publish | **100 / 100** orders published after restart and applied **exactly once**, though 1–4 duplicates per run really reached Kafka; last publish ≤ 148 ms after the app started (bound: 5 s) | [m4a-crash-recovery.md](docs/results/s08/m4a-crash-recovery.md) |
 | 10,000 card charges with 20 % of provider responses lost after commit | **Exactly one** successful charge for every one of 10,000 attempts; all **1,946** injected timeouts traced one-to-one to a lost response; 0 stray charges | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
 | The same, with every provider webhook dropped | 229 of 1,000 attempts went `UNKNOWN`; the resolver settled all 229, one charge each; the slowest was settled 196.6 s after submission (limit: 5 min in `UNKNOWN`) | [m8b-card-timeout-volume.md](docs/results/s08/m8b-card-timeout-volume.md) |
 | Reconciliation against the running FakeCard | 20 / 20 report lines matched, the settlement followed into the ledger, provider clearing back to exactly 0; with report corruption injected, 8 typed breaks and the 146 residual **flagged, not adjusted away** | [reconciliation-live.md](docs/results/s06/reconciliation-live.md) |
-| A defect found by measuring, then fixed | Under hot-account contention, valid orders were quarantined instead of retried. Root-caused, fixed, with a regression test proven to fail without the fix | [CR-S07-01](docs/scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed) |
+| Reconciliation under chaos, 2 settlement cycles × 5 runs | **405 of 405 breaks explained** by the injected fault log, **0 unexplained**, 0 duplicate charges, with provider faults, webhook chaos and `kill -9` of two services every cycle | [m11c-recon-under-chaos.md](docs/results/s06/m11c-recon-under-chaos.md) |
+| Fresh clone → running system, nothing cached | **4.83 minutes** from `git clone` to a completed seeded scenario, downloading 7.3 GB (Gradle, JDK, images) | [fresh-clone.md](docs/results/m14/fresh-clone.md) |
+| Defects found by measuring, then fixed | Valid orders quarantined under hot-account contention ([CR-S07-01](docs/scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed)); order-service killed for memory at 1,000 req/s (fixed by sizing Tomcat threads to the connection pool and bounding malloc arenas: [p1-api-ack.md](docs/results/perf/p1-api-ack.md)). Each fix re-measured | [scope-decisions.md](docs/scope-decisions.md) |
 | Test suite, force-executed 2026-09-18 | **360 unit + 303 integration** (real PostgreSQL and Kafka via Testcontainers), **0 failures**, 1 deliberate skip; plus end-to-end and chaos layers run against the live stack | [architecture.md](docs/architecture.md#what-the-tests-actually-cover) |
 
-Latency covers the outbox → Kafka (12 partitions) → ledger path, timed at both ends on one PostgreSQL clock, and
-excludes the HTTP layer. The "5,000 orders/s batched" design estimate was **not** reached (best: 80 % of it). [perf-summary.md](docs/results/perf/perf-summary.md) lists every
-figure that can be quoted, and every one that cannot.
+Order-to-ledger latency covers the outbox → Kafka (12 partitions) → ledger path, timed at both ends on one PostgreSQL
+clock; API acknowledgement is the HTTP layer, timed by the client. [perf-summary.md](docs/results/perf/perf-summary.md)
+lists every figure that can be quoted, and every one that cannot.
 
 ## Operator dashboard
 
@@ -93,11 +96,11 @@ Kept explicit on purpose. [docs/scope-decisions.md](docs/scope-decisions.md) rec
   reconciliation and the seeded W1 scenario were all exercised against the running stack. But the reconciliation runs
   close their day by backdating that run's own rows, as the integration tests do, rather than waiting for a real
   UTC midnight.
-- **Performance gaps.** Client-observed API latency (P1) was not measured, and everything ran on one laptop: one
-  database server, one broker, one relay.
+- **One laptop.** Every figure is from one machine: one database server, one broker, one relay, client and server
+  sharing the CPUs. On Docker Desktop, `fsync` may be acknowledged from the host's cache, which flatters commit time
+  compared with a dedicated server.
 - **Open acceptance criteria** are listed in [docs/architecture.md](docs/architecture.md#acceptance-criteria-m1m14) as NOT MET or
-  PARTIAL, each with the reason. They include reordered webhook delivery at volume, reconciliation under chaos, a
-  cold-cache fresh-clone timing, and a demo video.
+  PARTIAL, each with the reason. They include reordered webhook delivery at volume and a demo video.
 
 ## Quickstart
 

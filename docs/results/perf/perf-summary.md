@@ -60,10 +60,16 @@ windows, durability on, Apple M4 laptop through Docker Desktop.
    outbox → Kafka (12 partitions) → ledger apply path, both ends on one PostgreSQL clock. HTTP excluded.
 2. **Sustained 500 orders/s for 10 minutes: 300,000 orders, 0 missing, p99 76.2 ms, drained 1 s after load stopped**
    (T1, one 600 s window).
-3. **Batched ledger apply: 4,002 orders/s on a single hot account**, 5.4× per-order (740) at one writer, 100-order
-   transactions.
+3. **Batched ledger apply: 5,133 orders/s on a single hot account** with 500-order transactions, and **5,671 orders/s**
+   with 8 writers × 100-order batches over 100 platform entities ([five-thousand.md](five-thousand.md)); 100-order
+   transactions give 4,002, 5.4× per-order (740).
 4. **Spreading the hot account over 100 sub-accounts: 2.9× throughput (568 → 1,647 orders/s at 32 writers), lock-wait
    p95 213 → 2.8 ms**. A workload-level emulation of sharding, not implemented sharding.
 
-**Not quotable:** "5,000 orders/s" (best 4,002, 80 % of it); P1 (not measured); anything from the 2026-09-17
-interrupted run on its own.
+5. **API acknowledgement (P1): p50 0.94 ms, p95 1.63 ms, p99 2.70 ms at 200 requests/s**, client-observed with k6's
+   constant-arrival-rate executor on the Compose network; clean to 1,000 requests/s (p99 13 ms), saturated at 2,000
+   ([p1-api-ack.md](p1-api-ack.md)).
+
+**Not quotable:** the "100 orders per 20 ms" mechanism behind the 5,000 estimate (a 100-order transaction takes about
+25 ms); anything from the 2026-09-17 interrupted run on its own; anything from P1 ladder 1 at 1,000 or 2,000 requests/s
+(taken before the memory fix).
