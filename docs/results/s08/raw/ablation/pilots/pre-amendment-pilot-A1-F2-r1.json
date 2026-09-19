@@ -1,0 +1,164 @@
+{
+  "evidence" : "S08-M13b",
+  "label" : "pilot-A1-F2-r1",
+  "cell" : "A1/F2",
+  "variant" : "A1",
+  "faults" : "F2",
+  "run" : 1,
+  "seed" : 8437586174679936528,
+  "run_id" : "pilota1f2r1",
+  "timing_dependent_cell" : false,
+  "switches_requested" : [ "A1", "F2" ],
+  "reset_seconds" : 22.894,
+  "switches_observed" : {
+    "ledger-service" : "ZS-CHAOS service=ledger-service active=[A1, F2]",
+    "instrument-service" : "ZS-CHAOS service=instrument-service active=[]",
+    "order-service" : "ZS-CHAOS service=order-service active=[]",
+    "order-service zero-sum triggers" : "ZS-CHAOS service=order-service zero-sum-triggers-enabled=true {money_order_entries_zero_sum=true, money_orders_have_entries=true}"
+  },
+  "fakecard_profile" : "{\"seed\":0}",
+  "load" : {
+    "workload" : {
+      "trips" : 6000,
+      "tripsPerSecond" : 100.0,
+      "riders" : 200,
+      "drivers" : 50,
+      "cards" : false,
+      "bugRate" : 0.0,
+      "resendRate" : 0.0,
+      "keyReuseRate" : 0.0
+    },
+    "started_at" : "2026-09-19T00:24:53.415198Z",
+    "finished_at" : "2026-09-19T00:25:53.410338Z",
+    "generation_seconds" : 59.995,
+    "counts" : {
+      "created" : 6000
+    },
+    "unexpected_statuses" : { }
+  },
+  "fault_actions" : [ {
+    "fault" : "F2",
+    "started_at" : "2026-09-19T00:25:19.888338Z",
+    "exit_code" : 86,
+    "hook_fired" : true,
+    "action" : "arm F2 hook; docker start",
+    "ended_at" : "2026-09-19T00:25:20.498681Z"
+  } ],
+  "fault_injections" : 1,
+  "fault_action_errors" : 0,
+  "quiesce" : {
+    "quiesced" : true,
+    "max_wait_seconds" : 300,
+    "waited_seconds" : 17.721,
+    "recovery_to_zero_lag_seconds" : 13.718,
+    "last_probe" : {
+      "orders_outbox_unpublished" : 0,
+      "instruments_outbox_unpublished" : 0,
+      "consumer_lag" : 0,
+      "attempts_not_terminal" : 0,
+      "webhooks_undelivered" : 0,
+      "orders" : 6000,
+      "applied_orders" : 6000
+    },
+    "stuck_attempts" : 0
+  },
+  "verifier_exit" : 1,
+  "verifier_checks" : [ {
+    "id" : "I1",
+    "what" : "every money order is zero-sum per currency",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_checked" : 6000,
+      "unbalanced_orders" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I2",
+    "what" : "global per-currency sum of ledger balances is 0",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "nonzero_currencies" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I3",
+    "what" : "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_mismatched" : 0,
+      "running_sum_rows_wrong" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I4",
+    "what" : "changelog seq is gapless per entity",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "entities_with_gaps" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6",
+    "what" : "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_in_store" : 6000,
+      "applied_orders" : 6000,
+      "missing_orders" : 0,
+      "extra_applied" : 0,
+      "unresolved_quarantined" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6b",
+    "what" : "every ledger balance = Σ entries for that account across all orders in the order store",
+    "status" : "FAIL",
+    "violations" : 13,
+    "metrics" : {
+      "accounts_compared" : 251,
+      "accounts_drifting" : 13,
+      "drift_abs_minor" : 24484
+    },
+    "sample" : [ "platform:main/revenue/USD ledger=-3273557 orders=-3271111", "driver:pilota1f2r1d45/payable/USD ledger=-247858 orders=-247102", "rider:pilota1f2r1r42/receivable/USD ledger=96167 orders=94802", "driver:pilota1f2r1d33/payable/USD ledger=-291119 orders=-289243", "rider:pilota1f2r1r149/receivable/USD ledger=110363 orders=108900", "rider:pilota1f2r1r137/receivable/USD ledger=83132 orders=80788", "rider:pilota1f2r1r125/receivable/USD ledger=119599 orders=117333", "rider:pilota1f2r1r56/receivable/USD ledger=70009 orders=66150", "driver:pilota1f2r1d20/payable/USD ledger=-261158 orders=-260066", "driver:pilota1f2r1d49/payable/USD ledger=-337666 orders=-334578" ]
+  }, {
+    "id" : "I7",
+    "what" : "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "attempts" : 0,
+      "provider_success_records" : 0,
+      "duplicate_charges" : 0,
+      "duplicate_minor" : 0,
+      "success_without_provider_record" : 0,
+      "provider_success_without_attempt" : 0,
+      "provider_success_on_failed_attempt" : 0
+    },
+    "sample" : [ ]
+  } ],
+  "classification" : "VIOLATION",
+  "violated" : [ "I6b" ],
+  "predicted_class_observed" : true,
+  "provenance" : {
+    "captured_at" : "2026-09-19T00:26:11.872147Z",
+    "git_sha" : "eb9da116a52551ee8bb6ffd1082641b85c68f370",
+    "working_tree" : "clean (0 changes)",
+    "versions_document" : "docs/adr/0002-stack-and-pinned-versions.md",
+    "java_runtime" : "25.0.4.1+1-LTS",
+    "hardware" : "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64",
+    "seeds" : [ 8437586174679936528 ],
+    "runtime_versions" : {
+      "ledger-service image" : "sha256:7284cc0e431a1b4247cc63a76b5f74cf5645a4e9b2716fdbfda412fe1bcf1bac",
+      "instrument-service image" : "sha256:1c7e88821bf721948694563035356738b36fd461f42d42431b523caf6d158fb6",
+      "order-service image" : "sha256:5fbab14236ea1687b3a0a076d910314500977178b3e5c8c3f572d4ec99e02303",
+      "fake-providers image" : "sha256:988d67ef2201c5c5deaf44ad40c1bd8bd383aa193138e9115645a9852ee76956",
+      "JVM" : "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)"
+    }
+  },
+  "wall_seconds" : 101.532
+}
