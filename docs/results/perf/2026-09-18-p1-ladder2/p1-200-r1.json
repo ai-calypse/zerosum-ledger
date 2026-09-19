@@ -1,0 +1,222 @@
+{
+ "options": {
+  "summaryTrendStats": [
+   "min",
+   "med",
+   "avg",
+   "p(90)",
+   "p(95)",
+   "p(99)",
+   "max"
+  ],
+  "summaryTimeUnit": "",
+  "noColor": false
+ },
+ "state": {
+  "isStdOutTTY": false,
+  "isStdErrTTY": false,
+  "testRunDurationMs": 60001.707083
+ },
+ "metrics": {
+  "iterations": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 12001,
+    "rate": 200.0109760777154
+   }
+  },
+  "http_req_failed": {
+   "contains": "default",
+   "values": {
+    "fails": 12001,
+    "rate": 0,
+    "passes": 0
+   },
+   "type": "rate"
+  },
+  "http_req_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0.503208,
+    "med": 0.912292,
+    "avg": 1.0111543601366506,
+    "p(90)": 1.341583,
+    "p(95)": 1.633,
+    "p(99)": 2.615083,
+    "max": 20.098292
+   }
+  },
+  "http_req_tls_handshaking": {
+   "contains": "time",
+   "values": {
+    "p(99)": 0,
+    "max": 0,
+    "min": 0,
+    "med": 0,
+    "avg": 0,
+    "p(90)": 0,
+    "p(95)": 0
+   },
+   "type": "trend"
+  },
+  "http_req_blocked": {
+   "values": {
+    "p(90)": 0.002541,
+    "p(95)": 0.0035,
+    "p(99)": 0.094209,
+    "max": 1.230542,
+    "min": 0.000666,
+    "med": 0.0015,
+    "avg": 0.0036212971419047352
+   },
+   "type": "trend",
+   "contains": "time"
+  },
+  "http_req_connecting": {
+   "contains": "time",
+   "values": {
+    "min": 0,
+    "med": 0,
+    "avg": 0.0012898960086659447,
+    "p(90)": 0,
+    "p(95)": 0,
+    "p(99)": 0.06825,
+    "max": 1.164541
+   },
+   "type": "trend"
+  },
+  "http_req_sending": {
+   "values": {
+    "p(90)": 0.01525,
+    "p(95)": 0.020417,
+    "p(99)": 0.032542,
+    "max": 0.350042,
+    "min": 0.002709,
+    "med": 0.010208,
+    "avg": 0.011455657111907346
+   },
+   "type": "trend",
+   "contains": "time"
+  },
+  "http_req_waiting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0.487834,
+    "med": 0.885083,
+    "avg": 0.9810977616865252,
+    "p(90)": 1.3005,
+    "p(95)": 1.577792,
+    "p(99)": 2.524292,
+    "max": 20.004042
+   }
+  },
+  "data_received": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "count": 9291117,
+    "rate": 154847.54437315682
+   }
+  },
+  "http_req_duration{expected_response:true}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(90)": 1.341583,
+    "p(95)": 1.633,
+    "p(99)": 2.615083,
+    "max": 20.098292,
+    "min": 0.503208,
+    "med": 0.912292,
+    "avg": 1.0111543601366506
+   }
+  },
+  "data_sent": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "count": 8965315,
+    "rate": 149417.665527388
+   }
+  },
+  "vus": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "value": 1,
+    "min": 0,
+    "max": 1
+   }
+  },
+  "http_reqs": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 12001,
+    "rate": 200.0109760777154
+   }
+  },
+  "vus_max": {
+   "contains": "default",
+   "values": {
+    "value": 50,
+    "min": 50,
+    "max": 50
+   },
+   "type": "gauge"
+  },
+  "http_req_receiving": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 0.018600941338221884,
+    "p(90)": 0.027542,
+    "p(95)": 0.038709,
+    "p(99)": 0.06275,
+    "max": 0.457917,
+    "min": 0.004458,
+    "med": 0.015625
+   }
+  },
+  "checks": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "passes": 12001,
+    "fails": 0,
+    "rate": 1
+   }
+  },
+  "iteration_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(90)": 1.446834,
+    "p(95)": 1.760625,
+    "p(99)": 2.828334,
+    "max": 20.402125,
+    "min": 0.545334,
+    "med": 0.9935,
+    "avg": 1.097654337055241
+   }
+  }
+ },
+ "root_group": {
+  "name": "",
+  "path": "",
+  "id": "d41d8cd98f00b204e9800998ecf8427e",
+  "groups": [],
+  "checks": [
+    {
+     "passes": 12001,
+     "fails": 0,
+     "name": "201 Created",
+     "path": "::201 Created",
+     "id": "728dcd977aae263ca314731145e1d447"
+    }
+   ]
+ }
+}

@@ -1,0 +1,1 @@
+{"consistent":true,"i2_non_zero_currencies":[],"i3_violations":[],"i4_violations":[],"i5":{"evaluated":false,"reason":"I5 is verified per entity through POST /v1/entities/{entity_id}/verify and across the ledger by the S06 verifier; scanning every chain here would exceed the audit-read budget on a large ledger."},"unresolved_quarantined_count":0,"non_zero_clearing_balances":[]}

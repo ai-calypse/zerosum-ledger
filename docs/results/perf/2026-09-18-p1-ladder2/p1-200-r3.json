@@ -1,0 +1,222 @@
+{
+ "options": {
+  "summaryTrendStats": [
+   "min",
+   "med",
+   "avg",
+   "p(90)",
+   "p(95)",
+   "p(99)",
+   "max"
+  ],
+  "summaryTimeUnit": "",
+  "noColor": false
+ },
+ "state": {
+  "testRunDurationMs": 60002.791291,
+  "isStdOutTTY": false,
+  "isStdErrTTY": false
+ },
+ "metrics": {
+  "http_reqs": {
+   "contains": "default",
+   "values": {
+    "count": 12001,
+    "rate": 200.00736202084096
+   },
+   "type": "counter"
+  },
+  "iterations": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 12001,
+    "rate": 200.00736202084096
+   }
+  },
+  "vus": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "max": 1,
+    "value": 1,
+    "min": 0
+   }
+  },
+  "http_req_waiting": {
+   "values": {
+    "p(99)": 2.602542,
+    "max": 34.6765,
+    "min": 0.480667,
+    "med": 0.91025,
+    "avg": 0.9998925064577926,
+    "p(90)": 1.31125,
+    "p(95)": 1.552042
+   },
+   "type": "trend",
+   "contains": "time"
+  },
+  "http_req_receiving": {
+   "contains": "time",
+   "values": {
+    "avg": 0.019512571202399815,
+    "p(90)": 0.027542,
+    "p(95)": 0.0375,
+    "p(99)": 0.0645,
+    "max": 2.531209,
+    "min": 0.00775,
+    "med": 0.016208
+   },
+   "type": "trend"
+  },
+  "http_req_blocked": {
+   "contains": "time",
+   "values": {
+    "p(99)": 0.093334,
+    "max": 2.636541,
+    "min": 0.000708,
+    "med": 0.001583,
+    "avg": 0.0038713570535787445,
+    "p(90)": 0.002583,
+    "p(95)": 0.0035
+   },
+   "type": "trend"
+  },
+  "data_received": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "count": 9291134,
+    "rate": 154845.02970770304
+   }
+  },
+  "http_req_tls_handshaking": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 0,
+    "p(99)": 0,
+    "max": 0,
+    "min": 0,
+    "med": 0,
+    "avg": 0,
+    "p(90)": 0
+   }
+  },
+  "http_req_connecting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "max": 2.566958,
+    "min": 0,
+    "med": 0,
+    "avg": 0.0015023913840513294,
+    "p(90)": 0,
+    "p(95)": 0,
+    "p(99)": 0.066416
+   }
+  },
+  "data_sent": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "rate": 149414.96565585164,
+    "count": 8965315
+   }
+  },
+  "http_req_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0.496291,
+    "med": 0.939208,
+    "avg": 1.0312053721356573,
+    "p(90)": 1.351334,
+    "p(95)": 1.61175,
+    "p(99)": 2.699375,
+    "max": 34.707667
+   }
+  },
+  "http_req_duration{expected_response:true}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(90)": 1.351334,
+    "p(95)": 1.61175,
+    "p(99)": 2.699375,
+    "max": 34.707667,
+    "min": 0.496291,
+    "med": 0.939208,
+    "avg": 1.0312053721356573
+   }
+  },
+  "http_req_sending": {
+   "values": {
+    "avg": 0.0118002944754604,
+    "p(90)": 0.015792,
+    "p(95)": 0.021084,
+    "p(99)": 0.033042,
+    "max": 0.573209,
+    "min": 0.003042,
+    "med": 0.010625
+   },
+   "type": "trend",
+   "contains": "time"
+  },
+  "iteration_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(99)": 2.940291,
+    "max": 34.8205,
+    "min": 0.536417,
+    "med": 1.023,
+    "avg": 1.120295639863353,
+    "p(90)": 1.456333,
+    "p(95)": 1.73875
+   }
+  },
+  "vus_max": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "value": 50,
+    "min": 50,
+    "max": 50
+   }
+  },
+  "http_req_failed": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "rate": 0,
+    "passes": 0,
+    "fails": 12001
+   }
+  },
+  "checks": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "rate": 1,
+    "passes": 12001,
+    "fails": 0
+   }
+  }
+ },
+ "root_group": {
+  "name": "",
+  "path": "",
+  "id": "d41d8cd98f00b204e9800998ecf8427e",
+  "groups": [],
+  "checks": [
+    {
+     "path": "::201 Created",
+     "id": "728dcd977aae263ca314731145e1d447",
+     "passes": 12001,
+     "fails": 0,
+     "name": "201 Created"
+    }
+   ]
+ }
+}

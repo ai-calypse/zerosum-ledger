@@ -1,0 +1,222 @@
+{
+ "root_group": {
+  "name": "",
+  "path": "",
+  "id": "d41d8cd98f00b204e9800998ecf8427e",
+  "groups": [],
+  "checks": [
+    {
+     "id": "728dcd977aae263ca314731145e1d447",
+     "passes": 6001,
+     "fails": 0,
+     "name": "201 Created",
+     "path": "::201 Created"
+    }
+   ]
+ },
+ "options": {
+  "summaryTrendStats": [
+   "min",
+   "med",
+   "avg",
+   "p(90)",
+   "p(95)",
+   "p(99)",
+   "max"
+  ],
+  "summaryTimeUnit": "",
+  "noColor": false
+ },
+ "state": {
+  "testRunDurationMs": 60001.937167,
+  "isStdOutTTY": false,
+  "isStdErrTTY": false
+ },
+ "metrics": {
+  "http_req_receiving": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 0.022917,
+    "avg": 0.028793020996500652,
+    "p(90)": 0.049875,
+    "p(95)": 0.063375,
+    "p(99)": 0.09825,
+    "max": 0.214792,
+    "min": 0.008834
+   }
+  },
+  "vus_max": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "value": 50,
+    "min": 50,
+    "max": 50
+   }
+  },
+  "http_req_connecting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "max": 1.237167,
+    "min": 0,
+    "med": 0,
+    "avg": 0.0020153311114814204,
+    "p(90)": 0,
+    "p(95)": 0,
+    "p(99)": 0.083334
+   }
+  },
+  "checks": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "passes": 6001,
+    "fails": 0,
+    "rate": 1
+   }
+  },
+  "http_req_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 1.249291,
+    "avg": 1.3444429461756333,
+    "p(90)": 1.866834,
+    "p(95)": 2.212625,
+    "p(99)": 3.240458,
+    "max": 12.940041,
+    "min": 0.5335
+   }
+  },
+  "http_req_waiting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "min": 0.517542,
+    "med": 1.207083,
+    "avg": 1.3002935859023508,
+    "p(90)": 1.804667,
+    "p(95)": 2.140667,
+    "p(99)": 3.134542,
+    "max": 12.880541
+   }
+  },
+  "http_req_failed": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "rate": 0,
+    "passes": 0,
+    "fails": 6001
+   }
+  },
+  "vus": {
+   "type": "gauge",
+   "contains": "default",
+   "values": {
+    "value": 0,
+    "min": 0,
+    "max": 0
+   }
+  },
+  "http_reqs": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 6001,
+    "rate": 100.0134376211514
+   }
+  },
+  "data_received": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "count": 4641327,
+    "rate": 77352.9525735487
+   }
+  },
+  "http_req_tls_handshaking": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 0,
+    "p(99)": 0,
+    "max": 0,
+    "min": 0,
+    "med": 0,
+    "avg": 0,
+    "p(90)": 0
+   }
+  },
+  "iterations": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 6001,
+    "rate": 100.0134376211514
+   }
+  },
+  "http_req_blocked": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(90)": 0.003834,
+    "p(95)": 0.005542,
+    "p(99)": 0.115625,
+    "max": 1.313083,
+    "min": 0.000791,
+    "med": 0.002333,
+    "avg": 0.005372740376603869
+   }
+  },
+  "iteration_duration": {
+   "contains": "time",
+   "values": {
+    "med": 1.36225,
+    "avg": 1.4638770736543867,
+    "p(90)": 2.027166,
+    "p(95)": 2.405333,
+    "p(99)": 3.492792,
+    "max": 13.047459,
+    "min": 0.591708
+   },
+   "type": "trend"
+  },
+  "data_sent": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "rate": 74636.9569291676,
+    "count": 4478362
+   }
+  },
+  "http_req_duration{expected_response:true}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 1.249291,
+    "avg": 1.3444429461756333,
+    "p(90)": 1.866834,
+    "p(95)": 2.212625,
+    "p(99)": 3.240458,
+    "max": 12.940041,
+    "min": 0.5335
+   }
+  },
+  "http_req_sending": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 0.015356339276787314,
+    "p(90)": 0.020667,
+    "p(95)": 0.0255,
+    "p(99)": 0.040042,
+    "max": 2.426958,
+    "min": 0.004167,
+    "med": 0.013667
+   }
+  }
+ }
+}
