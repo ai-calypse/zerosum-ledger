@@ -627,3 +627,25 @@ not re-run after the fix, so its 32 × 100 figure stays marked invalid.
 **Confirmed at load, 2026-09-18.** The quiet-machine re-run ([quiet-rerun.md](results/perf/quiet-rerun.md))
 ran 32 writers × 100-order batches on one entity again, with the fix in place. The same lock-queue timeouts occurred
 **12 times; every one was retried, 0 orders were quarantined**, and all three windows were valid.
+
+## order-service was killed for memory at 1,000 requests/s (fixed)
+
+**Found:** 2026-09-18, by the first P1 k6 ladder ([p1-api-ack.md](results/perf/p1-api-ack.md)), not by any test.
+**Fixed** the same day in `9726d41`.
+
+At 1,000 requests/s order-service's resident memory reached 753 of its 768 MiB container limit, and the container was
+killed. The Compose file sets `restart: "no"`, so the next step of the ladder ran against a service that no longer
+existed. No money was lost: every accepted order had already been committed with its outbox row, and the ledger
+stayed consistent.
+
+**Cause.** The JVM accounted for about 385 MB. The rest was native memory: Tomcat's default 200 request threads (233
+live threads in all) contending for a 10-connection pool, each busy thread growing its own glibc malloc arena.
+`-XX:MaxRAMPercentage=60` had budgeted for heap, metaspace and "threads", but not for 200 of them each fragmenting its
+own arena.
+
+**Fix.** `server.tomcat.threads.max: 32`, sized to the pool, since every write holds a connection. `MALLOC_ARENA_MAX=2`
+in the shared service image. The same load then peaked at 527 MiB. In the quiet re-run, 1,000 requests/s ran clean
+(p99 13 ms), and 2,000/s was past saturation but survived.
+
+**Still thin.** At 2,000 requests/s memory peaked at 722 of 768 MiB. Lowering `MaxRAMPercentage`, or giving
+order-service a larger limit, is the next step if the service is ever driven past saturation for long.
