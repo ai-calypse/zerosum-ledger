@@ -55,7 +55,10 @@ class AblationExperimentE2ETest {
     private static final String NO_FAULTS = "{\"seed\":0}";
 
     /** Cells named crash-timing-dependent in the run plan before the first evidence run (master §8.5, §0.3 E5). */
-    static final Set<String> TIMING_DEPENDENT = Set.of("A1/F4", "A2/F1", "A2/F4");
+    static final Set<String> TIMING_DEPENDENT = Set.of("A1/F4", "A2/F1", "A2/F4", "A1/F4h");
+
+    /** F4h outage: longer than the producer's delivery.timeout.ms (Kafka default 120 s; order-service does not override it). */
+    static final Duration F4H_OUTAGE = Duration.ofSeconds(150);
 
     private static final Workload PLAIN_60 = new Workload(6_000, 100, 200, 50, false, 0, 0, 0);
     private static final Workload PLAIN_90 = new Workload(9_000, 100, 200, 50, false, 0, 0, 0);
@@ -75,6 +78,9 @@ class AblationExperimentE2ETest {
             new Cell("A0/F4", "A0", "F4", List.of(), PLAIN_60),
             new Cell("A1/F4", "A1", "F4", List.of("A1"), PLAIN_60),
             new Cell("A2/F4", "A2", "F4", List.of("A2"), PLAIN_60),
+            new Cell("A0/F4h", "A0", "F4h", List.of(), PLAIN_60),
+            new Cell("A1/F4h", "A1", "F4h", List.of("A1"), PLAIN_60),
+            new Cell("A2/F4h", "A2", "F4h", List.of("A2"), PLAIN_60),
             new Cell("A0/F7", "A0", "F7", List.of(), CARDS),
             new Cell("A3/F7", "A3", "F7", List.of("A3"), CARDS),
             new Cell("A0/F11v", "A0", "F11v", List.of(), F11_BUGS),
@@ -285,6 +291,16 @@ class AblationExperimentE2ETest {
                 Instant began = Instant.now();
                 ChaosStack.restartKafka();
                 return Map.of("action", "docker restart kafka", "restart_seconds", secondsSince(began));
+            }));
+            // Run plan 3.6: a hard broker kill held down past the producer's delivery timeout. F4's graceful restart
+            // neither lost a buffered send nor dropped an offset commit, so it exercised neither A1 nor A2.
+            case "F4h" -> threads.add(every("F4h", seed, stop, actions, tags, () -> {
+                ChaosStack.kill("kafka");
+                int exit = ChaosStack.exitCode("kafka");
+                Stack.sleep(F4H_OUTAGE);
+                ChaosStack.start("kafka");
+                return Map.of("action", "docker kill -s KILL kafka; down " + F4H_OUTAGE.toSeconds() + " s; docker start",
+                        "exit_code", exit);
             }));
             case "F12b" -> {
                 threads.add(every("F1", seed, stop, actions, tags, () -> crash("order-service")));

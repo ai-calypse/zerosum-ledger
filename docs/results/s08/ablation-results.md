@@ -152,6 +152,27 @@ afterwards. **No service behaviour, workload, fault, quiesce rule or classificat
 Two evidence runs made before this amendment (`A0-F2-r1`, `A1-F2-r1`, at `eb9da11`) lacked the capture and were
 discarded. The series restarted from run 1 at the amendment's commit.
 
+
+### 3.6 Second amendment, 2026-09-19, after the 51-run series: a broker fault that exercises A1 and A2
+
+Recorded **before** any F4h run. The 51-run series (3.4) finished with A1/F4 and A2/F4 at 0 of 3: a graceful
+`docker restart kafka` (F4) neither lost a buffered producer send nor dropped the ledger's offset commit, so F4
+exercised neither protection. §8.5 names the remedy: when an ablation does not show its failure class, the harness is
+not exercising that protection, and A0's "0 violations" claim for it is invalid until the harness is fixed. The F4
+results stay in this report exactly as measured. This amendment adds a harder broker fault and does not replace them
+silently.
+
+- **F4h:** `docker kill -s KILL kafka` once per run, at a seeded 20–40 s into the load, with the broker **kept down
+  150 s** before `docker start`. 150 s exceeds the producer's `delivery.timeout.ms` (Kafka's default 120 s;
+  order-service does not override it), so without an outbox a send made early in the outage expires in the producer's
+  buffer. A hard kill also takes the broker down without completing in-flight offset commits.
+- **Cells, 3 runs each, workload plain-60:** A0/F4h (control), A1/F4h, A2/F4h.
+- **Thresholds, fixed now:** A0/F4h every run PASS. A2/F4h ≥ 50 % (a send made early in the outage should always
+  expire, so this is not timing-dependent). **A1/F4h is named crash-timing-dependent: ≥ 1 of 3**, because redelivery
+  needs the kill to land between a batch's database commit and its offset commit.
+- **Variant validity:** A1 and A2 are judged on their crash cell (F2, F1) and F4h. F4 is reported alongside, as the
+  finding that a graceful broker restart does not exercise them.
+
 ## 4–10. Results
 
 Pending the evidence runs.
