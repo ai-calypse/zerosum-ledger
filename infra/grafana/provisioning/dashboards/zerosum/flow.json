@@ -7,6 +7,11 @@
   "version": 1,
   "refresh": "10s",
   "time": { "from": "now-15m", "to": "now" },
+  "annotations": { "list": [
+    { "name": "Experiment runs and faults", "enable": true, "iconColor": "#F2495C",
+      "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+      "target": { "type": "tags", "tags": ["zs-run"], "matchAny": true, "limit": 2000 } }
+  ] },
   "description": "Order intake through outbox, relay and Kafka to ledger apply. Panels are bound to series listed in infra/otel/registry.yaml; a panel that renders empty should be checked with infra/otel/check-registry.sh before it is believed.",
   "panels": [
     {

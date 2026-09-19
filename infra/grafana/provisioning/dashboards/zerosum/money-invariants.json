@@ -7,6 +7,11 @@
   "version": 1,
   "refresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
+  "annotations": { "list": [
+    { "name": "Experiment runs and faults", "enable": true, "iconColor": "#F2495C",
+      "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+      "target": { "type": "tags", "tags": ["zs-run"], "matchAny": true, "limit": 2000 } }
+  ] },
   "description": "The checks that say whether the books are trustworthy. NOTE: the reconciliation-breaks panel the master specifies is absent because S06 does not exist yet — see infra/otel/registry.yaml 'blocked'. Its absence is recorded work, not an oversight.",
   "panels": [
     {

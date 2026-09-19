@@ -108,8 +108,10 @@ class AblationExperimentE2ETest {
                 }
             }
         } finally {
-            ChaosStack.downAll();
-            System.out.println("ZS-ABLATION stack torn down (compose down --volumes)");
+            // Observability amendment: the data services and their volumes go, otel-lgtm stays, so every run's metrics,
+            // traces and annotations can be read in Grafana afterwards. `make down` removes it.
+            ChaosStack.teardown();
+            System.out.println("ZS-ABLATION data services torn down; otel-lgtm left running at " + RunTelemetry.GRAFANA);
         }
         aggregate();
         assertEquals(List.of(), harnessErrors, "harness errors are rerun, never counted");
@@ -140,6 +142,8 @@ class AblationExperimentE2ETest {
             ChaosStack.reset(cell.switches());
             json.put("reset_seconds", secondsSince(startedAt));
             json.set("switches_observed", observedSwitches(cell));
+            List<String> tags = List.of(label, cell.variant(), cell.faults());
+            RunTelemetry.annotate(Instant.now(), null, label + " start: switches " + cell.switches(), tags);
 
             if (cell.workload().cards()) {
                 TripLoad.registerCards(runId, cell.workload().riders());
@@ -149,7 +153,7 @@ class AblationExperimentE2ETest {
             putFakeCard(profile);
 
             var stop = new AtomicBoolean();
-            List<Thread> schedules = schedules(cell.faults(), seed, stop, actions);
+            List<Thread> schedules = schedules(cell.faults(), seed, stop, actions, tags);
             Map<String, Object> load;
             try {
                 load = new TripLoad().run(runId, seed, cell.workload());
@@ -161,6 +165,7 @@ class AblationExperimentE2ETest {
                 putFakeCard(NO_FAULTS);
             }
             Instant generationEnd = Instant.now();
+            RunTelemetry.annotate(generationEnd, null, label + " load finished: " + load.get("counts"), tags);
             json.set("load", Stack.JSON.valueToTree(load));
             json.set("fault_actions", Stack.JSON.valueToTree(new ArrayList<>(actions)));
             json.put("fault_injections", actions.size());
@@ -198,6 +203,15 @@ class AblationExperimentE2ETest {
                 // the stack may already be down; teardown below discards the profile with the volume anyway
             }
             json.put("wall_seconds", secondsSince(startedAt));
+            Instant endedAt = Instant.now();
+            ObjectNode window = json.putObject("window_utc");
+            window.put("start", startedAt.toString());
+            window.put("end", endedAt.toString());
+            json.put("grafana_url", RunTelemetry.grafanaUrl(startedAt, endedAt));
+            json.put("logs", "logs/" + label + "/");
+            RunTelemetry.saveLogs(OUT.resolve("logs"), label);
+            RunTelemetry.annotate(startedAt, endedAt, label + " -> " + json.path("classification").asString()
+                    + " violated=" + json.path("violated"), List.of(label, cell.variant(), cell.faults()));
             write(OUT.resolve("runs").resolve(label + ".json"), json.toPrettyString());
             ChaosStack.teardown();
         }
@@ -262,19 +276,19 @@ class AblationExperimentE2ETest {
 
     /** One thread per container fault, each on its own seeded 20–40 s schedule (master §8.4 F1). */
     private static List<Thread> schedules(String faults, long seed, AtomicBoolean stop,
-            List<Map<String, Object>> actions) {
+            List<Map<String, Object>> actions, List<String> tags) {
         var threads = new ArrayList<Thread>();
         switch (faults) {
-            case "F1" -> threads.add(every("F1", seed, stop, actions, () -> crash("order-service")));
-            case "F2" -> threads.add(every("F2", seed, stop, actions, () -> hook("ledger-service", "F2")));
-            case "F4" -> threads.add(every("F4", seed, stop, actions, () -> {
+            case "F1" -> threads.add(every("F1", seed, stop, actions, tags, () -> crash("order-service")));
+            case "F2" -> threads.add(every("F2", seed, stop, actions, tags, () -> hook("ledger-service", "F2")));
+            case "F4" -> threads.add(every("F4", seed, stop, actions, tags, () -> {
                 Instant began = Instant.now();
                 ChaosStack.restartKafka();
                 return Map.of("action", "docker restart kafka", "restart_seconds", secondsSince(began));
             }));
             case "F12b" -> {
-                threads.add(every("F1", seed, stop, actions, () -> crash("order-service")));
-                threads.add(every("F3", seed, stop, actions, () -> hook("instrument-service", "F3")));
+                threads.add(every("F1", seed, stop, actions, tags, () -> crash("order-service")));
+                threads.add(every("F3", seed, stop, actions, tags, () -> hook("instrument-service", "F3")));
             }
             default -> {
                 // F7, F8c and F11v are provider profiles and workload properties, not container actions
@@ -284,7 +298,7 @@ class AblationExperimentE2ETest {
     }
 
     private static Thread every(String fault, long seed, AtomicBoolean stop, List<Map<String, Object>> actions,
-            Supplier<Map<String, Object>> action) {
+            List<String> tags, Supplier<Map<String, Object>> action) {
         var random = new SplittableRandom(seed ^ fault.hashCode());
         return Thread.ofPlatform().name("fault-" + fault).start(() -> {
             while (true) {
@@ -305,6 +319,10 @@ class AblationExperimentE2ETest {
                 }
                 record.put("ended_at", Instant.now().toString());
                 actions.add(record);
+                RunTelemetry.annotate(Instant.parse((String) record.get("started_at")),
+                        Instant.parse((String) record.get("ended_at")),
+                        tags.getFirst() + " " + fault + ": " + record.get("action") + " exit=" + record.get("exit_code"),
+                        concatTags(tags, "zs-fault"));
             }
         });
     }
@@ -484,6 +502,12 @@ class AblationExperimentE2ETest {
             images.put(service + " image", ChaosStack.image(service));
         }
         return images;
+    }
+
+    private static List<String> concatTags(List<String> tags, String extra) {
+        var all = new ArrayList<>(tags);
+        all.add(extra);
+        return all;
     }
 
     private static double secondsSince(Instant from) {

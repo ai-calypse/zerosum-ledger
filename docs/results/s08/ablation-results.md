@@ -134,6 +134,24 @@ Invariant violations by id (verifier), duplicate charges count and minor units (
 generation and the last fault action to the first probe with zero lag and empty outboxes), stuck attempts (non-terminal
 attempts at the last probe).
 
+
+### 3.5 Pre-evidence amendment, 2026-09-19: observability only
+
+Made after the pilots and before the counted evidence series, so that every run can be replayed step by step
+afterwards. **No service behaviour, workload, fault, quiesce rule or classification changed.**
+
+- Each service's full log (`docker logs --timestamps`, all restarts of the container) is saved, gzipped, before the
+  run's containers are removed: `logs/<label>/<service>.log.gz`.
+- Grafana annotations (tag `zs-run`) mark each run's start, every fault action with its exit code, the end of the load,
+  and the verdict as a region over the run. Both provisioned dashboards (`zs-flow`, `zs-money-invariants`) gained an
+  annotation layer that shows them.
+- Each run JSON records its UTC window and a Grafana URL for it.
+- At the end the data services and volumes are removed, but `otel-lgtm` is left running with every run's metrics,
+  traces and annotations. `make down` removes it.
+
+Two evidence runs made before this amendment (`A0-F2-r1`, `A1-F2-r1`, at `eb9da11`) lacked the capture and were
+discarded. The series restarted from run 1 at the amendment's commit.
+
 ## 4–10. Results
 
 Pending the evidence runs.
