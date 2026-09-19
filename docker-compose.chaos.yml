@@ -1,0 +1,34 @@
+# Chaos overlay — the ablation experiment only (master §8.5, S08; decision: D08-3).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml -f docker-compose.chaos.yml up -d --wait
+#
+# Puts the three services that own a chaos switch under the `chaos` Spring profile with the opt-in
+# ZS_ALLOW_CHAOS=true, and passes each switch from the caller's environment, default off. With every switch off this
+# is the A0 control: same profile, same topology, no protection removed. libs/auth ChaosGuard refuses to start a
+# service with a switch on outside these conditions, and every service logs `ZS-CHAOS service=... active=[...]`.
+#
+# Never used by `make up`, `make demo` or CI. The harness is infra/tests/.../ablation/AblationExperimentE2ETest.
+x-chaos: &chaos
+  SPRING_PROFILES_ACTIVE: chaos
+  ZS_ALLOW_CHAOS: "true"
+
+services:
+  order-service:
+    environment:
+      <<: *chaos
+      ZS_CHAOS_A2: ${ZS_CHAOS_A2:-false}
+      ZS_CHAOS_A4: ${ZS_CHAOS_A4:-false}
+
+  ledger-service:
+    environment:
+      <<: *chaos
+      ZS_CHAOS_A1: ${ZS_CHAOS_A1:-false}
+      ZS_CHAOS_A4: ${ZS_CHAOS_A4:-false}
+      ZS_CHAOS_F2: ${ZS_CHAOS_F2:-false}
+
+  instrument-service:
+    environment:
+      <<: *chaos
+      ZS_CHAOS_A3: ${ZS_CHAOS_A3:-false}
+      ZS_CHAOS_A5: ${ZS_CHAOS_A5:-false}
+      ZS_CHAOS_F3: ${ZS_CHAOS_F3:-false}

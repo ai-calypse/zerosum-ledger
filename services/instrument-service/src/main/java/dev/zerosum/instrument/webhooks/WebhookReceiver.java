@@ -1,6 +1,7 @@
 // decision: D05-3, D05-5 — docs/step_05_instruments_fake_providers.md#decisions-and-outputs
 package dev.zerosum.instrument.webhooks;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.instrument.core.ProviderEvent;
 import dev.zerosum.instrument.core.ProviderStatus;
 import dev.zerosum.instrument.store.AttemptStateMachines;
@@ -73,8 +74,12 @@ public class WebhookReceiver {
     private final AttemptTransitions transitions;
     private final IllegalTransitions illegal;
     private final MeterRegistry meters;
+    /** decision: D08-3 — the A5 ablation: a duplicate delivery is applied again. Off outside chaos. */
+    private final boolean skipDedupe;
 
-    WebhookReceiver(JdbcClient db, AttemptTransitions transitions, IllegalTransitions illegal, MeterRegistry meters) {
+    WebhookReceiver(JdbcClient db, AttemptTransitions transitions, IllegalTransitions illegal, MeterRegistry meters,
+            ChaosGuard.Active chaos) {
+        this.skipDedupe = chaos.on("A5");
         this.db = db;
         this.transitions = transitions;
         this.illegal = illegal;
@@ -89,7 +94,10 @@ public class WebhookReceiver {
     public Received receive(ProviderEvent event, byte[] rawBody) {
         Optional<Attempt> attempt = attemptOf(event.clientReference());
 
-        if (!record(event, attempt.map(Attempt::attemptId).orElse(null), rawBody)) {
+        // decision: D08-3 — A5 ablation (master §8.5): the primary key still refuses a second row, but its answer is
+        // ignored and the delivery is applied as if new. Predicted harmless: the state machine and the order-level
+        // idempotency key (event_id) are the layers behind it.
+        if (!record(event, attempt.map(Attempt::attemptId).orElse(null), rawBody) && !skipDedupe) {
             // Already recorded, so it was already applied by whichever delivery got here first.
             return done(event, new Received(Disposition.DUPLICATE, attempt.map(Attempt::attemptId).orElse(null), null));
         }

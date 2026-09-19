@@ -1,5 +1,6 @@
 package dev.zerosum.ledger.kafka;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.ledger.apply.ApplyBatchResult;
 import dev.zerosum.ledger.apply.ApplyOutcome;
 import dev.zerosum.ledger.apply.ApplyRecord;
@@ -10,6 +11,7 @@ import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -39,9 +41,18 @@ class MoneyOrderListener {
     private final Counter applied;
     private final Counter duplicates;
     private final Counter quarantined;
+    /** decision: D08-3 — the F2 crash hook (master §8.4 F2). Off outside the guarded chaos profile. */
+    private final boolean crashHook;
 
     MoneyOrderListener(LedgerApplyEngine engine, DlqPublisher dlq, ApplyMetrics applyMetrics,
             org.springframework.jdbc.core.JdbcTemplate template, MeterRegistry meters) {
+        this(engine, dlq, applyMetrics, template, meters, new ChaosGuard.Active("ledger-service", List.of()));
+    }
+
+    @Autowired
+    MoneyOrderListener(LedgerApplyEngine engine, DlqPublisher dlq, ApplyMetrics applyMetrics,
+            org.springframework.jdbc.core.JdbcTemplate template, MeterRegistry meters, ChaosGuard.Active chaos) {
+        this.crashHook = chaos.on("F2");
         this.engine = engine;
         this.dlq = dlq;
         this.applyMetrics = applyMetrics;
@@ -72,6 +83,15 @@ class MoneyOrderListener {
                 .toList();
 
         ApplyBatchResult result = engine.apply(batch);
+
+        // decision: D08-3 — F2 (master §8.4, "kill during apply"), chaos only, armed once per injection by the harness.
+        // Committed and not yet acknowledged: the one point where a crash makes Kafka redeliver orders the ledger has
+        // already applied. A random kill -9 almost never lands there, because each poll commits in one transaction.
+        if (crashHook && ChaosGuard.consumeArm("F2")) {
+            log.warn("ZS-CHAOS F2 halting after committing a batch of {} records, before acknowledging it",
+                    records.size());
+            ChaosGuard.halt();
+        }
 
         // Latency and retry signals, taken from what the engine measured rather than re-timed here (D07-1).
         applyMetrics.batchApplied(result);

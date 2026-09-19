@@ -62,6 +62,13 @@ zs:
     writer-tokens: ${ZS_WRITER_TOKENS:}
     reader-token: ${ZS_READER_TOKEN:}
     admin-token: ${ZS_ADMIN_TOKEN:}
+  # decision: D08-3 — chaos switches (master §8.5), off. Honoured only under the `chaos` profile with
+  # ZS_ALLOW_CHAOS=true; libs/auth ChaosGuard refuses to start otherwise. Set by docker-compose.chaos.yml
+  # (ZS_CHAOS_A3, ZS_CHAOS_A5, ZS_CHAOS_F3) for the ablation experiment only.
+  chaos:
+    a3: false
+    a5: false
+    f3: false
   instruments:
     fakecard-base-url: ${ZS_FAKECARD_BASE_URL:http://localhost:8090}
     fakebank-base-url: ${ZS_FAKEBANK_BASE_URL:http://localhost:8090}

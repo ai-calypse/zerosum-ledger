@@ -1,5 +1,6 @@
 package dev.zerosum.ledger.apply;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.ledger.apply.ApplyRecord.SourcePosition;
 import dev.zerosum.ledger.changelog.ChangelogHasher;
 import dev.zerosum.ledger.store.LedgerStore;
@@ -21,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -47,9 +49,19 @@ public class LedgerApplyEngine {
     private final RetryClassifier classifier;
     private final LedgerApplyProperties properties;
     private final TransactionTemplate transactions;
+    /** decision: D08-3 — the A1 ablation: apply redelivered orders again. Off outside the guarded chaos profile. */
+    private final boolean skipDedupe;
 
     public LedgerApplyEngine(OrderDecoder decoder, LedgerStore store, ChangelogHasher hasher, RetryClassifier classifier,
             LedgerApplyProperties properties, PlatformTransactionManager transactionManager) {
+        this(decoder, store, hasher, classifier, properties, transactionManager,
+                new ChaosGuard.Active("ledger-service", List.of()));
+    }
+
+    @Autowired
+    public LedgerApplyEngine(OrderDecoder decoder, LedgerStore store, ChangelogHasher hasher, RetryClassifier classifier,
+            LedgerApplyProperties properties, PlatformTransactionManager transactionManager, ChaosGuard.Active chaos) {
+        this.skipDedupe = chaos.on("A1");
         this.decoder = decoder;
         this.store = store;
         this.hasher = hasher;
@@ -194,10 +206,13 @@ public class LedgerApplyEngine {
             }
 
             Set<UUID> fresh = candidates.isEmpty() ? Set.of() : store.insertAppliedOrders(candidates, positions);
-            List<DecodedOrder> orders = candidates.stream().filter(o -> fresh.contains(o.orderId())).toList();
+            // decision: D08-3 — A1 ablation (master §8.5): the applied_orders row is still written (ON CONFLICT DO
+            // NOTHING, so a conflict never aborts the batch), but its answer is ignored and every candidate is applied.
+            List<DecodedOrder> orders = skipDedupe ? candidates
+                    : candidates.stream().filter(o -> fresh.contains(o.orderId())).toList();
             for (DecodedOrder order : candidates) {
                 int index = firstIndexOf.get(order.orderId());
-                outcomes.put(index, fresh.contains(order.orderId())
+                outcomes.put(index, skipDedupe || fresh.contains(order.orderId())
                         ? ApplyOutcome.applied(index, order.orderId())
                         : ApplyOutcome.duplicate(index, order.orderId()));
             }

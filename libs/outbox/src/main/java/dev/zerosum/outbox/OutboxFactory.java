@@ -24,6 +24,15 @@ public final class OutboxFactory {
         return new OutboxWriter(jdbc);
     }
 
+    /**
+     * decision: D08-3 — the A2 ablation's writer: commit, then send directly, no outbox row (§0.3 C10). Only a service
+     * whose chaos guard accepted A2 builds this; the parameter is untyped for the same reason as {@link #relay}'s.
+     */
+    @SuppressWarnings("unchecked")
+    public static OutboxWriter dualWriter(org.springframework.jdbc.core.simple.JdbcClient jdbc, Object kafka) {
+        return new OutboxWriter(jdbc, (KafkaTemplate<String, String>) kafka);
+    }
+
     public static OutboxMetrics metrics(MeterRegistry registry, Supplier<Number> oldestUnpublishedAgeSeconds) {
         return new OutboxMetrics(registry, oldestUnpublishedAgeSeconds);
     }

@@ -1,5 +1,6 @@
 package dev.zerosum.order.outbox;
 
+import dev.zerosum.auth.ChaosGuard;
 import dev.zerosum.order.order.OrderStore;
 import dev.zerosum.outbox.OutboxCleanupJob;
 import dev.zerosum.outbox.OutboxFactory;
@@ -33,9 +34,11 @@ class OrderOutboxConfiguration {
     /** The topic money orders are published to (master §5.4). */
     static final String MONEY_ORDERS_TOPIC = "payments.money-orders.v1";
 
+    /** decision: D08-3 — under the guarded A2 ablation only, the library's dual writer replaces the outbox. */
     @Bean
-    OutboxWriter outboxWriter(JdbcClient jdbc) {
-        return OutboxFactory.writer(jdbc);
+    OutboxWriter outboxWriter(JdbcClient jdbc, ChaosGuard.Active chaos,
+            @org.springframework.beans.factory.annotation.Qualifier("kafkaTemplate") Object kafkaTemplate) {
+        return chaos.on("A2") ? OutboxFactory.dualWriter(jdbc, kafkaTemplate) : OutboxFactory.writer(jdbc);
     }
 
     @Bean

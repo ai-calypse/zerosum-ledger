@@ -34,3 +34,14 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree(rootDir.resolve("services")) { include("*/src/main/resources/db/migration/**") })
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
+
+// decision: D08-4 — the ablation experiment judges every run with the real verifier CLI, installed rather than run
+// through a nested Gradle build (which would contend for this build's locks).
+tasks.named<Test>("chaosTest") {
+    dependsOn(":tools:verifier:installDist")
+    // The experiment rebuilds the service images from these jars, so a run can never measure a stale build.
+    listOf("order-service", "ledger-service", "instrument-service", "fake-providers")
+        .forEach { dependsOn(":services:$it:assemble") }
+    systemProperty("zs.verifier", rootDir.resolve("tools/verifier/build/install/verifier/bin/verifier").absolutePath)
+    inputs.file(rootDir.resolve("docker-compose.chaos.yml")).withPathSensitivity(PathSensitivity.RELATIVE)
+}
