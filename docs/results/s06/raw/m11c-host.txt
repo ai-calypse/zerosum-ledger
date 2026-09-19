@@ -1,0 +1,13 @@
+docker engine 29.8.0
+compose 5.5.1
+docker VM cpus=10 mem_bytes=8319504384 arch=aarch64
+order-service sha256:a5658d1437cb54d1416d51931f95eb04d0f332fd2b6864b5e691a608fd6e0e04 created=2026-09-18T23:24:41.563404294Z
+ledger-service sha256:a1cc7d54a2cc6504849d1a9c66dcf2deef308fe7856e227eeec5bd33cae1b6c3 created=2026-09-18T23:24:41.563031502Z
+instrument-service sha256:6261b12a22830064e326568ded2df7079fb242326c61e92bee4dfc9bf99d29da created=2026-09-18T23:24:41.563055711Z
+fake-providers sha256:8bcadca5503cdc7aa67c8373e4e7b3946b6a68064a5844edb6af85514b64bbb4 created=2026-09-18T23:24:41.562380169Z
+postgres postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+kafka apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+host Mac16,12 cpus=10 mem_bytes=25769803776 macOS 26.5.2
+Fri Sep 18 11:25:25 PM UTC 2026
+TZ=unset
+Fri Sep 18 11:25:25 PM UTC 2026

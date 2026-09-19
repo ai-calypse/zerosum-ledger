@@ -22,7 +22,8 @@ import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -61,11 +62,13 @@ public class SettlementReports {
     private final JdbcClient db;
     private final FaultProfiles profiles;
     private final Clock clock;
+    private final TransactionTemplate transactions;
 
-    SettlementReports(JdbcClient db, FaultProfiles profiles, Clock clock) {
+    SettlementReports(JdbcClient db, FaultProfiles profiles, Clock clock, PlatformTransactionManager transactionManager) {
         this.db = db;
         this.profiles = profiles;
         this.clock = clock;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -89,23 +92,34 @@ public class SettlementReports {
      * <p>The insert is {@code ON CONFLICT DO NOTHING} and the row is then read back unconditionally, so two concurrent
      * first requests produce one report: the loser discards its own (differently corrupted) draft and serves the
      * winner's bytes.
+     *
+     * <p><strong>The loser's fault-log rows are discarded with its draft.</strong> Drawing the knobs records each
+     * injection in the fault log (§0.3 E2), and I12 holds every recorded injection to a break. A draft that was never
+     * served must therefore leave no record, or I12 reports injections that reached nobody as undetected. So the draw,
+     * the log rows and the insert share one transaction, rolled back when the insert finds the day already stored.
+     * An explicit template, not {@code @Transactional}: {@link #forDate} calls this on {@code this}, which never
+     * passes through Spring's proxy, so the annotation this method used to carry was silently inert.
      */
-    @Transactional
     SettlementReportResponse generate(LocalDate date) {
         String reportId = reportId(date);
-        List<SettlementLineResponse> clean = lines(date);
-        List<SettlementLineResponse> served = inject(reportId, clean);
-        String servedJson = JSON.writeValueAsString(served);
+        transactions.executeWithoutResult(status -> {
+            List<SettlementLineResponse> clean = lines(date);
+            List<SettlementLineResponse> served = inject(reportId, clean);
+            String servedJson = JSON.writeValueAsString(served);
 
-        db.sql("""
-                INSERT INTO settlement_reports (provider, report_date, report_id, clean_lines, served_lines,
-                                                content_hash)
-                VALUES (?, ?, ?, ?::jsonb, ?::jsonb, ?)
-                ON CONFLICT (provider, report_date) DO NOTHING
-                """)
-                .params(PROVIDER, Timestamp.valueOf(date.atStartOfDay()), reportId,
-                        JSON.writeValueAsString(clean), servedJson, sha256(servedJson))
-                .update();
+            int inserted = db.sql("""
+                    INSERT INTO settlement_reports (provider, report_date, report_id, clean_lines, served_lines,
+                                                    content_hash)
+                    VALUES (?, ?, ?, ?::jsonb, ?::jsonb, ?)
+                    ON CONFLICT (provider, report_date) DO NOTHING
+                    """)
+                    .params(PROVIDER, Timestamp.valueOf(date.atStartOfDay()), reportId,
+                            JSON.writeValueAsString(clean), servedJson, sha256(servedJson))
+                    .update();
+            if (inserted == 0) {
+                status.setRollbackOnly();
+            }
+        });
 
         return stored(date).orElseThrow(() -> new IllegalStateException(
                 "the settlement report for " + date + " was neither inserted nor found"));

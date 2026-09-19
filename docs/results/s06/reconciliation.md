@@ -44,7 +44,7 @@ baseline and what this machine measures was not chased down.
 |---|---|---|
 | (a) A FakeCard settlement report produces a SETTLEMENT order booking net cash and fees | **Met, with one stated gap** | `ReconciliationRunIT.settlementReportProducesASettlementOrder`: one run, one outbox row, payload valid against D01-8, and `report_id`, `currency`, `gross_minor`, `fee_minor`, `net_minor`, `event_id` and `order_group_id` all equal to golden `EV-O6` loaded from `libs/contracts`. **The gap:** the assertion stops at the outbox row. The booking of +net to `platform:main/cash`, +fee to `processing_fees` and −gross off `provider:fakecard/clearing` is performed by order-service's `PaymentEventMapper`, which implements the SETTLEMENT row and has its own golden test; **no end-to-end run was observed** in this step. |
 | (b) Injected discrepancies each produce a typed break | **Met** | Each knob is proven to fire and to be recorded (`DiscrepancyKnobIT`), and each maps to its own break type (`SettlementMatcherTest`), asserted as the **type** rather than as a count. |
-| (c) A0 chaos runs end with 0 unexplained breaks after 2 settlement cycles | **Not run** | No chaos orchestration exists, and no scheduler advances settlement cycles, so cycles cannot elapse without explicit API calls. Recorded unevaluated — neither met nor failed. |
+| (c) A0 chaos runs end with 0 unexplained breaks after 2 settlement cycles | **Met, 2026-09-18 — see [m11c-recon-under-chaos.md](m11c-recon-under-chaos.md)** | *Superseded.* At the time of this note: no chaos orchestration existed, and no scheduler advances settlement cycles. The later evidence runs 5 × 2 cycles under F1/F3/F7/F8/F10 chaos. The test triggers each cycle and closes each day by backdating, and the verifier's I12 finds 0 unexplained breaks and 0 undetected injections. |
 
 ## The knob-to-break map (D06-2)
 
@@ -95,7 +95,8 @@ that test is for.
   This is the direct reason **M11(c) is unevaluated**, and the scheduler is the first thing to add back.
 - **No reconciliation metrics.** S07's reconciliation alert row and the Money-invariants reconciliation panel stay
   blocked, exactly as S07 recorded.
-- **No verifier work.** `tools/verifier` still evaluates I2–I4 only (CR-S09-01). **I9** (clearing residual equals
+- **No verifier work.** *(Superseded: `tools/verifier` now also evaluates I1, I6, I6b, I7, I10 and I12 — see
+  [m11c-recon-under-chaos.md](m11c-recon-under-chaos.md). I9 is still not evaluated.)* `tools/verifier` still evaluates I2–I4 only (CR-S09-01). **I9** (clearing residual equals
   in-flight plus open breaks) and **I12** (every injected discrepancy has its mapped break) are therefore **not
   evaluated**: the knob-to-break map above is asserted by this step's own tests, not by an independent tool reading
   the fault log. That independence is the whole point of I12, and it does not exist yet.
