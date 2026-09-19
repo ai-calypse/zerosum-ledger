@@ -9,6 +9,11 @@
 | Owning step and task | S08 (S08-T03 seams, S08-T05 runs) |
 | Date (UTC) | 2026-09-18 |
 
+> **Superseded, 2026-09-19.** The switches this document said did not exist were built (guarded by the `chaos` profile
+> and `ZS_ALLOW_CHAOS=true`), and the experiment was run as specified: 60 evidence runs, with M13(b) now PARTIAL
+> (A2, A3, A4 and B0 valid; A1 not valid). See **[ablation-results.md](ablation-results.md)**. The two emulations
+> below are kept as the earlier record.
+
 ## 2. Status
 
 - **Not run as specified — M13 (b) is NOT MET.** A1–A4 are defined as chaos-profile flags that disable one

@@ -1,0 +1,23 @@
+{
+  "tool": "tools/verifier",
+  "label": "A2-F4h-r2",
+  "started_at": "2026-09-19T09:04:32.865283Z",
+  "jdbc_url": "jdbc:postgresql://127.0.0.1:5432/ledger",
+  "targets": {"ledger": "jdbc:postgresql://127.0.0.1:5432/ledger", "orders": "jdbc:postgresql://127.0.0.1:5432/orders", "instruments": "jdbc:postgresql://127.0.0.1:5432/instruments", "providers": "jdbc:postgresql://127.0.0.1:5432/fakeproviders"},
+  "connected_as": "verifier",
+  "session_transaction_read_only": "on",
+  "sessions_transaction_read_only": {"ledger": "on", "orders": "on", "instruments": "on", "providers": "on"},
+  "scope": {"entities": 251, "accounts": 251, "changelog_rows": 17937, "applied_orders": 5979, "empty": false},
+  "checks": [
+    {"id": "I1", "what": "every money order is zero-sum per currency", "status": "PASS", "violations": 0, "metrics": {"orders_checked": 6000, "unbalanced_orders": 0}, "sample": []},
+    {"id": "I2", "what": "global per-currency sum of ledger balances is 0", "status": "PASS", "violations": 0, "metrics": {"nonzero_currencies": 0}, "sample": []},
+    {"id": "I3", "what": "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum", "status": "PASS", "violations": 0, "metrics": {"accounts_mismatched": 0, "running_sum_rows_wrong": 0}, "sample": []},
+    {"id": "I4", "what": "changelog seq is gapless per entity", "status": "PASS", "violations": 0, "metrics": {"entities_with_gaps": 0}, "sample": []},
+    {"id": "I6", "what": "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows", "status": "FAIL", "violations": 21, "metrics": {"orders_in_store": 6000, "applied_orders": 5979, "missing_orders": 21, "extra_applied": 0, "unresolved_quarantined": 0}, "sample": ["not applied: 01a0b8e6-3f9a-7b06-b5f4-a450c2c04e08", "not applied: 01a0b8e6-3fa5-7462-a4a1-ae363cf567b4", "not applied: 01a0b8e6-3fae-7d92-a23b-6c33b3dc76b1", "not applied: 01a0b8e6-3fb8-717f-b680-d4206f00be0c", "not applied: 01a0b8e6-3fc4-70d1-a16b-3dbcd6721c2a", "not applied: 01a0b8e6-3fcd-73ff-a058-29eeeef1dc0b", "not applied: 01a0b8e6-3fd6-7600-9a9f-ecd50fdc2089", "not applied: 01a0b8e6-3fe0-7255-921c-8bd07c78b1dd", "not applied: 01a0b8e6-3feb-75d7-b24c-fb4ad0f2e919", "not applied: 01a0b8e6-3ff4-79b8-a65d-cada5c918ff9"]},
+    {"id": "I6b", "what": "every ledger balance = Σ entries for that account across all orders in the order store", "status": "FAIL", "violations": 39, "metrics": {"accounts_compared": 251, "accounts_drifting": 39, "drift_abs_minor": 125988}, "sample": ["rider:a2f4hr2r162/receivable/USD ledger=71700 orders=76435", "driver:a2f4hr2d11/payable/USD ledger=-268787 orders=-271214", "rider:a2f4hr2r189/receivable/USD ledger=89317 orders=93179", "driver:a2f4hr2d18/payable/USD ledger=-264486 orders=-271316", "driver:a2f4hr2d6/payable/USD ledger=-275080 orders=-278170", "driver:a2f4hr2d29/payable/USD ledger=-302064 orders=-306633", "rider:a2f4hr2r11/receivable/USD ledger=63885 orders=67511", "rider:a2f4hr2r90/receivable/USD ledger=86549 orders=90817", "rider:a2f4hr2r116/receivable/USD ledger=71032 orders=73192", "driver:a2f4hr2d35/payable/USD ledger=-267407 orders=-273695"]},
+    {"id": "I7", "what": "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed", "status": "PASS", "violations": 0, "metrics": {"attempts": 0, "provider_success_records": 0, "duplicate_charges": 0, "duplicate_minor": 0, "success_without_provider_record": 0, "provider_success_without_attempt": 0, "provider_success_on_failed_attempt": 0}, "sample": []}
+  ],
+  "result": "FAIL",
+  "passed": false,
+  "provenance": {"captured_at": "2026-09-19T09:04:33.092498Z", "git_sha": "41b0960d7d7a2d2151ae95731e4015c927fab4c5", "working_tree": "clean (0 changes)", "versions_document": "docs/adr/0002-stack-and-pinned-versions.md", "java_runtime": "26.0.1+8-34", "hardware": "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64", "seeds": [], "runtime_versions": {"PostgreSQL": "PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit", "JVM": "Java HotSpot(TM) 64-Bit Server VM 26.0.1 (Oracle Corporation)"}}
+}

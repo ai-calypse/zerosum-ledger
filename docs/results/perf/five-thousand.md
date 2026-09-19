@@ -49,9 +49,26 @@ hot account. The cost: each commit takes about 97 ms, so a single order waits lo
 - **8 writers × 100-order batches over 100 entities is the fastest configuration measured: 5,671 orders/s.**
 - **More writers made it worse.** The workload assigns platform entities round-robin (`platform:p0000`–`p0099`), so
   one 100-order batch touches **all 100** of them. With 32 concurrent batches, every batch queues behind every other on shared
-  entity locks: lock-wait p95 is 4.95 s. **Batching and spreading do not compose naïvely.** They need
-  shard-aligned batches, with each writer (each Kafka partition consumer) owning a disjoint set of platform shards.
-  That is the design implication; it was not built or measured.
+  entity locks: lock-wait p95 is 4.95 s. **Batching and spreading do not compose naïvely.** One way to make them
+  compose is shard-aligned batches, with each writer (each Kafka partition consumer) owning a disjoint set of
+  platform shards. That is this project's own extrapolation, not built or measured.
+
+### 4.3 How this compares with Uber's published solution
+
+Uber's [*Building High Throughput Payment Account Processing*](https://www.uber.com/us/en/blog/high-throughput-processing/)
+(Gulfstream, March 2026) solves the hot-account problem by **time-window micro-batching per account**. Operations
+for one account are grouped into 250 ms windows (coordinated in Redis), applied in memory, and written with **one read
+and one atomic write per batch** under optimistic locking. The audit log is written asynchronously, off the critical
+path. That took a hot account from 3–4 to more than 30 updates per second. Uber **rejected sharding the account**
+across rows because it "complicates the single-balance concept and hot account detection".
+
+- §4.1 is the same idea as Uber's: amortise a hot account's per-update round trips and lock over a batch. Our batch
+  boundary is a Kafka poll, not a time window. We lock pessimistically (`SELECT … FOR UPDATE`) rather than
+  optimistically. Our changelog is written in the same transaction, not asynchronously.
+- §4.2's entity spread emulates the sharding Uber rejected, and the collision at 32 × 100 is the kind of complexity
+  they cite.
+- **The numbers are not comparable.** Uber's figures are for DynamoDB with 30–160 ms network round trips at
+  production scale. These are for a local PostgreSQL with sub-millisecond round trips on one laptop.
 - CR-S07-01 held again: 211 lock-queue timeouts at 32 × 100, all retried, 0 quarantined, every window valid.
 
 ## 5. Verdict against the ESTIMATE

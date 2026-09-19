@@ -27,6 +27,7 @@ recorded in [perf-summary.md](docs/results/perf/perf-summary.md)).
 | Reconciliation against the running FakeCard | 20 / 20 report lines matched, the settlement followed into the ledger, provider clearing back to exactly 0; with report corruption injected, 8 typed breaks and the 146 residual **flagged, not adjusted away** | [reconciliation-live.md](docs/results/s06/reconciliation-live.md) |
 | Reconciliation under chaos, 2 settlement cycles × 5 runs | **405 of 405 breaks explained** by the injected fault log, **0 unexplained**, 0 duplicate charges, with provider faults, webhook chaos and `kill -9` of two services every cycle | [m11c-recon-under-chaos.md](docs/results/s06/m11c-recon-under-chaos.md) |
 | Fresh clone → running system, nothing cached | **4.83 minutes** from `git clone` to a completed seeded scenario, downloading 7.3 GB (Gradle, JDK, images) | [fresh-clone.md](docs/results/m14/fresh-clone.md) |
+| Safeguard-removal experiment (M13(b)), 60 runs | Each protection switched off alone produced its predicted failure: **no outbox → orders lost** (up to 32 per broker outage), **fresh payment key → 26–28 duplicate charges per 200 trips**, **no zero-sum checks → 55–70 unbalanced orders**; the **full design made 0 violations in 21 of 21 fault runs**. The ledger's de-duplication failed as predicted under consumer crashes (3/3) but not under broker faults, so that variant is recorded as not valid | [ablation-results.md](docs/results/s08/ablation-results.md) |
 | Defects found by measuring, then fixed | Valid orders quarantined under hot-account contention ([CR-S07-01](docs/scope-decisions.md#cr-s07-01--a-statement-timeout-while-queueing-for-entity-locks-quarantined-valid-money-fixed)); order-service killed for memory at 1,000 req/s (fixed by sizing Tomcat threads to the connection pool and bounding malloc arenas: [p1-api-ack.md](docs/results/perf/p1-api-ack.md)). Each fix re-measured | [scope-decisions.md](docs/scope-decisions.md) |
 | Test suite, force-executed 2026-09-18 | **360 unit + 303 integration** (real PostgreSQL and Kafka via Testcontainers), **0 failures**, 1 deliberate skip; plus end-to-end and chaos layers run against the live stack | [architecture.md](docs/architecture.md#what-the-tests-actually-cover) |
 
@@ -100,7 +101,8 @@ Kept explicit on purpose. [docs/scope-decisions.md](docs/scope-decisions.md) rec
   sharing the CPUs. On Docker Desktop, `fsync` may be acknowledged from the host's cache, which flatters commit time
   compared with a dedicated server.
 - **Open acceptance criteria** are listed in [docs/architecture.md](docs/architecture.md#acceptance-criteria-m1m14) as NOT MET or
-  PARTIAL, each with the reason. They include reordered webhook delivery at volume and a demo video.
+  PARTIAL, each with the reason. They include reordered webhook delivery at volume, the one ablation (A1) that no broker fault
+  could exercise, and a demo video.
 
 ## Quickstart
 

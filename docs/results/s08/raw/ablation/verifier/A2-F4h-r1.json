@@ -1,0 +1,23 @@
+{
+  "tool": "tools/verifier",
+  "label": "A2-F4h-r1",
+  "started_at": "2026-09-19T08:53:07.365394Z",
+  "jdbc_url": "jdbc:postgresql://127.0.0.1:5432/ledger",
+  "targets": {"ledger": "jdbc:postgresql://127.0.0.1:5432/ledger", "orders": "jdbc:postgresql://127.0.0.1:5432/orders", "instruments": "jdbc:postgresql://127.0.0.1:5432/instruments", "providers": "jdbc:postgresql://127.0.0.1:5432/fakeproviders"},
+  "connected_as": "verifier",
+  "session_transaction_read_only": "on",
+  "sessions_transaction_read_only": {"ledger": "on", "orders": "on", "instruments": "on", "providers": "on"},
+  "scope": {"entities": 251, "accounts": 251, "changelog_rows": 17937, "applied_orders": 5979, "empty": false},
+  "checks": [
+    {"id": "I1", "what": "every money order is zero-sum per currency", "status": "PASS", "violations": 0, "metrics": {"orders_checked": 6000, "unbalanced_orders": 0}, "sample": []},
+    {"id": "I2", "what": "global per-currency sum of ledger balances is 0", "status": "PASS", "violations": 0, "metrics": {"nonzero_currencies": 0}, "sample": []},
+    {"id": "I3", "what": "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum", "status": "PASS", "violations": 0, "metrics": {"accounts_mismatched": 0, "running_sum_rows_wrong": 0}, "sample": []},
+    {"id": "I4", "what": "changelog seq is gapless per entity", "status": "PASS", "violations": 0, "metrics": {"entities_with_gaps": 0}, "sample": []},
+    {"id": "I6", "what": "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows", "status": "FAIL", "violations": 21, "metrics": {"orders_in_store": 6000, "applied_orders": 5979, "missing_orders": 21, "extra_applied": 0, "unresolved_quarantined": 0}, "sample": ["not applied: 01a0b8db-c616-7c1e-8ffc-d45571305a25", "not applied: 01a0b8db-c620-7668-a7ee-ac1b8f396ab4", "not applied: 01a0b8db-c62b-74fa-b75f-a87d6c63348e", "not applied: 01a0b8db-c634-7cd9-aab7-2713909d5c61", "not applied: 01a0b8db-c63d-7d4a-9d6e-1e4f574d1231", "not applied: 01a0b8db-c648-7adc-ab88-a49f4ab59e38", "not applied: 01a0b8db-c653-722d-ba73-6c5940bd9233", "not applied: 01a0b8db-c65c-76b5-b6cb-b482923959a5", "not applied: 01a0b8db-c667-7229-8bf2-9fe4744f508b", "not applied: 01a0b8db-c66f-7b95-82bb-8a5bf5ef6d01"]},
+    {"id": "I6b", "what": "every ledger balance = Σ entries for that account across all orders in the order store", "status": "FAIL", "violations": 37, "metrics": {"accounts_compared": 251, "accounts_drifting": 37, "drift_abs_minor": 119342}, "sample": ["driver:a2f4hr1d0/payable/USD ledger=-211083 orders=-213723", "rider:a2f4hr1r28/receivable/USD ledger=82327 orders=85602", "rider:a2f4hr1r141/receivable/USD ledger=66821 orders=67422", "driver:a2f4hr1d45/payable/USD ledger=-253849 orders=-254822", "driver:a2f4hr1d25/payable/USD ledger=-277045 orders=-281253", "driver:a2f4hr1d43/payable/USD ledger=-273624 orders=-276334", "driver:a2f4hr1d29/payable/USD ledger=-287388 orders=-290008", "rider:a2f4hr1r76/receivable/USD ledger=75709 orders=80224", "rider:a2f4hr1r92/receivable/USD ledger=108037 orders=111424", "rider:a2f4hr1r158/receivable/USD ledger=111650 orders=115288"]},
+    {"id": "I7", "what": "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed", "status": "PASS", "violations": 0, "metrics": {"attempts": 0, "provider_success_records": 0, "duplicate_charges": 0, "duplicate_minor": 0, "success_without_provider_record": 0, "provider_success_without_attempt": 0, "provider_success_on_failed_attempt": 0}, "sample": []}
+  ],
+  "result": "FAIL",
+  "passed": false,
+  "provenance": {"captured_at": "2026-09-19T08:53:07.616101Z", "git_sha": "41b0960d7d7a2d2151ae95731e4015c927fab4c5", "working_tree": "clean (0 changes)", "versions_document": "docs/adr/0002-stack-and-pinned-versions.md", "java_runtime": "26.0.1+8-34", "hardware": "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64", "seeds": [], "runtime_versions": {"JVM": "Java HotSpot(TM) 64-Bit Server VM 26.0.1 (Oracle Corporation)", "PostgreSQL": "PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"}}
+}

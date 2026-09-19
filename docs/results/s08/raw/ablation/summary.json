@@ -54,6 +54,17 @@
     "valid" : true,
     "runs_violating_by_invariant" : { }
   },
+  "A0/F4h" : {
+    "runs" : 3,
+    "classifications" : {
+      "PASS" : 3
+    },
+    "judged_runs" : 3,
+    "predicted_class_observed" : 3,
+    "threshold" : "all runs PASS",
+    "valid" : true,
+    "runs_violating_by_invariant" : { }
+  },
   "A0/F7" : {
     "runs" : 3,
     "classifications" : {
@@ -89,6 +100,17 @@
     "valid" : false,
     "runs_violating_by_invariant" : { }
   },
+  "A1/F4h" : {
+    "runs" : 3,
+    "classifications" : {
+      "PASS" : 3
+    },
+    "judged_runs" : 3,
+    "predicted_class_observed" : 0,
+    "threshold" : ">= 1 run",
+    "valid" : false,
+    "runs_violating_by_invariant" : { }
+  },
   "A2/F1" : {
     "runs" : 3,
     "classifications" : {
@@ -113,6 +135,20 @@
     "threshold" : ">= 1 run",
     "valid" : false,
     "runs_violating_by_invariant" : { }
+  },
+  "A2/F4h" : {
+    "runs" : 3,
+    "classifications" : {
+      "VIOLATION" : 3
+    },
+    "judged_runs" : 3,
+    "predicted_class_observed" : 3,
+    "threshold" : ">= 50% of runs",
+    "valid" : true,
+    "runs_violating_by_invariant" : {
+      "I6" : 3,
+      "I6b" : 3
+    }
   },
   "A3/F7" : {
     "runs" : 6,

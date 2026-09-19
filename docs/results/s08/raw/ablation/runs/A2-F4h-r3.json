@@ -1,0 +1,177 @@
+{
+  "evidence" : "S08-M13b",
+  "label" : "A2-F4h-r3",
+  "cell" : "A2/F4h",
+  "variant" : "A2",
+  "faults" : "F4h",
+  "run" : 3,
+  "seed" : 2342961964701308396,
+  "run_id" : "a2f4hr3",
+  "timing_dependent_cell" : false,
+  "switches_requested" : [ "A2" ],
+  "reset_seconds" : 17.371,
+  "switches_observed" : {
+    "order-service" : "ZS-CHAOS service=order-service active=[A2]",
+    "instrument-service" : "ZS-CHAOS service=instrument-service active=[]",
+    "ledger-service" : "ZS-CHAOS service=ledger-service active=[]",
+    "order-service zero-sum triggers" : "ZS-CHAOS service=order-service zero-sum-triggers-enabled=true {money_order_entries_zero_sum=true, money_orders_have_entries=true}"
+  },
+  "fakecard_profile" : "{\"seed\":0}",
+  "load" : {
+    "workload" : {
+      "trips" : 6000,
+      "tripsPerSecond" : 100.0,
+      "riders" : 200,
+      "drivers" : 50,
+      "cards" : false,
+      "bugRate" : 0.0,
+      "resendRate" : 0.0,
+      "keyReuseRate" : 0.0
+    },
+    "started_at" : "2026-09-19T09:12:06.388877Z",
+    "finished_at" : "2026-09-19T09:15:27.884823Z",
+    "generation_seconds" : 201.495,
+    "counts" : {
+      "created" : 2067,
+      "replayed_on_retry" : 3933,
+      "retried_transport" : 236969
+    },
+    "unexpected_statuses" : { }
+  },
+  "fault_actions" : [ {
+    "fault" : "F4h",
+    "started_at" : "2026-09-19T09:12:26.833726Z",
+    "action" : "docker kill -s KILL kafka; down 150 s; docker start",
+    "exit_code" : 137,
+    "ended_at" : "2026-09-19T09:14:57.279874Z"
+  }, {
+    "fault" : "F4h",
+    "started_at" : "2026-09-19T09:15:22.545334Z",
+    "action" : "docker kill -s KILL kafka; down 150 s; docker start",
+    "exit_code" : 137,
+    "ended_at" : "2026-09-19T09:17:53.071365Z"
+  } ],
+  "fault_injections" : 2,
+  "fault_action_errors" : 0,
+  "quiesce" : {
+    "quiesced" : true,
+    "max_wait_seconds" : 300,
+    "waited_seconds" : 5.193,
+    "recovery_to_zero_lag_seconds" : 19.032,
+    "last_probe" : {
+      "orders_outbox_unpublished" : 0,
+      "instruments_outbox_unpublished" : 0,
+      "consumer_lag" : 0,
+      "attempts_not_terminal" : 0,
+      "webhooks_undelivered" : 0,
+      "orders" : 6000,
+      "applied_orders" : 5968
+    },
+    "stuck_attempts" : 0
+  },
+  "verifier_exit" : 1,
+  "verifier_checks" : [ {
+    "id" : "I1",
+    "what" : "every money order is zero-sum per currency",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "orders_checked" : 6000,
+      "unbalanced_orders" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I2",
+    "what" : "global per-currency sum of ledger balances is 0",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "nonzero_currencies" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I3",
+    "what" : "account balance = Σ changelog deltas, and balance_after_minor is a correct running sum",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "accounts_mismatched" : 0,
+      "running_sum_rows_wrong" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I4",
+    "what" : "changelog seq is gapless per entity",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "entities_with_gaps" : 0
+    },
+    "sample" : [ ]
+  }, {
+    "id" : "I6",
+    "what" : "order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows",
+    "status" : "FAIL",
+    "violations" : 32,
+    "metrics" : {
+      "orders_in_store" : 6000,
+      "applied_orders" : 5968,
+      "missing_orders" : 32,
+      "extra_applied" : 0,
+      "unresolved_quarantined" : 0
+    },
+    "sample" : [ "not applied: 01a0b8f0-3c40-7bb3-91b7-e8631eb7abc2", "not applied: 01a0b8f0-3c47-7a40-887d-efd3318ec5df", "not applied: 01a0b8f0-3c50-7e84-92b2-c8b44d44d738", "not applied: 01a0b8f0-3c5a-7c8d-b2b7-712041a5731a", "not applied: 01a0b8f0-3c68-7949-beb8-f44ff181f901", "not applied: 01a0b8f0-3c6e-7350-aa49-2860b5e5bd92", "not applied: 01a0b8f0-3c78-7636-b95d-4226f8655b67", "not applied: 01a0b8f0-3c81-7ca1-9193-66c5131b4a1b", "not applied: 01a0b8f0-3c8c-72c2-b7b1-55d53e58ce59", "not applied: 01a0b8f0-3c96-79c4-b89c-6dc34be75576" ]
+  }, {
+    "id" : "I6b",
+    "what" : "every ledger balance = Σ entries for that account across all orders in the order store",
+    "status" : "FAIL",
+    "violations" : 57,
+    "metrics" : {
+      "accounts_compared" : 251,
+      "accounts_drifting" : 57,
+      "drift_abs_minor" : 160404
+    },
+    "sample" : [ "rider:a2f4hr3r93/receivable/USD ledger=61384 orders=65949", "rider:a2f4hr3r100/receivable/USD ledger=100603 orders=104461", "rider:a2f4hr3r98/receivable/USD ledger=96613 orders=99906", "rider:a2f4hr3r17/receivable/USD ledger=77516 orders=78426", "driver:a2f4hr3d18/payable/USD ledger=-262025 orders=-263027", "driver:a2f4hr3d39/payable/USD ledger=-262518 orders=-264603", "driver:a2f4hr3d37/payable/USD ledger=-259363 orders=-260380", "rider:a2f4hr3r22/receivable/USD ledger=80458 orders=80981", "driver:a2f4hr3d30/payable/USD ledger=-284252 orders=-286529", "driver:a2f4hr3d23/payable/USD ledger=-258421 orders=-261569" ]
+  }, {
+    "id" : "I7",
+    "what" : "provider ground truth ↔ attempts: one provider success per attempt, none unclaimed",
+    "status" : "PASS",
+    "violations" : 0,
+    "metrics" : {
+      "attempts" : 0,
+      "provider_success_records" : 0,
+      "duplicate_charges" : 0,
+      "duplicate_minor" : 0,
+      "success_without_provider_record" : 0,
+      "provider_success_without_attempt" : 0,
+      "provider_success_on_failed_attempt" : 0
+    },
+    "sample" : [ ]
+  } ],
+  "classification" : "VIOLATION",
+  "violated" : [ "I6", "I6b" ],
+  "predicted_class_observed" : true,
+  "provenance" : {
+    "captured_at" : "2026-09-19T09:18:16.669179Z",
+    "git_sha" : "41b0960d7d7a2d2151ae95731e4015c927fab4c5",
+    "working_tree" : "clean (0 changes)",
+    "versions_document" : "docs/adr/0002-stack-and-pinned-versions.md",
+    "java_runtime" : "25.0.4.1+1-LTS",
+    "hardware" : "Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64",
+    "seeds" : [ 2342961964701308396 ],
+    "runtime_versions" : {
+      "order-service image" : "sha256:940e8709a1b538594b62b9d85e908a14561590258c651cc3fd20505ed5665ad2",
+      "instrument-service image" : "sha256:6e51aa5847eb6ecf0a95015dfb5624f5b5f7c4d0629b776c06a21491f20d5ca9",
+      "ledger-service image" : "sha256:11cabf776ce28b7d03b01be65ce887c21c1632626bb632a57c400ac6eac0987e",
+      "JVM" : "OpenJDK 64-Bit Server VM 25.0.4.1 (Eclipse Adoptium)",
+      "fake-providers image" : "sha256:611bff1727ae3cb54a3e6fdb8470cb47871a685014e6a4a55b9bf598eb34bdc6"
+    }
+  },
+  "wall_seconds" : 387.796,
+  "window_utc" : {
+    "start" : "2026-09-19T09:11:48.906815Z",
+    "end" : "2026-09-19T09:18:16.703362Z"
+  },
+  "grafana_url" : "http://127.0.0.1:3000/d/zs-flow?from=1789809078906&to=1789809526703",
+  "logs" : "logs/A2-F4h-r3/"
+}

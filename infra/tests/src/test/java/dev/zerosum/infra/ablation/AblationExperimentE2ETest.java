@@ -292,7 +292,7 @@ class AblationExperimentE2ETest {
                 ChaosStack.restartKafka();
                 return Map.of("action", "docker restart kafka", "restart_seconds", secondsSince(began));
             }));
-            // Run plan 3.6: a hard broker kill held down past the producer's delivery timeout. F4's graceful restart
+            // Run plan 3.8: a hard broker kill held down past the producer's delivery timeout. F4's graceful restart
             // neither lost a buffered send nor dropped an offset commit, so it exercised neither A1 nor A2.
             case "F4h" -> threads.add(every("F4h", seed, stop, actions, tags, () -> {
                 ChaosStack.kill("kafka");

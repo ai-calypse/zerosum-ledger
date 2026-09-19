@@ -1,0 +1,96 @@
+# A2-F4h-r3 — invariants I1, I2, I3, I4, I6, I6b, I7
+
+<!--
+decision: CR-S09-01 — docs/scope-decisions.md#m13-evidence-harness
+Written by tools/verifier. Do not edit by hand: re-run the tool, which recaptures the provenance block.
+-->
+
+## 1. Evidence ID and type
+
+| Field | Value |
+|---|---|
+| Evidence ID | A2-F4h-r3 |
+| Type | verification |
+| Owning step and task | M13 (a), M13 (c) — evidence harness |
+| Date (UTC) | 2026-09-19 |
+
+## 2. Status
+
+- **Measured**
+
+## 3. Provenance (master §3.1 M13 c)
+
+| Item | Value |
+|---|---|
+| Git commit SHA | `41b0960d7d7a2d2151ae95731e4015c927fab4c5`; working tree clean (0 changes) |
+| Versions | [docs/adr/0002-stack-and-pinned-versions.md](../../adr/0002-stack-and-pinned-versions.md) at the SHA above. Runtime-reported: JVM Java HotSpot(TM) 64-Bit Server VM 26.0.1 (Oracle Corporation), PostgreSQL PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit |
+| Seeds | none (non-generative evidence) |
+| Hardware | Mac16,12, 10 cores, 24.0 GiB RAM (25769803776 bytes), Mac OS X 26.5.2, aarch64 |
+
+## 4. Host and Docker allocation
+
+| Item | Value |
+|---|---|
+| Docker engine / Compose version | n/a — the verifier connects over JDBC and starts no containers |
+| Docker VM CPUs / memory | n/a — as above |
+| Emulated images (non-native architecture) | n/a — as above |
+| Other load on the host during the run | not captured; the verifier only reads, and reports no timings that load could distort |
+
+## 5. Scenario, workload and seeds
+
+
+
+Targets, each connected as `verifier`: `ledger` jdbc:postgresql://127.0.0.1:5432/ledger (`transaction_read_only = on`); `orders` jdbc:postgresql://127.0.0.1:5432/orders (`transaction_read_only = on`); `instruments` jdbc:postgresql://127.0.0.1:5432/instruments (`transaction_read_only = on`); `providers` jdbc:postgresql://127.0.0.1:5432/fakeproviders (`transaction_read_only = on`).
+
+Ledger scope actually examined: **entities=251 accounts=251 changelog_rows=17904 applied_orders=5968**. Each database was read inside one read-only repeatable-read
+transaction, and the transactions were opened back to back before any check ran.
+
+Seeds: none (non-generative evidence).
+
+## 6. Exact commands
+
+```sh
+./gradlew :tools:verifier:run --args="--jdbc-url jdbc:postgresql://127.0.0.1:5432/ledger --orders-jdbc-url jdbc:postgresql://127.0.0.1:5432/orders --instruments-jdbc-url jdbc:postgresql://127.0.0.1:5432/instruments --providers-jdbc-url jdbc:postgresql://127.0.0.1:5432/fakeproviders --checks I1,I2,I3,I4,I6,I6b,I7 --env-file /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/.env --out /Users/yakshgandhi/Documents/Development/fintech-blogs/zerosum-ledger/infra/tests/build/evidence/ablation/verifier --label A2-F4h-r3"
+```
+
+## 7. Raw data
+
+[A2-F4h-r3.json](A2-F4h-r3.json) — the same run, with every check's metrics and its sample of offending rows.
+
+## 8. Results
+
+| Invariant | What it checks | Result | Violations | Metrics |
+|---|---|---|---|---|
+| I1 | every money order is zero-sum per currency | **PASS** | 0 | orders_checked=6000, unbalanced_orders=0 |
+| I2 | global per-currency sum of ledger balances is 0 | **PASS** | 0 | nonzero_currencies=0 |
+| I3 | account balance = Σ changelog deltas, and balance_after_minor is a correct running sum | **PASS** | 0 | accounts_mismatched=0, running_sum_rows_wrong=0 |
+| I4 | changelog seq is gapless per entity | **PASS** | 0 | entities_with_gaps=0 |
+| I6 | order ids in the orders DB = applied_orders, and 0 unresolved quarantine rows | **VIOLATED** | 32 | orders_in_store=6000, applied_orders=5968, missing_orders=32, extra_applied=0, unresolved_quarantined=0 |
+| I6b | every ledger balance = Σ entries for that account across all orders in the order store | **VIOLATED** | 57 | accounts_compared=251, accounts_drifting=57, drift_abs_minor=160404 |
+| I7 | provider ground truth ↔ attempts: one provider success per attempt, none unclaimed | **PASS** | 0 | attempts=0, provider_success_records=0, duplicate_charges=0, duplicate_minor=0, success_without_provider_record=0, provider_success_without_attempt=0, provider_success_on_failed_attempt=0 |
+
+**Overall: FAIL — I6, I6b violated**
+
+Offending rows:
+
+- **I6** (first 10 of 32): `not applied: 01a0b8f0-3c40-7bb3-91b7-e8631eb7abc2`, `not applied: 01a0b8f0-3c47-7a40-887d-efd3318ec5df`, `not applied: 01a0b8f0-3c50-7e84-92b2-c8b44d44d738`, `not applied: 01a0b8f0-3c5a-7c8d-b2b7-712041a5731a`, `not applied: 01a0b8f0-3c68-7949-beb8-f44ff181f901`, `not applied: 01a0b8f0-3c6e-7350-aa49-2860b5e5bd92`, `not applied: 01a0b8f0-3c78-7636-b95d-4226f8655b67`, `not applied: 01a0b8f0-3c81-7ca1-9193-66c5131b4a1b`, `not applied: 01a0b8f0-3c8c-72c2-b7b1-55d53e58ce59`, `not applied: 01a0b8f0-3c96-79c4-b89c-6dc34be75576`
+- **I6b** (first 10 of 57): `rider:a2f4hr3r93/receivable/USD ledger=61384 orders=65949`, `rider:a2f4hr3r100/receivable/USD ledger=100603 orders=104461`, `rider:a2f4hr3r98/receivable/USD ledger=96613 orders=99906`, `rider:a2f4hr3r17/receivable/USD ledger=77516 orders=78426`, `driver:a2f4hr3d18/payable/USD ledger=-262025 orders=-263027`, `driver:a2f4hr3d39/payable/USD ledger=-262518 orders=-264603`, `driver:a2f4hr3d37/payable/USD ledger=-259363 orders=-260380`, `rider:a2f4hr3r22/receivable/USD ledger=80458 orders=80981`, `driver:a2f4hr3d30/payable/USD ledger=-284252 orders=-286529`, `driver:a2f4hr3d23/payable/USD ledger=-258421 orders=-261569`
+
+## 9. Gate or threshold compared against
+
+The invariant catalog in [master §8.3](../../zerosum_ledger_mvp_plan.md#invariants): I1, I2, I3, I4, I6, I6b, I7 evaluated.
+**Miss.**
+
+## 10. Deviations and limitations
+
+- **Not evaluated by this tool:** I5 (hash chain; needs the per-entity `verify` endpoint), I8, I9, I11
+  and R1.
+- **One snapshot per database, not one across them.** The four transactions open milliseconds apart, so
+  the cross-store checks (I6, I6b, I7, I12) are evidence about a quiesced system only.
+- **I7 reads provider ground truth from the fakeproviders database** (the tables `/admin/truth` reads),
+  keyed by `client_reference` = attempt id; charges and refunds count when `SUCCEEDED`, payouts unless
+  `FAILED`.
+- **I12 explains a break only by an injected discrepancy** in the fault log of the mapped type, for the same
+  provider reference in the same report. A break's `OPEN` status does not explain it.
+- **The I2–I4 SQL is a copy** of ledger-service's `InvariantQueries` (D02-8), so that the verifier can
+  audit a database whose service is not running. The two must be changed together.

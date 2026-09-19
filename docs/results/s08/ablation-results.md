@@ -7,12 +7,17 @@
 | Evidence ID | S08-M13b (master §3.1 M13 (b); ablation table [§8.5](../../zerosum_ledger_mvp_plan.md#ablation); faults [§8.4](../../zerosum_ledger_mvp_plan.md#fault-matrix)) |
 | Type | ablation |
 | Owning step and task | S08 (S08-T03 seams and guard, S08-T04/T05 runner and runs) |
-| Date (UTC) | results pending — see §2 |
+| Date (UTC) | 2026-09-19: 51-run series 01:06–02:37; F4h series 08:40–09:16 |
 
 ## 2. Status
 
-- **Run plan committed; evidence runs not yet executed.** This section is replaced with the measured status once the
-  runs below exist. Until then nothing in this document is a result.
+- **Measured: 60 evidence runs** (51 in the pre-registered series, plus 9 for the pre-registered F4h amendment,
+  §3.8). 246,696 trips through the real order API. Every run quiesced; 0 harness errors; 0 fault-action errors.
+- **M13(b): PARTIAL.** A2, A3, A4 and B0 are **valid**: each produced its predicted failure class at or above its
+  threshold. A5 showed no violation, as predicted. **A1 is not valid** under the pre-registered rule. Its protection
+  fails exactly as predicted under a ledger crash between commit and acknowledgement (F2, 3 of 3), but no broker fault
+  (F4 graceful restart, F4h hard kill) produced a redelivery in 6 runs (§6).
+- **The full design (A0) made 0 violations in all 21 control runs**, across seven fault sets.
 
 ## 3. Run plan (D08-6), committed before the first evidence run
 
@@ -135,7 +140,7 @@ generation and the last fault action to the first probe with zero lag and empty 
 attempts at the last probe).
 
 
-### 3.5 Pre-evidence amendment, 2026-09-19: observability only
+### 3.7 Pre-evidence amendment, 2026-09-19: observability only
 
 Made after the pilots and before the counted evidence series, so that every run can be replayed step by step
 afterwards. **No service behaviour, workload, fault, quiesce rule or classification changed.**
@@ -153,7 +158,7 @@ Two evidence runs made before this amendment (`A0-F2-r1`, `A1-F2-r1`, at `eb9da1
 discarded. The series restarted from run 1 at the amendment's commit.
 
 
-### 3.6 Second amendment, 2026-09-19, after the 51-run series: a broker fault that exercises A1 and A2
+### 3.8 Second amendment, 2026-09-19, after the 51-run series: a broker fault that exercises A1 and A2
 
 Recorded **before** any F4h run. The 51-run series (3.4) finished with A1/F4 and A2/F4 at 0 of 3: a graceful
 `docker restart kafka` (F4) neither lost a buffered producer send nor dropped the ledger's offset commit, so F4
@@ -173,6 +178,199 @@ silently.
 - **Variant validity:** A1 and A2 are judged on their crash cell (F2, F1) and F4h. F4 is reported alongside, as the
   finding that a graceful broker restart does not exercise them.
 
-## 4–10. Results
+## 4. Provenance
 
-Pending the evidence runs.
+| Item | Value |
+|---|---|
+| Git commit SHA | 51-run series: `530037d`; F4h series: `41b0960`. **Every one of the 60 run JSONs records a clean working tree** (the harness refuses an evidence run otherwise) |
+| Images | built by the harness from that checkout at the start of each invocation (`docker compose build`), then run under `docker-compose.chaos.yml` |
+| Hardware | Apple M4, 10 cores, 24 GiB, on mains power; Docker Desktop VM 10 CPUs / 7.75 GiB. Unrelated applications were closed; nothing else used Docker during the runs |
+| Raw data | [raw/ablation/](raw/ablation/): `runs/` (60 run JSONs), `verifier/`, `logs/` (every service, every run), `summary.json`; `pilots/` and `pre-amendment/` kept and labelled, never counted |
+
+## 5. Results by cell
+
+Generated from the raw run JSONs and `summary.json`. Damage columns are the verifier's own metrics, one value per run.
+
+| Cell | Runs | Predicted class observed | Threshold | Valid | Invariants violated (runs) | Damage per run |
+|---|---|---|---|---|---|---|
+| A0/F1 | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A0/F2 | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A0/F4 | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A0/F4h | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A0/F7 | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A0/F11v | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A0/F12b | 3 | 3 of 3 | all runs PASS | yes | — | 0 violations |
+| A1/F2 | 3 | 3 of 3 | >= 50% of runs | yes | I6b×3 | drift $355/28,398/27,208 |
+| A1/F4 | 3 | 0 of 3 | >= 1 run | **no** | — | 0 violations |
+| A1/F4h | 3 | 0 of 3 | >= 1 run | **no** | — | 0 violations |
+| A2/F1 | 3 | 3 of 3 | >= 1 run | yes | I6×3, I6b×3 | missing orders 2/2/2; drift $85/138/112 |
+| A2/F4 | 3 | 0 of 3 | >= 1 run | **no** | — | 0 violations |
+| A2/F4h | 3 | 3 of 3 | >= 50% of runs | yes | I6×3, I6b×3 | missing orders 21/21/32; drift $1,193/1,260/1,604 |
+| A3/F7 | 6 | 6 of 6 | >= 50% of runs | yes | I7×6 | duplicate charges 28/28/27/28/28/26 ($672/719/844/786/874/598) |
+| A4/F11v | 6 | 6 of 6 | >= 50% of runs | yes | I1×6, I2×5 | unbalanced orders 55/70/64/58/60/65 |
+| B0/F12b | 6 | 5 of 6 | >= 50% of runs | yes | I1×5, I2×4, I7×6 | duplicate charges 22/20/27/28/19/21 ($565/503/690/683/569/597); unbalanced orders 2/1/4/5/4/0 |
+| A5/F8c | 3 | 3 of 3 | reported only (predicted: no violation) | reported only | — | 0 violations |
+
+60 evidence runs: {'PASS': 33, 'VIOLATION': 27}; trips created 246,696; wall 124 min
+
+## 6. Verdict per variant
+
+| Variant | Cells and result | Verdict |
+|---|---|---|
+| **A0** (full design) | 21 of 21 PASS under F1, F2, F4, F4h, F7, F11v, F12b | **valid**: 0 invariant violations, 0 duplicate charges |
+| **A1** ledger de-duplication off | F2 **3/3** (I6b; up to $28,398 of drift in one run, up to 231 accounts drifting); F4 0/3; F4h 0/3 | **not valid** under the pre-registered rule (§3.8). The protection is real and the prediction held under consumer crashes, but the broker cells never exercised it (§8) |
+| **A2** outbox off (dual write) | F1 **3/3** (2 orders lost per run); F4h **3/3** (21–32 lost per run); F4 0/3, reported | **valid** |
+| **A3** fresh provider key on retry | F7 **6/6** (26–28 duplicate charges per 200 trips, $598–874 over-charged) | **valid** |
+| **A4** zero-sum checks off | F11v **6/6** I1 (55–70 unbalanced orders); I2 in 5 of 6 | **valid**. In the sixth run the ±1 errors cancelled out globally, so only the per-order check (I1) could see them |
+| **B0** all four off | F12b **5/6** with two or more classes (duplicate charges in 6/6, zero-sum in 5/6) | **valid** |
+| **A5** webhook de-duplication off | F8c 3/3 PASS | as predicted: the attempt state machine refuses stale events (`ignored_stale_event`), a second layer |
+
+## 7. What the broker-fault results mean
+
+- A **graceful** Kafka restart (F4) exercised neither the ledger's de-duplication (A1) nor the outbox (A2): 0 of 6.
+  The producer and consumer rode through it. A0's clean result under F4 therefore says little about either protection.
+- A **hard** kill held past the producer's metadata wait (F4h) exercises the outbox decisively: A2 lost orders in
+  3 of 3, while the control lost none and kept the API available.
+- **No broker fault** exercised A1 (0 of 6). Only a consumer crash between database commit and offset commit does
+  (F2, 3 of 3).
+
+## 8. Walkthroughs: one run per variant, step by step
+
+Each walkthrough is built from the run's own files: `raw/ablation/runs/<label>.json` (timeline, faults, recovery,
+verifier findings), `raw/ablation/logs/<label>/<service>.log.gz` (every service's log across restarts), and
+`raw/ablation/verifier/<label>.{json,md}`. Times are UTC, 2026-09-19. Every run is also in Grafana
+(`otel-lgtm`, http://127.0.0.1:3000, left running): its metrics and traces, plus annotations tagged `zs-run` marking the
+run start, each fault, the end of the load and the verdict on the `ZeroSum — Flow` and `Money invariants` dashboards.
+Each run JSON's `grafana_url` opens its exact window. The container's own filesystem kept Grafana's and Prometheus's
+data across a Docker Desktop restart between the two series; `make down` deletes it.
+
+### A0 control under the storm: `A0-F12b-r2` (PASS)
+
+FakeCard lost 20 % of responses and failed 5 %, duplicated, reordered and dropped webhooks, and 1 % of fares were
+split wrong.
+1. 02:06:35 load starts: 300 card trips at 5/s. The buggy trip is **rejected with 422** (`bug_orders_rejected_422: 1`),
+   so it never enters the books.
+2. 02:06:44 instrument-service logs `no CHARGE transition from SUCCEEDED to UNKNOWN`. A webhook had already settled
+   the attempt when the submitter's timed-out answer arrived. The transition table refuses the stale, older result
+   (see the note at the end of this section).
+3. 02:06:55 and 02:07:19, **F3**: instrument-service halts between the provider call and recording the result
+   (exit 86), then restarts. 02:07:03, **F1**: order-service is `kill -9`'d (exit 137) and restarts; 69 client calls
+   retried with the same idempotency key.
+4. Load ends at 02:07:35. The backlog reaches zero 55.2 s after the last fault. 598 orders are stored and 598
+   applied.
+5. Verifier: every check passes. 0 duplicate charges, and the books sum to zero.
+
+### A1, ledger de-duplication off: `A1-F2-r2` (VIOLATION I6b)
+
+1. 01:28:09 load starts: 6,000 trips at 100/s. ledger-service logs `ZS-CHAOS … active=[A1, F2]`.
+2. 01:28:32.154 **F2**: `ZS-CHAOS F2 halting after committing a batch of 6 records, before acknowledging it`
+   (exit 86). The batch is in the database; Kafka does not know it was consumed.
+3. 01:28:36 ledger restarts. 01:29:17 the consumer rejoins: `Setting offset for partition … to the committed offset`.
+   Kafka hands back records the ledger has already applied. With the `applied_orders` check skipped, they are
+   **applied again**. F2 fires once more at 01:28:57.
+4. 6,000 orders are stored and 6,000 appear in `applied_orders` (the row is written with `ON CONFLICT DO NOTHING`),
+   so a count alone would look healthy.
+5. Verifier **I6b**: 230 of 251 accounts drifted, 2,839,750 minor units (**$28,397.50**) in total. For example,
+   `rider:a1f2r2r186/receivable ledger=71,757 orders=67,674`. Only the cross-store sum catches double-apply. I2–I4
+   still hold, because every duplicate is internally balanced.
+
+### A2, outbox off (dual write): `A2-F1-r1` (VIOLATION I6)
+
+1. 01:09:11 load starts: 9,000 trips. order-service logs `active=[A2]`. Each order is committed, then sent straight
+   to Kafka, with no outbox row.
+2. 01:09:49 and 01:10:13 **F1**: order-service `kill -9` (exit 137). Orders committed in the moments before each
+   kill never reached Kafka. The client got a 201 or retried, and nothing will ever re-send them.
+3. Backlog zero after 38.5 s: 9,000 orders stored, **8,998 applied**.
+4. Verifier **I6**: `missing_orders: 2`, e.g. `not applied: 01a0b736-5fb9-7169-92a3-cb0d5b196e37`. **I6b** follows:
+   5 accounts are short by those orders' entries (8,472 minor units). The A0/F1 control with the same seed stored and
+   applied 9,000 of 9,000.
+
+### A3, fresh idempotency key on retry: `A3-F7-r1` (VIOLATION I7)
+
+1. 01:53:28 load starts: 200 card trips at 4/s. FakeCard loses 20 % of responses after committing the charge.
+2. Each lost response surfaces as `Unknown`. instrument-service logs
+   `ZS-CHAOS A3 resubmitting attempt 01a0b75e-58b6-… under a fresh key`, and FakeCard sees a new key and **charges
+   again**.
+3. Verifier **I7**: 200 attempts but **228 provider successes**: 28 duplicate charges, 67,206 minor units ($672.06)
+   over-charged. For example, `CHARGE 01a0b75e-58b6-… succeeded 2 times`. The A0/F7 control logged 260
+   timeout/unknown lines under the same faults and made 0 duplicate charges: the same key makes the provider replay
+   the original charge.
+
+### A4, zero-sum checks off: `A4-F11v-r1` (VIOLATION I1, I2)
+
+1. 01:56:07 order-service logs `zero-sum triggers are {…=true} but A4 is on`, then
+   `zero-sum-triggers-enabled=false`. The owner role disabled the two zero-sum triggers only; the append-only triggers
+   stay. The API rule and the ledger's re-check are off too.
+2. 01:56:09 load starts: 6,000 trips, with 1 % carrying a ±1-minor-unit fare-split bug, 20 % resent with the same
+   key (1,188 replays), and 2 % same key with a different body (116 rejected with 422: idempotency still works).
+3. **All 55 buggy orders were accepted** (`bug_orders_accepted: 55`). In the A0 control, the same bugs were rejected
+   at the API.
+4. Verifier **I1**: 55 unbalanced orders, e.g. `01a0b761-…: USD sums to 1`. **I2**: the global USD total is no
+   longer zero.
+
+### B0, everything off, under the storm: `B0-F12b-r2` (VIOLATION I1, I2, I7)
+
+Same faults and seed as `A0-F12b-r2` above, with A1–A4 switched off. F3 fired twice and F1 once. Result: **20
+duplicate charges** ($503.26), and 1 unbalanced order (`sums to -1`) that broke the global zero. The control on the
+identical schedule passed.
+
+### A5, webhook de-duplication off: `A5-F8c-r1` (PASS, as predicted)
+
+FakeCard duplicated 30 %, reordered 30 % and dropped 10 % of webhooks. With `provider_events` de-duplication off,
+every duplicate reached the attempt state machine. The next layer stopped it:
+instrument-service logs `ignored_stale_event: webhook evt_2718364c-… reported S…` for each late or repeated event.
+Verifier: all checks pass. This is the predicted "no violation", and it shows the defence is layered.
+
+### A2 under the hard broker kill: `A2-F4h-r1` (VIOLATION I6), against its control `A0-F4h-r1` (PASS)
+
+Same seed and schedule; only A2 differs.
+1. **Control, A0-F4h-r1.** Load 08:42:08–08:43:08. Kafka `kill -9` at 08:42:37 (exit 137), down for 150 s, started
+   at 08:45:07. order-service never talks to Kafka at request time, so it **kept accepting orders at full rate
+   throughout: 6,000 in 60 s**, each one committed with its outbox row. When the broker returned, the relay drained
+   the backlog: zero lag 19.1 s later, 6,000 stored and 6,000 applied.
+2. **A2-F4h-r1** (no outbox: commit, then send directly). Kafka `kill -9` at 08:50:05, back at 08:52:36. Each direct
+   send now waited for topic metadata and failed: order-service logs
+   `TimeoutException: Topic payments.money-orders.v1 not present in metadata after 60000 ms` 26 times. That is
+   `max.block.ms`, a shorter wait than the 120 s delivery timeout §3.8 reasoned from. The wait happened **inside the
+   HTTP request**, so request threads and connections stalled. The load that took 60 s in the control took **204 s,
+   with 169,980 client retries**.
+3. Verifier **I6**: 6,000 orders stored, **5,979 applied: 21 missing**, e.g. `not applied: 01a0b8db-c616-…`.
+   These are orders the API committed and whose only send failed, and nothing will ever re-send them. **I6b**: 37
+   accounts short by $1,193.
+
+The outbox buys two things here: **no lost orders**, and an API that **stays available while the broker is down**.
+
+### A1 under broker faults: why nothing broke
+
+A1 broke under F2 (3 of 3) and under no broker fault (0 of 6). The likely reason, consistent with the logs but not
+proven here: the ledger commits a batch to the database and acknowledges its Kafka offset straight away. A graceful
+restart lets that acknowledgement finish, and in a hard kill the consumer is most likely waiting on the dead broker,
+not holding an applied-but-unacknowledged batch. Redelivery of
+an applied batch therefore needs the **consumer** to die in that few-millisecond gap, which is what the F2 hook does.
+In this design the de-duplication guards against consumer crashes, not broker crashes. Under the rule fixed in
+advance, A1 is still not valid: the F4h cell was pre-registered as part of its judgement, and it showed nothing.
+
+### A note these logs surfaced
+
+`A0-F12b-r2` logs the refused stale transition at **ERROR** (`could not record the outcome of attempt …`). The
+behaviour is correct: an older timed-out answer must not overwrite a newer SUCCEEDED. But an expected race logged as
+an error is noise that an on-call engineer would learn to ignore. It should be INFO, with a counter. Not changed
+during the evidence series.
+
+## 9. Confidence
+
+With 0 violations in n independent runs, the 95 % upper bound on the per-run failure probability is about 3/n (rule
+of three). For the full design that is **3/21 ≈ 14 % per run** across these fault sets. Per fault cell (n = 3) it is
+wide, about 63 %. These runs show that each protection is exercised and matters; they do not bound rare failures
+tightly. The master's plan of 20 runs of 10,000 trips per cell would.
+
+## 10. Limitations
+
+- **Scaled down**: 3–6 runs per cell and 200–9,000 trips per run, against the master's 20 × 10,000 (§3.3).
+- **F6 not run** (no Toxiproxy route to the providers). F8 applied to FakeCard's webhooks only; FakeBank returns not
+  exercised.
+- The F2 and F3 crash points are **hooks inside the services**, armed per injection. They are deterministic, which is
+  their point, but they are code paths only the `chaos` profile can enable (§3.1).
+- One laptop, one PostgreSQL, one single-node Kafka (replication factor 1).
+- **A1 is not valid** (§6). Making it valid would need a fault that kills the ledger consumer independently of any
+  hook, at a rate that makes landing in the commit-to-acknowledge window likely.
