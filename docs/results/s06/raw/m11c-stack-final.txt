@@ -1,0 +1,38 @@
+# M11(c) evidence stack, after run 5 and the final verifier CLI run, before `down -v` (2026-09-18, ~23:59 UTC).
+# Commands run from the worktree root as the postgres superuser via `docker compose exec`, read-only SELECTs.
+# Output copied verbatim.
+
+$ docker compose exec -T postgres psql -U postgres -d fakeproviders -Atc "SELECT provider, knobs::text FROM fault_profiles"
+fakecard|{"seed": 0, "return_rate": 0.0, "http_500_rate": 0.0, "latency_p50_ms": 0.0, "latency_p95_ms": 0.0, "webhook_drop_rate": 0.0, "webhook_reorder_rate": 0.0, "report_off_by_one_rate": 0.0, "webhook_duplicate_rate": 0.0, "max_processing_delay_ms": 0, "report_missing_line_rate": 0.0, "reset_before_commit_rate": 0.0, "timeout_after_commit_rate": 0.0, "report_duplicate_line_rate": 0.0, "simulated_banking_day_seconds": null}
+
+$ docker compose exec -T postgres psql -U postgres -d orders -Atc "SELECT type, count(*) FROM money_orders GROUP BY type ORDER BY type"
+COLLECTION|3000
+COMMERCE|3000
+SETTLEMENT|10
+
+$ docker compose exec -T postgres psql -U postgres -d ledger -Atc "SELECT entity_id, account_code, balance_minor FROM accounts WHERE entity_id LIKE 'provider:%'"
+provider:fakecard|clearing|16997
+
+$ docker compose exec -T postgres psql -U postgres -d instruments -Atc "SELECT report_date, lines_matched, breaks_found, status, settled FROM reconciliation_runs ORDER BY report_date"
+2026-09-08|280|31|COMPLETED|t
+2026-09-09|277|31|COMPLETED|t
+2026-09-10|268|50|COMPLETED|t
+2026-09-11|267|44|COMPLETED|t
+2026-09-12|259|50|COMPLETED|t
+2026-09-13|276|36|COMPLETED|t
+2026-09-14|271|44|COMPLETED|t
+2026-09-15|273|36|COMPLETED|t
+2026-09-16|269|43|COMPLETED|t
+2026-09-17|277|40|COMPLETED|t
+
+# Signed sum of every break: + our amount for a line missing from the report, − the report amount for a duplicated
+# line, + (ours − reported) for an amount mismatch. Returns (sum, number of breaks).
+$ docker compose exec -T postgres psql -U postgres -d instruments -Atc "SELECT sum(CASE break_type WHEN 'MISSING_IN_REPORT' THEN ledger_gross_minor WHEN 'DUPLICATE_LINE' THEN -report_gross_minor WHEN 'AMOUNT_MISMATCH' THEN ledger_gross_minor - report_gross_minor END), count(*) FROM reconciliation_breaks"
+16997|405
+
+$ docker compose -f docker-compose.yml -f docker-compose.demo.yml down -v
+ Volume zerosum-ledger_kafka-data Removed
+ Volume zerosum-ledger_postgres-data Removed
+ Network zerosum-ledger_default Removed
+$ docker compose -f docker-compose.yml -f docker-compose.demo.yml ps -a   # afterwards: no containers
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS

@@ -16,6 +16,10 @@ dependencies {
 
     // decision: S08 — the failure-mode tests record M13 (c) provenance with the same code the tools use.
     testImplementation(project(":libs:evidence"))
+
+    // M11(c) — the reconciliation chaos run ends by calling the real verifier entry point in-process, so the gate is
+    // the same code the CLI runs, not a restatement of its checks.
+    testImplementation(project(":tools:verifier"))
 }
 
 tasks.withType<Test>().configureEach {
