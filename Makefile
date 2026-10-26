@@ -56,8 +56,8 @@ e2e: ## End-to-end money path against the RUNNING stack (run `make up` first)
 	./gradlew e2eTest
 
 explorer: ## Open the Ledger Explorer
-	@echo "$(LEDGER)/explorer.html — the reader token is ZS_READER_TOKEN in .env"
-	@command -v open >/dev/null && open "$(LEDGER)/explorer.html" || true
+	@echo "$(PROXY)/explorer.html — the reader token is ZS_READER_TOKEN in .env"
+	@command -v open >/dev/null && open "$(PROXY)/explorer.html" || true
 
 grafana: ## Open Grafana (flow and money-invariants dashboards)
 	@command -v open >/dev/null && open "$(GRAFANA)" || true
@@ -81,7 +81,7 @@ verify-stack: ## Ask the running ledger whether its own books are consistent
 	  curl -s -H "Authorization: Bearer $$TOKEN" $(LEDGER)/v1/invariants; echo; \
 	  curl -s -H "Authorization: Bearer $$TOKEN" $(LEDGER)/v1/freshness; echo
 
-demo: up ## Full walkthrough: start the stack, move real money through it, then show the books
+demo: up ## Full walkthrough: start the stack, move simulated funds through it, then show the books
 	@echo "\n=== 1. the money path, end to end (order API -> outbox -> Kafka -> ledger) ==="
 	./gradlew e2eTest
 	@echo "\n=== 2. the simulated providers ==="
@@ -89,6 +89,6 @@ demo: up ## Full walkthrough: start the stack, move real money through it, then 
 	@echo "\n\n=== 3. the ledger's own invariants ==="
 	@$(MAKE) --no-print-directory verify-stack
 	@echo "\n=== 4. look at it ==="
-	@echo "  Explorer:  $(LEDGER)/explorer.html"
+	@echo "  Explorer:  $(PROXY)/explorer.html"
 	@echo "  Grafana:   $(GRAFANA)"
 	@echo "  Orders:    $(ORDERS)/v1/money-orders  (writer token required)"
