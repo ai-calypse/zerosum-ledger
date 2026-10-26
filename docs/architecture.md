@@ -1,5 +1,8 @@
 # Architecture
 
+For system-design reasoning, alternatives, consistency boundaries, and change triggers, start with the
+[architecture and tradeoff guide](../ARCHITECTURE.md). This document retains the detailed implementation/evidence reference.
+
 What this system actually is, as built — not as planned. Where the two differ, this document follows the code and the
 recorded evidence. The master plan ([docs/zerosum_ledger_mvp_plan.md](zerosum_ledger_mvp_plan.md)) is the proposal;
 [docs/scope-decisions.md](scope-decisions.md) records every place the build deliberately diverged from it.

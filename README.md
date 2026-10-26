@@ -11,7 +11,7 @@ Kafka delivery, simulated payment providers, reconciliation, and fault-injection
 [![CodeQL](https://github.com/ai-calypse/zerosum-ledger/actions/workflows/codeql.yml/badge.svg)](https://github.com/ai-calypse/zerosum-ledger/actions/workflows/codeql.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-256b5c)](LICENSE)
 
-[Engineering report](docs/engineering-report.md) · [Architecture](docs/architecture.md) · [Decision records](docs/adr/) · [Demo](docs/demo.md)
+[Engineering report](docs/engineering-report.md) · [Architecture & tradeoffs](ARCHITECTURE.md) · [Decision records](docs/adr/) · [Demo](docs/demo.md)
 
 ![Dashboard walkthrough assembled from committed screenshots](docs/images/zerosum-tour.gif)
 
