@@ -4,3 +4,9 @@ plugins {
     id("zs.java-conventions")
     application
 }
+
+// CLI defaults (.env and docs/results) are relative to the repository root, even when Gradle's
+// application plugin runs a nested tools project. This matches the documented root-level commands.
+tasks.named<JavaExec>("run") {
+    workingDir(rootDir)
+}
