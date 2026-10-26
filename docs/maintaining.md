@@ -11,6 +11,11 @@ language analysis complements runtime tests rather than replacing them.
 deletion are blocked. No approving-review count is required for the solo maintainer. Dependabot groups compatible
 updates weekly; review them as normal code changes. Third-party Actions use immutable commit pins.
 
+Integration runs in four independent groups: ledger, orders, instruments, and supporting modules. The support
+group runs the root integration task with those three services excluded, so new modules remain covered by default.
+Each group must execute tests and pass; the stable `integration (Testcontainers)` merge gate succeeds only when
+all groups succeed. Nightly stress sizing is preserved, and failure reports are retained per group.
+
 ## Release procedure
 
 1. Merge the release changes through a green PR and inspect the main-branch checks.

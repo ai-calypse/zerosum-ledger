@@ -46,12 +46,25 @@ jobs:
           name: build-test-reports
           path: "**/build/reports/tests/"
 
-  integration:
-    name: integration (Testcontainers)
+  integration-tests:
+    name: Integration / ${{ matrix.group }}
     needs: build
     runs-on: ubuntu-24.04
-    # Target ≤ 15 min on merge to main (master §10.3).
-    timeout-minutes: 15
+    # Separate the slow service suites so one serial job cannot exceed its budget.
+    # Each group still runs against real PostgreSQL/Kafka Testcontainers.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: ledger
+            tasks: ':services:ledger-service:integrationTest'
+          - group: instruments
+            tasks: ':services:instrument-service:integrationTest'
+          - group: orders
+            tasks: ':services:order-service:integrationTest'
+          - group: supporting modules
+            tasks: 'integrationTest -x :services:ledger-service:integrationTest -x :services:instrument-service:integrationTest -x :services:order-service:integrationTest'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,7 +78,7 @@ jobs:
       # pull requests run the reduced size so the job stays inside the ≤ 10 min target (master §10.3).
       # The nightly run adds -i so the harness's own ZS-STRESS line (size, threads, orders, retry counts) reaches the
       # log: without it System.out is suppressed and the run proves only that the flag was passed, not that it was read.
-      - run: ./gradlew integrationTest ${{ github.event_name == 'schedule' && '-Pzs.stress.size=full -i' || '' }}
+      - run: ./gradlew ${{ matrix.tasks }} ${{ github.event_name == 'schedule' && '-Pzs.stress.size=full -i' || '' }}
       - name: Summarize executed tests
         if: always()
         run: python3 .github/scripts/test-summary.py integrationTest
@@ -73,8 +86,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: integration-test-reports
+          name: integration-test-reports-${{ strategy.job-index }}
           path: "**/build/reports/tests/"
+
+  integration:
+    name: integration (Testcontainers)
+    if: always()
+    needs: integration-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every integration group to pass
+        env:
+          RESULT: ${{ needs.integration-tests.result }}
+        run: test "$RESULT" = success
 
   e2e:
     name: e2e (Compose)
